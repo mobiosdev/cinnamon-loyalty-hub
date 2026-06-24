@@ -7,7 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Building2, User, Check, ChevronsUpDown, Upload, Loader2, Calendar, FileText } from "lucide-react";
+import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { companyApi } from "@/services/companyApi";
@@ -19,6 +21,7 @@ import { StaffList } from "./StaffList";
 import { Checkbox } from "@/components/ui/checkbox";
 import { logCompanyActivity, logMemberActivity } from "@/utils/auditLogger";
 import { validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Company {
   id: string;
@@ -102,6 +105,12 @@ const CompanyRegistration = () => {
   const [categoryOffers, setCategoryOffers] = useState<any[]>([]);
   const [discountEnabled, setDiscountEnabled] = useState(true);
   const [selectedOfferIds, setSelectedOfferIds] = useState<string[]>([]);
+
+  // Bulk Upload states
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
+  const [uploadCategoryId, setUploadCategoryId] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   // Fetch all companies and categories for the dropdowns
   useEffect(() => {
@@ -364,6 +373,262 @@ const CompanyRegistration = () => {
     } catch (error) {
       console.error("Error deleting member:", error);
       toast.error("Failed to delete member");
+    }
+  };
+
+  const parseExcelDate = (val: any): string | null => {
+    if (!val) return null;
+    
+    // If it's a number (Excel serial date)
+    if (typeof val === 'number') {
+      const date = new Date((val - 25569) * 86400 * 1000);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0];
+      }
+    }
+    
+    // If it's a string
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (!trimmed) return null;
+      
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        return trimmed;
+      }
+      
+      const d = new Date(trimmed);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().split('T')[0];
+      }
+    }
+    
+    // If it's already a Date object
+    if (val instanceof Date && !isNaN(val.getTime())) {
+      return val.toISOString().split('T')[0];
+    }
+    
+    return null;
+  };
+
+  const downloadSampleExcel = () => {
+    const headers = [
+      ["Title", "First Name", "Last Name", "Mobile", "Date of Birth", "Email", "Designation", "Address", "Company Name", "Company Address", "Company Phone", "Company Email", "Company Manager", "Renewal Date"]
+    ];
+    const sampleData = [
+      ["Mr", "John", "Doe", "0771234567", "1990-05-15", "john.doe@example.com", "Manager", "123 Galle Road, Colombo", "Cinnamon Hotels", "77 Galle Road, Colombo 03", "0112345678", "info@cinnamon.com", "Mr. Manager", "2027-06-24"]
+    ];
+    
+    const worksheet = XLSX.utils.aoa_to_sheet([...headers, ...sampleData]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Members Template");
+    XLSX.writeFile(workbook, "bulk_members_template.xlsx");
+    toast.success("Sample Excel template downloaded!");
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadFile(file);
+    }
+  };
+
+  const handleBulkSubmit = async () => {
+    if (!uploadCategoryId) {
+      toast.error("Please select a member category");
+      return;
+    }
+    if (!uploadFile) {
+      toast.error("Please select an Excel file");
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      const reader = new FileReader();
+      
+      reader.onload = async (evt) => {
+        try {
+          const bstr = evt.target?.result;
+          const workbook = XLSX.read(bstr, { type: 'binary' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
+
+          if (jsonData.length === 0) {
+            toast.error("The uploaded file contains no rows");
+            setIsUploading(false);
+            return;
+          }
+
+          let successCount = 0;
+          let failCount = 0;
+          const errorsList: string[] = [];
+          const companyCache: Record<string, string> = {};
+
+          // Load category offers
+          let offers: any[] = [];
+          try {
+            offers = await offerApi.getOffersByCategory(Number(uploadCategoryId));
+          } catch (e) {
+            console.error("Error loading category offers:", e);
+          }
+          const offerIds = offers.map(o => o.id);
+
+          for (let i = 0; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            const title = row["Title"] || row["title"] || "";
+            const first_name = row["First Name"] || row["first_name"] || row["FirstName"] || "";
+            const last_name = row["Last Name"] || row["last_name"] || row["LastName"] || "";
+            const mobileStr = String(row["Mobile"] || row["mobile"] || row["phone"] || row["Phone"] || "").trim();
+            const email = row["Email"] || row["email"] || "";
+            const designation = row["Designation"] || row["designation"] || "";
+            const address = row["Address"] || row["address"] || "";
+
+            // Date columns parsing
+            const rawRenewDate = row["Renewal Date"] || row["renewal_date"] || row["Renew Date"] || row["renew_date"];
+            const parsedRenewDate = parseExcelDate(rawRenewDate) || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0];
+
+            const rawDob = row["Date of Birth"] || row["date_of_birth"] || row["DOB"] || row["dob"];
+            const parsedDob = parseExcelDate(rawDob);
+
+            // Company details columns
+            const cName = (row["Company Name"] || row["company_name"] || row["Company"] || row["company"] || "").toString().trim();
+            const cAddress = row["Company Address"] || row["company_address"] || "";
+            const cPhone = row["Company Phone"] || row["company_phone"] || "";
+            const cEmail = row["Company Email"] || row["company_email"] || "";
+            const cManager = row["Company Manager"] || row["company_manager"] || "";
+
+            if (!first_name || !last_name || !mobileStr) {
+              failCount++;
+              errorsList.push(`Row ${i + 2}: Missing Name or Mobile number`);
+              continue;
+            }
+
+            const mobileValidation = validateAndNormalizeSriLankanMobile(mobileStr);
+            if (!mobileValidation.isValid) {
+              failCount++;
+              errorsList.push(`Row ${i + 2} (${first_name}): ${mobileValidation.error}`);
+              continue;
+            }
+
+            // Resolve company_id
+            let companyId = "";
+            let resolvedCompanyName = "";
+
+            if (cName) {
+              const cacheKey = cName.toUpperCase();
+              if (companyCache[cacheKey]) {
+                companyId = companyCache[cacheKey];
+                resolvedCompanyName = cName;
+              } else {
+                try {
+                  const { data: existingCompanies } = await supabase
+                    .from('companies')
+                    .select('id, name')
+                    .ilike('name', cName)
+                    .limit(1);
+
+                  const existingCompany = existingCompanies?.[0];
+
+                  if (existingCompany) {
+                    companyId = existingCompany.id;
+                    companyCache[cacheKey] = companyId;
+                    resolvedCompanyName = existingCompany.name;
+                  } else {
+                    // Create new company
+                    const companyCode = `COMP${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                    const newCompany = await companyApi.createCompany({
+                      company_code: companyCode,
+                      name: cName,
+                      address: cAddress || 'N/A',
+                      phone: cPhone || '',
+                      email: cEmail || '',
+                      manager_name: cManager || '',
+                    });
+                    companyId = newCompany.id;
+                    companyCache[cacheKey] = companyId;
+                    resolvedCompanyName = cName;
+                    
+                    await logCompanyActivity('create', cName, companyId, {
+                      company_code: companyCode,
+                      source: 'bulk_upload'
+                    });
+                  }
+                } catch (err: any) {
+                  failCount++;
+                  errorsList.push(`Row ${i + 2}: Failed to resolve/create company '${cName}' (${err.message})`);
+                  continue;
+                }
+              }
+            } else if (selectedCompany?.id) {
+              companyId = selectedCompany.id;
+              resolvedCompanyName = selectedCompany.name;
+            } else {
+              failCount++;
+              errorsList.push(`Row ${i + 2}: Missing company name and no company is selected on the page`);
+              continue;
+            }
+
+            try {
+              const memberData = {
+                title,
+                company_id: companyId,
+                first_name,
+                last_name,
+                mobile: mobileValidation.normalized!,
+                email,
+                address,
+                designation,
+                registered_date: new Date().toISOString().split('T')[0],
+                renew_date: parsedRenewDate,
+                date_of_birth: parsedDob,
+                discount_amount: 0,
+                discount_percentage: 10,
+                discount_policy: 'percentage',
+                is_active: true,
+                category_id: Number(uploadCategoryId),
+                discount_enabled: true,
+                selected_offers: offerIds,
+              };
+
+              const result = await staffApi.registerStaff(memberData);
+
+              await logMemberActivity('create', `${first_name} ${last_name}`, result.id, {
+                company: resolvedCompanyName,
+                category: categories.find(c => c.id === Number(uploadCategoryId))?.name,
+                source: 'bulk_upload'
+              });
+
+              successCount++;
+            } catch (err: any) {
+              failCount++;
+              errorsList.push(`Row ${i + 2} (${first_name}): ${err.message || 'Registration failed'}`);
+            }
+          }
+
+          toast.success(`Uploaded ${successCount} member(s) successfully. Failed: ${failCount}`);
+          if (errorsList.length > 0) {
+            console.error("Bulk upload details:", errorsList);
+            toast.error(`Upload error: ${errorsList[0]}`);
+          }
+
+          setIsReload(!isReload);
+          setBulkUploadOpen(false);
+          setUploadFile(null);
+        } catch (err: any) {
+          console.error(err);
+          toast.error("Failed to parse the file structure");
+        } finally {
+          setIsUploading(false);
+        }
+      };
+
+      reader.readAsBinaryString(uploadFile);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to read the file");
+      setIsUploading(false);
     }
   };
 
@@ -1010,14 +1275,25 @@ const CompanyRegistration = () => {
         <TabsContent value="registered-members" className="mt-6">
           {/* Registered Members List */}
           <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <User className="h-5 w-5 text-primary" />
-            <CardTitle className="font-serif">Registered Members</CardTitle>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" />
+              <CardTitle className="font-serif">Registered Members</CardTitle>
+            </div>
+            <CardDescription>
+              View and manage all registered members
+            </CardDescription>
           </div>
-          <CardDescription>
-            View and manage all registered members
-          </CardDescription>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex items-center gap-2 shrink-0 self-start sm:self-auto"
+            onClick={() => setBulkUploadOpen(true)}
+          >
+            <Upload className="h-4 w-4" />
+            Bulk Upload Members
+          </Button>
         </CardHeader>
         <CardContent>
           <StaffList 
@@ -1030,6 +1306,118 @@ const CompanyRegistration = () => {
         </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Bulk Upload Dialog */}
+      <Dialog open={bulkUploadOpen} onOpenChange={(open) => {
+        setBulkUploadOpen(open);
+        if (!open) {
+          setUploadFile(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md flex flex-col p-6 gap-4">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <Upload className="h-5 w-5 text-primary" />
+              Bulk Upload Member Details
+            </DialogTitle>
+            <DialogDescription className="text-sm">
+              Upload an Excel file containing member details.
+            </DialogDescription>
+          </DialogHeader>
+
+            <div className="space-y-4">
+              {/* {selectedCompany?.id ? (
+                <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-blue-700 dark:text-blue-400 text-xs">
+                  Uploading members under company: <span className="font-semibold">{selectedCompany.name}</span>. (Or specify company details per row in Excel to route to other companies).
+                </div>
+              ) : (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-700 dark:text-amber-400 text-xs">
+                  No company selected. Your Excel file must include the **Company Name** column to automatically find or register companies.
+                </div>
+              )} */}
+
+              <div className="space-y-2">
+                <Label htmlFor="upload-category">Member Category *</Label>
+                <Select
+                  value={uploadCategoryId}
+                  onValueChange={setUploadCategoryId}
+                >
+                  <SelectTrigger id="upload-category" className="w-full">
+                    <SelectValue placeholder="Select category for uploaded members" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id.toString()}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="p-4 border border-dashed rounded-lg bg-muted/20 flex flex-col items-center justify-center gap-2 text-center">
+                <p className="text-xs text-muted-foreground">
+                  Need a template? Download our sample Excel layout.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadSampleExcel}
+                  className="gap-1.5"
+                >
+                  <FileText className="h-4 w-4 text-green-600" />
+                  Download Sample Template
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="upload-file">Choose Excel File *</Label>
+                <Input
+                  id="upload-file"
+                  type="file"
+                  accept=".xlsx, .xls"
+                  onChange={handleFileUpload}
+                  className="cursor-pointer"
+                />
+                {uploadFile && (
+                  <p className="text-xs text-green-600 font-medium">
+                    Selected file: {uploadFile.name}
+                  </p>
+                )}
+              </div>
+
+              <DialogFooter className="pt-2 gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setBulkUploadOpen(false)}
+                  disabled={isUploading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleBulkSubmit}
+                  disabled={isUploading || !uploadCategoryId || !uploadFile}
+                  className="gap-1.5"
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4" />
+                      Upload Members
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
