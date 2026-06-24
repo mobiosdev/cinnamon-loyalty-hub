@@ -6,20 +6,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash, Ban } from "lucide-react";
+import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash, Ban, Building2, User, Check, ChevronsUpDown, Calendar, FileText } from "lucide-react";
 import { staffApi } from "@/services/staffApi";
 import { offerApi } from "@/services/offerApi";
 import { companyApi } from "@/services/companyApi";
 import { categoryApi } from "@/services/categoryApi";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { maskPhoneNumber, formatPhoneForDisplay } from "@/utils/phoneUtils";
+import { maskPhoneNumber, formatPhoneForDisplay, validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { logMemberActivity } from "@/utils/auditLogger";
+import { logCompanyActivity, logMemberActivity } from "@/utils/auditLogger";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface StaffListProps {
   isReload?: boolean;
@@ -45,6 +47,17 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
   const [editFormData, setEditFormData] = useState<any>(null);
   const [companies, setCompanies] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  
+  // Form states for View/Edit Dialog (matching Member Registration page)
+  const [companyName, setCompanyName] = useState("");
+  const [companyAddress, setCompanyAddress] = useState("");
+  const [companyPhone, setCompanyPhone] = useState("");
+  const [companyEmail, setCompanyEmail] = useState("");
+  const [companyManagerName, setCompanyManagerName] = useState("");
+  const [selectedCompany, setSelectedCompany] = useState<any>(null);
+  const [openCompanySearch, setOpenCompanySearch] = useState(false);
+  const [categoryOffers, setCategoryOffers] = useState<any[]>([]);
+  const [selectedOfferIds, setSelectedOfferIds] = useState<string[]>([]);
   const [savingMember, setSavingMember] = useState(false);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [showDeactivateAlert, setShowDeactivateAlert] = useState(false);
@@ -264,6 +277,32 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
     }
   };
 
+  // Load offers when category changes in edit mode
+  useEffect(() => {
+    const loadEditCategoryOffers = async () => {
+      if (isEditMode && editFormData?.category_id) {
+        try {
+          const offers = await offerApi.getOffersByCategory(editFormData.category_id);
+          setCategoryOffers(offers);
+          
+          // If the category changed from the member's original category, auto-select all offers.
+          // Otherwise, preserve the member's current selected offers.
+          if (editFormData.category_id !== selectedMember?.category_id) {
+            setSelectedOfferIds(offers.map(o => o.id));
+          } else {
+            setSelectedOfferIds(Array.isArray(selectedMember?.selected_offers) ? selectedMember.selected_offers : []);
+          }
+        } catch (error) {
+          console.error('Error loading edit category offers:', error);
+          setCategoryOffers([]);
+          setSelectedOfferIds([]);
+        }
+      }
+    };
+
+    loadEditCategoryOffers();
+  }, [editFormData?.category_id, isEditMode]);
+
   const handleEnterEditMode = async () => {
     if (!selectedMember) return;
     
@@ -276,6 +315,24 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
       
       setCompanies(companiesData);
       setCategories(categoriesData);
+      
+      // Find current company details
+      const currentCompany = companiesData.find(c => c.id === selectedMember.company_id);
+      setSelectedCompany(currentCompany || null);
+      setCompanyName(currentCompany?.name || '');
+      setCompanyAddress(currentCompany?.address || '');
+      setCompanyPhone(currentCompany?.phone || '');
+      setCompanyEmail(currentCompany?.email || '');
+      setCompanyManagerName(currentCompany?.manager_name || '');
+
+      // Load offers for current category
+      if (selectedMember.category_id) {
+        const offers = await offerApi.getOffersByCategory(selectedMember.category_id);
+        setCategoryOffers(offers);
+      } else {
+        setCategoryOffers([]);
+      }
+      setSelectedOfferIds(Array.isArray(selectedMember.selected_offers) ? selectedMember.selected_offers : []);
       
       // Initialize form data with current member data
       setEditFormData({
@@ -292,7 +349,9 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
         discount_policy: selectedMember.discount_policy || 'percentage',
         discount_amount: selectedMember.discount_amount || 0,
         is_active: selectedMember.is_active ?? true,
-        date_of_birth: selectedMember.date_of_birth || '',
+        date_of_birth: selectedMember.date_of_birth ? selectedMember.date_of_birth.split('T')[0] : '',
+        registered_date: selectedMember.registered_date ? selectedMember.registered_date.split('T')[0] : '',
+        renew_date: selectedMember.renew_date ? selectedMember.renew_date.split('T')[0] : '',
       });
       
       setIsEditMode(true);
@@ -305,17 +364,126 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
   const handleSaveMember = async () => {
     if (!selectedMember || !editFormData) return;
     
+    // Validate member fields
+    if (!editFormData.title || !editFormData.first_name || !editFormData.last_name || 
+        !editFormData.mobile || !editFormData.email) {
+      toast.error('Please fill all required member fields');
+      return;
+    }
+
+    // Validate and normalize mobile number
+    const mobileValidation = validateAndNormalizeSriLankanMobile(editFormData.mobile);
+    if (!mobileValidation.isValid) {
+      toast.error(mobileValidation.error || "Invalid mobile number");
+      return;
+    }
+
+    // Validate and normalize company phone if provided
+    let normalizedCompanyPhone = companyPhone;
+    if (companyPhone) {
+      const companyPhoneValidation = validateAndNormalizeSriLankanMobile(companyPhone);
+      if (!companyPhoneValidation.isValid) {
+        toast.error("Invalid company phone number: " + companyPhoneValidation.error);
+        return;
+      }
+      normalizedCompanyPhone = companyPhoneValidation.normalized!;
+    }
+    
     setSavingMember(true);
     try {
-      await staffApi.updateStaff(selectedMember.id, editFormData);
+      // Step 1: Save or update company if name is provided
+      let companyId = editFormData.company_id || null;
+      
+      if (companyName.trim()) {
+        if (!selectedCompany?.id) {
+          // Create new company
+          const companyCode = `COMP${Date.now()}`;
+          const newCompany = await companyApi.createCompany({
+            company_code: companyCode,
+            name: companyName,
+            address: companyAddress || '',
+            phone: normalizedCompanyPhone || '',
+            email: companyEmail || '',
+            manager_name: companyManagerName || '',
+          });
+          companyId = newCompany.id;
+          
+          await logCompanyActivity('create', companyName, companyId, {
+            company_code: companyCode,
+            manager: companyManagerName
+          });
+        } else {
+          // Update existing company
+          companyId = selectedCompany.id;
+          await companyApi.updateCompany(companyId, {
+            company_code: selectedCompany.company_code,
+            name: companyName,
+            address: companyAddress || undefined,
+            phone: normalizedCompanyPhone || undefined,
+            email: companyEmail || undefined,
+            manager_name: companyManagerName || undefined,
+          });
+          
+          await logCompanyActivity('update', companyName, companyId, {
+            company_code: selectedCompany.company_code,
+            manager: companyManagerName
+          });
+        }
+      } else {
+        // If company name is empty, disassociate company
+        companyId = null;
+      }
+
+      // Step 2: Save member details
+      const memberUpdateData = {
+        title: editFormData.title,
+        first_name: editFormData.first_name,
+        last_name: editFormData.last_name,
+        mobile: mobileValidation.normalized!,
+        email: editFormData.email,
+        address: editFormData.address,
+        designation: editFormData.designation,
+        company_id: companyId || undefined,
+        category_id: editFormData.category_id,
+        discount_enabled: editFormData.discount_enabled,
+        discount_policy: editFormData.discount_policy,
+        discount_amount: Number(editFormData.discount_amount) || 0,
+        is_active: editFormData.is_active,
+        date_of_birth: editFormData.date_of_birth || null,
+        registered_date: editFormData.registered_date || null,
+        renew_date: editFormData.renew_date || null,
+        selected_offers: selectedOfferIds,
+      };
+
+      await staffApi.updateStaff(selectedMember.id, memberUpdateData);
       
       toast.success('Member updated successfully');
       
-      // Refresh the member data
+      // Log member update activity
+      await logMemberActivity(
+        'update',
+        `${editFormData.first_name} ${editFormData.last_name}`,
+        selectedMember.id,
+        {
+          company: companyName || 'None',
+          category: categories.find(c => c.id === editFormData.category_id)?.name,
+          discount_policy: editFormData.discount_policy
+        },
+        {
+          member_code: selectedMember.member_code,
+          phone: mobileValidation.normalized!,
+          name: `${editFormData.first_name} ${editFormData.last_name}`
+        }
+      );
+      
+      // Refresh the list and dialog
+      fetchStaff();
+      
+      // Re-fetch updated member to make sure join tables are correctly populated
       const updatedMemberResponse = await staffApi.getStaff({
         page: 1,
         limit: 1,
-        search: selectedMember.mobile
+        search: mobileValidation.normalized!
       });
       
       if (updatedMemberResponse.data.length > 0) {
@@ -328,7 +496,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
       setEditFormData(null);
     } catch (error) {
       console.error('Error saving member:', error);
-      toast.error('Failed to update member');
+      toast.error(error instanceof Error ? error.message : 'Failed to update member');
     } finally {
       setSavingMember(false);
     }
@@ -337,6 +505,14 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
   const handleCancelEdit = () => {
     setIsEditMode(false);
     setEditFormData(null);
+    setCompanyName("");
+    setCompanyAddress("");
+    setCompanyPhone("");
+    setCompanyEmail("");
+    setCompanyManagerName("");
+    setSelectedCompany(null);
+    setCategoryOffers([]);
+    setSelectedOfferIds([]);
   };
 
   const handleDeleteMember = async () => {
@@ -788,326 +964,226 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
           <ScrollArea className="flex-1 overflow-auto">
             {selectedMember && !isEditMode && (
               <div className="space-y-6 px-6 py-4 pb-6">
-              {/* Basic Information */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Member Code</p>
-                  <p className="text-base font-mono font-semibold">{selectedMember.member_code || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Status</p>
-                  <Badge variant={selectedMember.is_active ? "default" : "secondary"}>
-                    {selectedMember.is_active ? 'Active' : 'Inactive'}
-                  </Badge>
-                </div>
-                {!selectedMember.is_active && selectedMember.deactivation_note && (
-                  <div className="col-span-2 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 rounded-md p-3">
-                    <p className="text-sm font-semibold text-orange-700 dark:text-orange-400">Deactivation Note:</p>
-                    <p className="text-sm text-foreground mt-0.5">{selectedMember.deactivation_note}</p>
+                {/* Basic Information / Header status */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-muted/30 rounded-lg border border-border/50">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Member Code</p>
+                    <p className="text-lg font-mono font-bold text-foreground">{selectedMember.member_code || 'N/A'}</p>
                   </div>
-                )}
-              </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right md:text-left">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</p>
+                      <Badge variant={selectedMember.is_active ? "default" : "secondary"} className="mt-1">
+                        {selectedMember.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </div>
+                  </div>
+                  {!selectedMember.is_active && selectedMember.deactivation_note && (
+                    <div className="md:col-span-2 w-full bg-orange-500/10 border border-orange-500/20 dark:bg-orange-950/20 dark:border-orange-900 rounded-md p-3">
+                      <p className="text-sm font-semibold text-orange-700 dark:text-orange-400">Deactivation Note:</p>
+                      <p className="text-sm text-foreground mt-0.5">{selectedMember.deactivation_note}</p>
+                    </div>
+                  )}
+                </div>
 
-              {/* Personal Details */}
-              <div>
-                <h4 className="font-semibold mb-3 pb-2 border-b">Personal Information</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Full Name</p>
-                    <p className="text-base">{selectedMember.title} {selectedMember.first_name} {selectedMember.last_name}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Designation</p>
-                    <p className="text-base">{selectedMember.designation || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Date of Birth</p>
-                    <p className="text-base">
-                      {selectedMember.date_of_birth 
-                        ? new Date(selectedMember.date_of_birth).toLocaleDateString() 
-                        : 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Mobile</p>
-                    <button
-                      onClick={() => selectedMember && handlePhoneClick(selectedMember.id, selectedMember.mobile)}
-                      className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer font-mono text-base"
-                      title="Click to reveal/hide phone number"
-                    >
-                      {revealedPhones.has(selectedMember.id) ? (
-                        <>
-                          <Eye className="h-4 w-4" />
-                          {formatPhoneForDisplay(selectedMember.mobile)}
-                        </>
-                      ) : (
-                        <>
-                          <EyeOff className="h-4 w-4" />
-                          {maskPhoneNumber(selectedMember.mobile)}
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Email</p>
-                    <p className="text-base">{selectedMember.email || 'N/A'}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-sm font-medium text-muted-foreground">Address</p>
-                    <p className="text-base">{selectedMember.address || 'N/A'}</p>
-                  </div>
-                </div>
-              </div>
+                {/* Section 1: Personal Information */}
+                <Card className="border border-border/60 shadow-sm bg-card/30">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-base font-semibold">Personal Information</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Title</p>
+                      <p className="text-sm font-semibold mt-1">{selectedMember.title || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">First Name</p>
+                      <p className="text-sm font-semibold mt-1">{selectedMember.first_name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Last Name</p>
+                      <p className="text-sm font-semibold mt-1">{selectedMember.last_name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Date of Birth</p>
+                      <p className="text-sm font-semibold mt-1">
+                        {selectedMember.date_of_birth 
+                          ? new Date(selectedMember.date_of_birth).toLocaleDateString() 
+                          : 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Email</p>
+                      <p className="text-sm font-semibold mt-1 break-all">{selectedMember.email || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Mobile</p>
+                      <button
+                        onClick={() => selectedMember && handlePhoneClick(selectedMember.id, selectedMember.mobile)}
+                        className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer font-mono text-sm font-semibold mt-1"
+                        title="Click to reveal/hide phone number"
+                      >
+                        {revealedPhones.has(selectedMember.id) ? (
+                          <>
+                            <Eye className="h-3.5 w-3.5" />
+                            {formatPhoneForDisplay(selectedMember.mobile)}
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff className="h-3.5 w-3.5" />
+                            {maskPhoneNumber(selectedMember.mobile)}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <div className="md:col-span-2 lg:col-span-3">
+                      <p className="text-xs font-medium text-muted-foreground">Address</p>
+                      <p className="text-sm font-semibold mt-1">{selectedMember.address || 'N/A'}</p>
+                    </div>
+                  </CardContent>
+                </Card>
 
-              {/* Company Information */}
-              <div>
-                <h4 className="font-semibold mb-3 pb-2 border-b">Company Information</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Company Name</p>
-                    <p className="text-base">{selectedMember.company_name || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Member Category</p>
-                    <Badge variant={getCategoryBadgeVariant(selectedMember.category_name)} className="mt-1">
-                      {selectedMember.category_name || 'N/A'}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
+                {/* Section 2: Company Information */}
+                <Card className="border border-border/60 shadow-sm bg-card/30">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-base font-semibold">Company Information</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Company Name</p>
+                      <p className="text-sm font-semibold mt-1">{selectedMember.company_name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Designation</p>
+                      <p className="text-sm font-semibold mt-1">{selectedMember.designation || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Company Phone Number</p>
+                      <p className="text-sm font-semibold mt-1 font-mono">{selectedMember.company_phone || 'N/A'}</p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <p className="text-xs font-medium text-muted-foreground">Company Address</p>
+                      <p className="text-sm font-semibold mt-1">{selectedMember.company_address || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Company Email</p>
+                      <p className="text-sm font-semibold mt-1 break-all">{selectedMember.company_email || 'N/A'}</p>
+                    </div>
+                  </CardContent>
+                </Card>
 
-              {/* Membership Details */}
-              <div>
-                <h4 className="font-semibold mb-3 pb-2 border-b">Membership Details</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Registered Date</p>
-                    <p className="text-base">{selectedMember.registered_date ? new Date(selectedMember.registered_date).toLocaleDateString() : 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Renewal Date</p>
-                    <p className="text-base">{selectedMember.renew_date ? new Date(selectedMember.renew_date).toLocaleDateString() : 'N/A'}</p>
-                  </div>
-                </div>
-              </div>
+                {/* Section 3: Membership & Other Information */}
+                <Card className="border border-border/60 shadow-sm bg-card/30">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-base font-semibold">Membership & Other Information</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Member Category</p>
+                      <Badge variant={getCategoryBadgeVariant(selectedMember.category_name)} className="mt-1">
+                        {selectedMember.category_name || 'N/A'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Registration Date</p>
+                      <p className="text-sm font-semibold mt-1">
+                        {selectedMember.registered_date 
+                          ? new Date(selectedMember.registered_date).toLocaleDateString() 
+                          : 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Renewal Date</p>
+                      <p className="text-sm font-semibold mt-1">
+                        {selectedMember.renew_date 
+                          ? new Date(selectedMember.renew_date).toLocaleDateString() 
+                          : 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Manager Name</p>
+                      <p className="text-sm font-semibold mt-1">{selectedMember.company_manager_name || 'N/A'}</p>
+                    </div>
+                  </CardContent>
+                </Card>
 
-              {/* Discount Information */}
-              <div>
-                <h4 className="font-semibold mb-3 pb-2 border-b">Discount Benefits</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Discount Enabled</p>
-                    <Badge variant={selectedMember.discount_enabled ? "default" : "secondary"}>
-                      {selectedMember.discount_enabled ? 'Yes' : 'No'}
-                    </Badge>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Discount Policy</p>
-                    <p className="text-base capitalize">{selectedMember.discount_policy || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Discount Amount</p>
-                    <p className="text-base font-semibold">
-                      {selectedMember.discount_policy === 'percentage' 
-                        ? `${selectedMember.discount_amount}%`
-                        : `LKR ${selectedMember.discount_amount}`}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Selected Offers */}
-              <div>
-                <h4 className="font-semibold mb-3 pb-2 border-b flex items-center gap-2">
-                  <Gift className="h-4 w-4" />
-                  Selected Offers ({memberOffers.length})
-                </h4>
-                {loadingOffers ? (
-                  <div className="flex items-center justify-center p-4">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  </div>
-                ) : memberOffers.length > 0 ? (
-                  <div className="space-y-3">
-                    {memberOffers.map((offer: any) => {
-                      // Get all redemptions for this offer
-                      const offerRedemptions = redeemedOffers.filter(
-                        (r: any) => r.offers?.id === offer.id
-                      );
-                      // Check if there's an active redemption
-                      const activeRedemption = offerRedemptions.find((r: any) => r.status === 'active');
-                      const isCurrentlyRedeemed = !!activeRedemption;
-                      const hasHistory = offerRedemptions.length > 0;
+                {/* Section 4: Membership Benefits & Offers */}
+                <Card className="border border-border/60 shadow-sm bg-card/30">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Gift className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-base font-semibold">Discount Redemptions</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Discount redemptions history */}
+                    <div className="space-y-3">
+                      {/* <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Discount Redemptions ({discountRedemptions.length})
+                      </h5> */}
                       
-                      return (
-                        <div 
-                          key={offer.id} 
-                          className={`p-3 rounded-lg border-2 ${
-                            isCurrentlyRedeemed 
-                              ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900' 
-                              : 'bg-muted/30 border-border'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <p className={`font-medium ${isCurrentlyRedeemed ? 'text-green-700 dark:text-green-400' : ''}`}>
-                                  {offer.name}
+                      {loadingOffers ? (
+                        <div className="flex items-center justify-center p-6">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : discountRedemptions.length > 0 ? (
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                          {discountRedemptions.map((redemption: any) => (
+                            <div key={redemption.id} className="p-3 border border-blue-200 dark:border-blue-900/30 rounded-lg bg-blue-500/5 dark:bg-blue-950/10 flex items-start justify-between gap-3">
+                              <div className="space-y-0.5">
+                                <p className="font-semibold text-sm text-blue-700 dark:text-blue-400">
+                                  {redemption.discount_type === 'percentage' 
+                                    ? `${redemption.discount_value}% Discount` 
+                                    : `LKR ${redemption.discount_value?.toLocaleString()} Discount`}
                                 </p>
-                                {isCurrentlyRedeemed && (
-                                  <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-500" />
+                                {redemption.discount_amount && (
+                                  <p className="text-xs font-bold text-green-600 dark:text-green-400">
+                                    Saved: LKR {redemption.discount_amount?.toLocaleString()}
+                                  </p>
                                 )}
-                              </div>
-                              <p className="text-sm text-muted-foreground mt-1">{offer.description}</p>
-                              <p className="text-xs text-muted-foreground mt-2">
-                                Valid: {new Date(offer.valid_from).toLocaleDateString()} - {new Date(offer.valid_to).toLocaleDateString()}
-                              </p>
-                              
-                              {/* Show redemption history */}
-                              {hasHistory && (
-                                <div className="mt-3 pt-3 border-t space-y-2">
-                                  <p className="text-xs font-semibold text-muted-foreground">Redemption History:</p>
-                                   {offerRedemptions.map((redemption: any) => (
-                                    <div 
-                                      key={redemption.id} 
-                                      className={`text-xs p-2 rounded ${
-                                        redemption.status === 'active' 
-                                          ? 'bg-green-100 dark:bg-green-950/40' 
-                                          : 'bg-muted/50'
-                                      }`}
-                                    >
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div className="flex-1">
-                                          <p className="font-medium">
-                                            Redeemed: {format(new Date(redemption.redeemed_at), 'MMM dd, yyyy')} at {format(new Date(redemption.redeemed_at), 'HH:mm')}
-                                          </p>
-                                          {redemption.bill_number && (
-                                            <p className="font-mono text-muted-foreground">Bill: {redemption.bill_number}</p>
-                                          )}
-                                          {redemption.status === 'cancelled' && redemption.reactivated_at && (
-                                            <div className="mt-1 pt-1 border-t">
-                                              <p className="font-medium text-orange-600 dark:text-orange-400">
-                                                Reactivated: {format(new Date(redemption.reactivated_at), 'MMM dd, yyyy')} at {format(new Date(redemption.reactivated_at), 'HH:mm')}
-                                              </p>
-                                              {redemption.reactivated_by && (
-                                                <p className="text-muted-foreground">By: {redemption.reactivated_by}</p>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <Badge 
-                                            variant={redemption.status === 'active' ? 'default' : 'outline'}
-                                            className="text-xs"
-                                          >
-                                            {redemption.status === 'active' ? 'Active' : 'Reactivated'}
-                                          </Badge>
-                                          {redemption.status === 'active' && (
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              onClick={() => handleReactivateOffer(redemption.id)}
-                                              disabled={loadingOffers}
-                                              className="h-6 px-2"
-                                              title="Reactivation"
-                                            >
-                                              Reactivation
-                                            </Button>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground mt-1">
+                                  <span>Redeemed: {new Date(redemption.redeemed_at).toLocaleDateString()}</span>
+                                  {redemption.bill_number && <span className="font-mono">Bill: {redemption.bill_number}</span>}
                                 </div>
-                              )}
+                              </div>
+                              <Badge className="bg-blue-600 text-white hover:bg-blue-700 text-[10px] shrink-0">Used</Badge>
                             </div>
-                            <div className="flex flex-col gap-2">
-                              {isCurrentlyRedeemed ? (
-                                <Badge className="shrink-0 bg-green-600 hover:bg-green-700 text-white">
-                                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                                  Redeemed
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="shrink-0">
-                                  <Gift className="h-3 w-3 mr-1" />
-                                  Available
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
+                          ))}
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground p-3 border rounded-lg bg-muted/20">
-                    No offers selected
-                  </p>
-                )}
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic p-3 border rounded-lg bg-muted/10">No discount redemptions yet</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-
-              {/* Discount Redemptions */}
-              <div>
-                <h4 className="font-semibold mb-3 pb-2 border-b flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Discount Redemptions ({discountRedemptions.length})
-                </h4>
-                {loadingOffers ? (
-                  <div className="flex items-center justify-center p-4">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  </div>
-                ) : discountRedemptions.length > 0 ? (
-                  <div className="space-y-3 max-h-64 overflow-y-auto">
-                    {discountRedemptions.map((redemption: any) => (
-                      <div key={redemption.id} className="p-3 border rounded-lg bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-blue-700 dark:text-blue-400">
-                                {redemption.discount_type === 'percentage' 
-                                  ? `${redemption.discount_value}% Discount` 
-                                  : `LKR ${redemption.discount_value} Discount`}
-                              </p>
-                            </div>
-                            {redemption.discount_amount && (
-                              <p className="text-sm font-semibold text-green-600 dark:text-green-400 mt-1">
-                                Saved: LKR {redemption.discount_amount}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                              <span>Redeemed: {new Date(redemption.redeemed_at).toLocaleDateString()}</span>
-                              {redemption.bill_number && (
-                                <span className="font-mono">Bill: {redemption.bill_number}</span>
-                              )}
-                            </div>
-                          </div>
-                          <Badge className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white">
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                            Used
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground p-3 border rounded-lg bg-muted/20">
-                    No discount redemptions yet
-                  </p>
-                )}
-              </div>
-            </div>
             )}
 
             {/* Edit Form */}
             {isEditMode && editFormData && (
               <div className="space-y-6 px-6 py-4 pb-6">
-                <div>
-                  <h4 className="font-semibold mb-4 pb-2 border-b">Edit Member Information</h4>
-                  
-                  {/* Basic Information */}
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="title">Title</Label>
+                <div className="space-y-6">
+                  {/* Section 1: Personal Information */}
+                  <Card className="border border-border/60 shadow-sm bg-card/30">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-primary" />
+                        <CardTitle className="text-base font-semibold">Personal Information</CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="title">Title *</Label>
                         <Select
                           value={editFormData.title}
                           onValueChange={(value) => setEditFormData({ ...editFormData, title: value })}
@@ -1116,78 +1192,39 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                             <SelectValue placeholder="Select title" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Mr">Mr</SelectItem>
-                            <SelectItem value="Mrs">Mrs</SelectItem>
+                            <SelectItem value="Mr">Mr.</SelectItem>
+                            <SelectItem value="Mrs">Mrs.</SelectItem>
+                            <SelectItem value="Ms">Ms.</SelectItem>
                             <SelectItem value="Miss">Miss</SelectItem>
-                            <SelectItem value="Dr">Dr</SelectItem>
+                            <SelectItem value="Dr">Dr.</SelectItem>
+                            <SelectItem value="Prof">Prof.</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Label htmlFor="is_active">Status</Label>
-                        <Switch
-                          id="is_active"
-                          checked={editFormData.is_active}
-                          onCheckedChange={(checked) => setEditFormData({ ...editFormData, is_active: checked })}
-                        />
-                        <span className="text-sm text-muted-foreground">
-                          {editFormData.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
+                      
+                      <div className="space-y-2">
                         <Label htmlFor="first_name">First Name *</Label>
                         <Input
                           id="first_name"
-                          value={editFormData.first_name}
+                          value={editFormData.first_name || ''}
                           onChange={(e) => setEditFormData({ ...editFormData, first_name: e.target.value })}
+                          placeholder="First name"
                           required
                         />
                       </div>
-                      <div>
+                      
+                      <div className="space-y-2">
                         <Label htmlFor="last_name">Last Name *</Label>
                         <Input
                           id="last_name"
-                          value={editFormData.last_name}
+                          value={editFormData.last_name || ''}
                           onChange={(e) => setEditFormData({ ...editFormData, last_name: e.target.value })}
+                          placeholder="Last name"
                           required
                         />
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="mobile">Mobile *</Label>
-                        <Input
-                          id="mobile"
-                          value={editFormData.mobile}
-                          onChange={(e) => setEditFormData({ ...editFormData, mobile: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          value={editFormData.email}
-                          onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="designation">Designation</Label>
-                        <Input
-                          id="designation"
-                          value={editFormData.designation}
-                          onChange={(e) => setEditFormData({ ...editFormData, designation: e.target.value })}
-                        />
-                      </div>
-                      <div>
+                      <div className="space-y-2">
                         <Label htmlFor="date_of_birth">Date of Birth</Label>
                         <Input
                           id="date_of_birth"
@@ -1196,41 +1233,184 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                           onChange={(e) => setEditFormData({ ...editFormData, date_of_birth: e.target.value })}
                         />
                       </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="address">Address</Label>
-                      <Input
-                        id="address"
-                        value={editFormData.address}
-                        onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="company_id">Company</Label>
-                        <Select
-                          value={editFormData.company_id}
-                          onValueChange={(value) => setEditFormData({ ...editFormData, company_id: value })}
-                        >
-                          <SelectTrigger id="company_id">
-                            <SelectValue placeholder="Select company" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {companies.map((company) => (
-                              <SelectItem key={company.id} value={company.id}>
-                                {company.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={editFormData.email || ''}
+                          onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                          placeholder="email@example.com"
+                          required
+                        />
                       </div>
-                      <div>
-                        <Label htmlFor="category_id">Category</Label>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="mobile">Mobile *</Label>
+                        <Input
+                          id="mobile"
+                          value={editFormData.mobile || ''}
+                          onChange={(e) => setEditFormData({ ...editFormData, mobile: e.target.value })}
+                          placeholder="+94 77 123 4567"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2 lg:col-span-2">
+                        <Label htmlFor="address">Address</Label>
+                        <Input
+                          id="address"
+                          value={editFormData.address || ''}
+                          onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+                          placeholder="Member address"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2.5 pt-6 pl-1">
+                        <Switch
+                          id="is_active"
+                          checked={editFormData.is_active}
+                          onCheckedChange={(checked) => setEditFormData({ ...editFormData, is_active: checked })}
+                        />
+                        <div className="space-y-0.5">
+                          <Label htmlFor="is_active" className="text-sm font-medium cursor-pointer">
+                            Active Status
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            {editFormData.is_active ? 'Member is active and can redeem offers' : 'Member is inactive'}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Section 2: Company Information */}
+                  <Card className="border border-border/60 shadow-sm bg-card/30">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-primary" />
+                        <CardTitle className="text-base font-semibold">Company Information</CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="companyName">Company Name</Label>
+                        <div className="relative">
+                          <Input
+                            id="companyName"
+                            value={companyName}
+                            onChange={(e) => {
+                              setCompanyName(e.target.value);
+                              setSelectedCompany(null);
+                              setEditFormData(prev => ({ ...prev, company_id: '' }));
+                            }}
+                            onFocus={() => setOpenCompanySearch(true)}
+                            onBlur={() => setTimeout(() => setOpenCompanySearch(false), 200)}
+                            placeholder="Search or enter company name..."
+                            className="pr-10"
+                          />
+                          <ChevronsUpDown className="absolute right-3 top-3 h-4 w-4 opacity-50" />
+                          {openCompanySearch && companyName && (
+                            <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-md max-h-60 overflow-auto p-1">
+                              {companies.filter(c => c.name.toLowerCase().includes(companyName.toLowerCase())).length > 0 ? (
+                                companies
+                                  .filter(c => c.name.toLowerCase().includes(companyName.toLowerCase()))
+                                  .map((company) => (
+                                    <div
+                                      key={company.id}
+                                      className="flex items-start gap-2 p-2 hover:bg-accent cursor-pointer rounded-sm"
+                                      onClick={() => {
+                                        setSelectedCompany(company);
+                                        setCompanyName(company.name);
+                                        setCompanyAddress(company.address || '');
+                                        setCompanyPhone(company.phone || '');
+                                        setCompanyEmail(company.email || '');
+                                        setCompanyManagerName(company.manager_name || '');
+                                        setEditFormData(prev => ({ ...prev, company_id: company.id }));
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "h-4 w-4 mt-0.5 pointer-events-none",
+                                          selectedCompany?.id === company.id ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      <div className="flex-1">
+                                        <p className="font-medium text-sm">{company.name}</p>
+                                        <p className="text-xs text-muted-foreground">{company.address}</p>
+                                      </div>
+                                    </div>
+                                  ))
+                              ) : (
+                                <div className="p-2 text-sm text-muted-foreground">
+                                  No matching companies. Continue typing to add new company.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="designation">Designation</Label>
+                        <Input
+                          id="designation"
+                          value={editFormData.designation || ''}
+                          onChange={(e) => setEditFormData({ ...editFormData, designation: e.target.value })}
+                          placeholder="e.g. Sales Manager"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="companyPhone">Company Phone Number</Label>
+                        <Input
+                          id="companyPhone"
+                          value={companyPhone}
+                          onChange={(e) => setCompanyPhone(e.target.value)}
+                          placeholder="Enter company phone number"
+                        />
+                      </div>
+
+                      <div className="space-y-2 lg:col-span-2">
+                        <Label htmlFor="companyAddress">Company Address</Label>
+                        <Input
+                          id="companyAddress"
+                          value={companyAddress}
+                          onChange={(e) => setCompanyAddress(e.target.value)}
+                          placeholder="Enter company address"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="companyEmail">Company Email</Label>
+                        <Input
+                          id="companyEmail"
+                          type="email"
+                          value={companyEmail}
+                          onChange={(e) => setCompanyEmail(e.target.value)}
+                          placeholder="Enter company email"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Section 3: Membership & Other Information */}
+                  <Card className="border border-border/60 shadow-sm bg-card/30">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-primary" />
+                        <CardTitle className="text-base font-semibold">Membership & Other Information</CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="category_id">Member Category *</Label>
                         <Select
-                          value={editFormData.category_id?.toString()}
-                          onValueChange={(value) => setEditFormData({ ...editFormData, category_id: Number(value) })}
+                          value={editFormData.category_id?.toString() || ''}
+                          onValueChange={(value) => {
+                            setEditFormData({ ...editFormData, category_id: value ? Number(value) : undefined });
+                          }}
                         >
                           <SelectTrigger id="category_id">
                             <SelectValue placeholder="Select category" />
@@ -1244,56 +1424,91 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                           </SelectContent>
                         </Select>
                       </div>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Discount Benefits */}
-                <div>
-                  <h4 className="font-semibold mb-4 pb-2 border-b">Discount Benefits</h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor="discount_enabled">Discount Enabled</Label>
-                      <Switch
-                        id="discount_enabled"
-                        checked={editFormData.discount_enabled}
-                        onCheckedChange={(checked) => setEditFormData({ ...editFormData, discount_enabled: checked })}
-                      />
-                      <span className="text-sm text-muted-foreground">
-                        {editFormData.discount_enabled ? 'Yes' : 'No'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="discount_policy">Discount Policy</Label>
-                        <Select
-                          value={editFormData.discount_policy}
-                          onValueChange={(value) => setEditFormData({ ...editFormData, discount_policy: value })}
-                        >
-                          <SelectTrigger id="discount_policy">
-                            <SelectValue placeholder="Select policy" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="percentage">Percentage</SelectItem>
-                            <SelectItem value="fixed">Fixed Amount</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label htmlFor="discount_amount">
-                          {editFormData.discount_policy === 'percentage' ? 'Discount Percentage' : 'Discount Amount'}
-                        </Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="registered_date">Registration Date *</Label>
                         <Input
-                          id="discount_amount"
-                          type="number"
-                          value={editFormData.discount_amount}
-                          onChange={(e) => setEditFormData({ ...editFormData, discount_amount: Number(e.target.value) })}
-                          min="0"
+                          id="registered_date"
+                          type="date"
+                          value={editFormData.registered_date || ''}
+                          onChange={(e) => setEditFormData({ ...editFormData, registered_date: e.target.value })}
+                          required
                         />
                       </div>
-                    </div>
-                  </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="renew_date">Renewal Date *</Label>
+                        <Input
+                          id="renew_date"
+                          type="date"
+                          value={editFormData.renew_date || ''}
+                          onChange={(e) => setEditFormData({ ...editFormData, renew_date: e.target.value })}
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="managerName">Manager Name</Label>
+                        <Input
+                          id="managerName"
+                          value={companyManagerName}
+                          onChange={(e) => setCompanyManagerName(e.target.value)}
+                          placeholder="Enter manager name"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Section 4: Membership Benefits & Offers */}
+                  <Card className="border border-border/60 shadow-sm bg-card/30">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <Gift className="h-4 w-4 text-primary" />
+                        <CardTitle className="text-base font-semibold">Discount Redemptions</CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Discount redemptions history */}
+                      <div className="space-y-3">
+                        {/* <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Discount Redemptions ({discountRedemptions.length})
+                        </h5> */}
+                        
+                        {loadingOffers ? (
+                          <div className="flex items-center justify-center p-6">
+                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : discountRedemptions.length > 0 ? (
+                          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                            {discountRedemptions.map((redemption: any) => (
+                              <div key={redemption.id} className="p-3 border border-blue-200 dark:border-blue-900/30 rounded-lg bg-blue-500/5 dark:bg-blue-950/10 flex items-start justify-between gap-3">
+                                <div className="space-y-0.5">
+                                  <p className="font-semibold text-sm text-blue-700 dark:text-blue-400">
+                                    {redemption.discount_type === 'percentage' 
+                                      ? `${redemption.discount_value}% Discount` 
+                                      : `LKR ${redemption.discount_value?.toLocaleString()} Discount`}
+                                  </p>
+                                  {redemption.discount_amount && (
+                                    <p className="text-xs font-bold text-green-600 dark:text-green-400">
+                                      Saved: LKR {redemption.discount_amount?.toLocaleString()}
+                                    </p>
+                                  )}
+                                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground mt-1">
+                                    <span>Redeemed: {new Date(redemption.redeemed_at).toLocaleDateString()}</span>
+                                    {redemption.bill_number && <span className="font-mono">Bill: {redemption.bill_number}</span>}
+                                  </div>
+                                </div>
+                                <Badge className="bg-blue-600 text-white hover:bg-blue-700 text-[10px] shrink-0">Used</Badge>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic p-3 border rounded-lg bg-muted/10">No discount redemptions yet</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             )}

@@ -57,7 +57,7 @@ export const staffApi = {
         .select(`
           *,
           companies (
-            name
+            *
           ),
           customer_categories (
             name
@@ -100,6 +100,10 @@ export const staffApi = {
       const transformedData = (data || []).map((member: any) => ({
         ...member,
         company_name: member.companies?.name,
+        company_phone: member.companies?.phone,
+        company_address: member.companies?.address,
+        company_email: member.companies?.email,
+        company_manager_name: member.companies?.manager_name,
         category_name: member.customer_categories?.name,
         selected_offers: Array.isArray(member.selected_offers) ? member.selected_offers as string[] : [],
         member_code: member.member_code || 'N/A'

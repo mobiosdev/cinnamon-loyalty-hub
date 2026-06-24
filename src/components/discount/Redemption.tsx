@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, Gift, Send, CheckCircle, AlertCircle, Percent } from "lucide-react";
+import { CreditCard, Gift, Send, CheckCircle, AlertCircle, Percent, QrCode, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { offerApi } from "@/services/offerApi";
@@ -14,6 +14,7 @@ import { validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import axios from "axios";
+import { cn } from "@/lib/utils";
 
 type RedemptionStep = "input" | "verify" | "benefits";
 
@@ -52,6 +53,33 @@ const Redemption = () => {
   const [availableOffers, setAvailableOffers] = useState<AvailableOffer[]>([]);
   const [redeemedItems, setRedeemedItems] = useState<Set<string>>(new Set());
   const [discountHistory, setDiscountHistory] = useState<any[]>([]);
+
+  // Name search and remark states
+  const [searchNameQuery, setSearchNameQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchingNames, setSearchingNames] = useState(false);
+  const [remark, setRemark] = useState("");
+
+  const getCategoryBadgeVariant = (categoryName: string): "default" | "secondary" | "destructive" | "outline" => {
+    const categoryColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+      'vip': 'default',
+      'premium': 'default',
+      'standard': 'secondary',
+      'basic': 'outline',
+      'corporate': 'secondary',
+      'silver': 'outline',
+      'gold': 'default',
+      'platinum': 'destructive',
+    };
+    
+    const normalized = categoryName?.toLowerCase() || '';
+    for (const [key, variant] of Object.entries(categoryColors)) {
+      if (normalized.includes(key)) {
+        return variant;
+      }
+    }
+    return 'outline';
+  };
 
   const formatExpiryTime = (timeString: string | null) => {
     if (!timeString) return "";
@@ -314,10 +342,72 @@ const Redemption = () => {
     setAvailableOffers([]);
     setRedeemedItems(new Set());
     setExpiryTime(null);
+    setSearchNameQuery("");
+    setSearchResults([]);
+    setRemark("");
+  };
+
+  const handleSelectMember = (member: any) => {
+    setMobileNumber(member.mobile || "");
+    setMemberCode(member.member_code || "");
+    toast.success(`Selected member: ${member.first_name} ${member.last_name}`);
+  };
+
+  const handleNameSearch = async () => {
+    if (!searchNameQuery.trim()) {
+      toast.error("Please enter a name to search");
+      return;
+    }
+    
+    setSearchingNames(true);
+    try {
+      let query = supabase
+        .from('members')
+        .select(`
+          *,
+          companies (
+            name
+          ),
+          customer_categories (
+            name
+          )
+        `);
+
+      // Only get active and non-deleted members
+      query = query.eq('is_active', true).or('is_deleted.eq.false,is_deleted.is.null');
+
+      const trimmedQuery = searchNameQuery.trim();
+      if (trimmedQuery) {
+        query = query.or(`first_name.ilike.%${trimmedQuery}%,last_name.ilike.%${trimmedQuery}%`);
+      }
+
+      const { data, error } = await query.limit(10);
+      
+      if (error) throw error;
+      
+      const transformedData = (data || []).map((member: any) => ({
+        ...member,
+        company_name: member.companies?.name,
+        category_name: member.customer_categories?.name,
+      }));
+
+      setSearchResults(transformedData);
+      
+      if (transformedData.length === 0) {
+        toast.info("No matching members found");
+      } else {
+        toast.success(`Found ${transformedData.length} matching member(s)`);
+      }
+    } catch (error) {
+      console.error("Error searching member by name:", error);
+      toast.error("Failed to search members");
+    } finally {
+      setSearchingNames(false);
+    }
   };
 
   const renderInputStep = () => (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <Label htmlFor="billNumber">Bill Number</Label>
         <Input
@@ -329,41 +419,149 @@ const Redemption = () => {
         />
       </div>
 
-      <div>
-        <Label htmlFor="mobile">Customer Mobile Number</Label>
-        <Input
-          id="mobile"
-          value={mobileNumber}
-          onChange={(e) => setMobileNumber(e.target.value)}
-          placeholder="+94 XXX XXX XXX"
-          className="text-lg"
-        />
+      <div className="space-y-2">
+        <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
+          <div className="space-y-1">
+            <Label htmlFor="mobile">Member Mobile Number</Label>
+            <Input
+              id="mobile"
+              value={mobileNumber}
+              onChange={(e) => setMobileNumber(e.target.value)}
+              placeholder="+94 XXX XXX XXX"
+              className="text-lg"
+            />
+          </div>
+
+          <div className="pt-6 font-semibold text-muted-foreground text-sm text-center">OR</div>
+
+          <div className="space-y-1">
+            <Label htmlFor="memberCode">Member Code</Label>
+            <Input
+              id="memberCode"
+              value={memberCode}
+              onChange={(e) => setMemberCode(e.target.value)}
+              placeholder="e.g. MEM12345"
+              className="text-lg font-mono uppercase"
+            />
+          </div>
+        </div>
+        
+        <p className="text-xs text-muted-foreground">
+          Provide at least Mobile Number or Member Code to search the member.
+        </p>
       </div>
 
       <div className="relative flex py-2 items-center">
         <div className="flex-grow border-t border-muted"></div>
-        <span className="flex-shrink mx-4 text-muted-foreground text-xs uppercase">or</span>
+        <span className="flex-shrink mx-4 text-muted-foreground text-xs uppercase font-semibold">Or Search by Name</span>
         <div className="flex-grow border-t border-muted"></div>
       </div>
 
-      <div>
-        <Label htmlFor="memberCode">Member Code</Label>
-        <Input
-          id="memberCode"
-          value={memberCode}
-          onChange={(e) => setMemberCode(e.target.value)}
-          placeholder="e.g. MEM12345"
-          className="text-lg font-mono uppercase"
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          Provide at least Mobile Number or Member Code to search the member
-        </p>
+      <div className="space-y-4 p-4 bg-muted/20 rounded-lg border border-border/50">
+        <div className="space-y-1">
+          <Label htmlFor="searchNameQuery">Search by First Name or Last Name</Label>
+          <Input
+            id="searchNameQuery"
+            value={searchNameQuery}
+            onChange={(e) => setSearchNameQuery(e.target.value)}
+            placeholder="Enter first name or last name..."
+            className="w-full"
+          />
+        </div>
+
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={handleNameSearch} 
+          disabled={searchingNames}
+          className="w-full"
+        >
+          {searchingNames ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Searching...
+            </>
+          ) : (
+            "Search Member"
+          )}
+        </Button>
+
+        {/* Search Results Table (mirroring Registered Members page, excluding actions) */}
+        {searchResults.length > 0 && (
+          <div className="border rounded-md mt-4 overflow-x-auto bg-background">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Member Code</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {searchResults.map((member) => (
+                  <TableRow 
+                    key={member.id} 
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => handleSelectMember(member)}
+                  >
+                    <TableCell className="font-mono font-semibold text-xs">{member.member_code || 'N/A'}</TableCell>
+                    <TableCell className="text-xs font-medium">{`${member.title || ''} ${member.first_name} ${member.last_name}`}</TableCell>
+                    <TableCell className="text-xs">{member.company_name || 'N/A'}</TableCell>
+                    <TableCell className="text-xs">
+                      <Badge variant={getCategoryBadgeVariant(member.category_name)} className="text-[10px] py-0 px-1.5">
+                        {member.category_name || 'N/A'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{member.mobile}</TableCell>
+                    <TableCell className="text-xs">
+                      <Badge variant={member.is_active ? "default" : "secondary"} className="text-[10px] py-0 px-1.5">
+                        {member.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
 
-      <Button onClick={handleSendOTP} disabled={loading} size="lg" className="w-full">
-        <Send className="mr-2 h-4 w-4" />
-        {loading ? "Sending..." : "Send OTP"}
-      </Button>
+      <div className="space-y-1">
+        <Label htmlFor="remark">Remark</Label>
+        <Input
+          id="remark"
+          value={remark}
+          onChange={(e) => setRemark(e.target.value)}
+          placeholder="Enter any remarks or notes..."
+          className="text-base"
+        />
+      </div>
+
+      <div className="space-y-3 pt-2">
+        <Button onClick={handleSendOTP} disabled={loading} size="lg" className="w-full">
+          <Send className="mr-2 h-4 w-4" />
+          {loading ? "Sending..." : "Send OTP"}
+        </Button>
+
+        <Button 
+          type="button" 
+          variant="outline" 
+          size="lg" 
+          className="w-full border-dashed border-primary/40 hover:border-primary/80 hover:bg-primary/5 text-primary"
+          onClick={() => toast.info("QR Code scanner opening...")}
+        >
+          <QrCode className="mr-2 h-5 w-5" />
+          Click to Scan QR Code
+        </Button>
+
+        {/* <Button onClick={handleSendOTP} disabled={loading} size="lg" className="w-full" variant="secondary">
+          <Send className="mr-2 h-4 w-4" />
+          {loading ? "Sending..." : "Send OTP"}
+        </Button> */}
+      </div>
     </div>
   );
 
@@ -623,7 +821,7 @@ const Redemption = () => {
             <CardTitle className="font-serif">Redemption</CardTitle>
           </div>
           <CardDescription>
-            Verify customer and redeem all available benefits in one place
+            Verify members and redeme benifits
           </CardDescription>
         </CardHeader>
 

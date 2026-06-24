@@ -748,7 +748,7 @@ const CompanyRegistration = () => {
                      </div>
 
                      <div className="space-y-2">
-                       <Label htmlFor="companyPhone">Company Phone</Label>
+                       <Label htmlFor="companyPhone">Company Phone Number</Label>
                        <Input
                          id="companyPhone"
                          value={companyPhone}
