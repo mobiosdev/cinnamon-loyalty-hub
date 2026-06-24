@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Gift, Plus, Pencil, Trash2, Trash, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { offerApi } from "@/services/offerApi";
+import { offerApi, serializeOfferDescription, parseOfferDescription } from "@/services/offerApi";
 import { categoryApi } from "@/services/categoryApi";
 import { supabase } from "@/integrations/supabase/client";
 import { logOfferActivity } from "@/utils/auditLogger";
@@ -27,6 +27,16 @@ const OfferManagement = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   const [editSelectedCategoryIds, setEditSelectedCategoryIds] = useState<number[]>([]);
+  const [categorySettings, setCategorySettings] = useState<Record<number, {
+    is_recurrent: boolean;
+    hasUsageLimit: boolean;
+    usage_limit: string;
+  }>>({});
+  const [editCategorySettings, setEditCategorySettings] = useState<Record<number, {
+    is_recurrent: boolean;
+    hasUsageLimit: boolean;
+    usage_limit: string;
+  }>>({});
   const [selectedOfferIds, setSelectedOfferIds] = useState<Set<string>>(new Set());
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [showBulkDeleteAlert, setShowBulkDeleteAlert] = useState(false);
@@ -72,6 +82,42 @@ const OfferManagement = () => {
     loadCategories();
   }, []);
 
+  const handleCategoryToggle = (catId: number, checked: boolean) => {
+    if (checked) {
+      setSelectedCategoryIds([...selectedCategoryIds, catId]);
+      if (!categorySettings[catId]) {
+        setCategorySettings(prev => ({
+          ...prev,
+          [catId]: {
+            is_recurrent: false,
+            hasUsageLimit: false,
+            usage_limit: "",
+          }
+        }));
+      }
+    } else {
+      setSelectedCategoryIds(selectedCategoryIds.filter(id => id !== catId));
+    }
+  };
+
+  const handleEditCategoryToggle = (catId: number, checked: boolean) => {
+    if (checked) {
+      setEditSelectedCategoryIds([...editSelectedCategoryIds, catId]);
+      if (!editCategorySettings[catId]) {
+        setEditCategorySettings(prev => ({
+          ...prev,
+          [catId]: {
+            is_recurrent: false,
+            hasUsageLimit: false,
+            usage_limit: "",
+          }
+        }));
+      }
+    } else {
+      setEditSelectedCategoryIds(editSelectedCategoryIds.filter(id => id !== catId));
+    }
+  };
+
   const loadOffers = async () => {
     try {
       const data = await offerApi.getOffers();
@@ -92,8 +138,8 @@ const OfferManagement = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || selectedCategoryIds.length === 0) {
-      toast.error("Please fill all required fields and select at least one category");
+    if (!formData.name || !formData.valid_from || !formData.valid_until || selectedCategoryIds.length === 0) {
+      toast.error("Please fill all required fields (Name, Valid Dates, and Category)");
       return;
     }
 
@@ -106,65 +152,76 @@ const OfferManagement = () => {
       toast.error("Please enter a valid maximum discount amount");
       return;
     }
-    if (formData.is_recurrent && formData.hasUsageLimit) {
-      const limitVal = parseInt(formData.usage_limit);
-      if (isNaN(limitVal) || limitVal <= 0) {
-        toast.error("Please enter a valid usage limit (minimum 1)");
-        return;
+
+    // Validate recurrence settings for each selected category
+    for (const catId of selectedCategoryIds) {
+      const settings = categorySettings[catId];
+      if (settings?.is_recurrent && settings.hasUsageLimit) {
+        const limitVal = parseInt(settings.usage_limit);
+        const catName = categories.find(c => c.id === catId)?.name || `Category ${catId}`;
+        if (isNaN(limitVal) || limitVal <= 0) {
+          toast.error(`Please enter a valid usage limit (minimum 1) for ${catName}`);
+          return;
+        }
       }
     }
 
     setLoading(true);
     try {
+      // Serialize the recurrence settings for all selected categories into the description
+      const serializedDescription = serializeOfferDescription(formData.description, categorySettings);
+
+      // Use the settings of the first category as default values for the offers table columns
+      const firstCatId = selectedCategoryIds[0];
+      const defaultSettings = categorySettings[firstCatId] || {
+        is_recurrent: false,
+        hasUsageLimit: false,
+        usage_limit: "",
+      };
+
       const createdOffer = await offerApi.createOffer({
         name: formData.name,
-        description: formData.description,
+        description: serializedDescription,
         valid_from: formData.valid_from,
         valid_to: formData.valid_until,
         is_active: true,
-        category_ids: selectedCategoryIds,
-        category_id: selectedCategoryIds[0], // For backward compatibility
+        category_ids: selectedCategoryIds, // Associate with ALL selected categories!
+        category_id: firstCatId,
         min_bill_value: formData.hasMinBillValue ? parseFloat(formData.min_bill_value) : undefined,
         max_discount_amount: formData.hasMaxDiscount ? parseFloat(formData.max_discount_amount) : undefined,
-        is_recurrent: formData.is_recurrent,
-        usage_limit: formData.is_recurrent && formData.hasUsageLimit ? parseInt(formData.usage_limit) : null,
+        is_recurrent: defaultSettings.is_recurrent,
+        usage_limit: defaultSettings.is_recurrent && defaultSettings.hasUsageLimit ? parseInt(defaultSettings.usage_limit) : null,
       });
-      
-      // Log offer creation
+
+      // Log offer activity
+      const catNames = selectedCategoryIds
+        .map(id => categories.find(c => c.id === id)?.name)
+        .filter(Boolean)
+        .join(', ');
+
       await logOfferActivity('create', formData.name, createdOffer.id, {
-        categories: selectedCategoryIds.map(id => categories.find(c => c.id === id)?.name).join(', '),
+        categories: catNames,
         valid_from: formData.valid_from,
         valid_to: formData.valid_until,
         min_bill_value: formData.hasMinBillValue ? formData.min_bill_value : null,
         max_discount_amount: formData.hasMaxDiscount ? formData.max_discount_amount : null,
-        is_recurrent: formData.is_recurrent,
-        usage_limit: formData.is_recurrent && formData.hasUsageLimit ? formData.usage_limit : null
       });
-      
-      // If apply to existing members is checked, call the edge function
-      if (formData.applyToExistingMembers && selectedCategoryIds.length > 0) {
+
+      // If apply to existing members is checked, assign the offer
+      if (formData.applyToExistingMembers) {
         try {
-          const { data, error } = await supabase.functions.invoke('assign-offer-to-members', {
+          await supabase.functions.invoke('assign-offer-to-members', {
             body: {
               offer_id: createdOffer.id,
               category_ids: selectedCategoryIds,
             },
           });
-
-          if (error) throw error;
-
-          if (data?.updated_count > 0) {
-            toast.success(`Offer created and assigned to ${data.updated_count} existing members`);
-          } else {
-            toast.success("Offer created successfully");
-          }
         } catch (assignError) {
-          console.error('Error assigning offer to members:', assignError);
-          toast.warning("Offer created but failed to assign to some members");
+          console.error(`Error assigning offer to members:`, assignError);
         }
-      } else {
-        toast.success("Offer created successfully");
       }
+
+      toast.success("Offer created successfully");
       
       setFormData({ 
         name: "", 
@@ -181,6 +238,7 @@ const OfferManagement = () => {
         usage_limit: "",
       });
       setSelectedCategoryIds([]);
+      setCategorySettings({});
       loadOffers();
     } catch (error) {
       toast.error("Failed to create offer");
@@ -211,9 +269,13 @@ const OfferManagement = () => {
 
   const handleEditClick = async (offer: any) => {
     setEditingOffer(offer);
+    
+    // Parse description and recurrence settings
+    const { description: cleanDescription, category_recurrence } = parseOfferDescription(offer.description);
+
     setEditFormData({
       name: offer.name,
-      description: offer.description || "",
+      description: cleanDescription || "",
       valid_from: offer.valid_from || "",
       valid_to: offer.valid_to || "",
       hasMinBillValue: !!offer.min_bill_value,
@@ -229,9 +291,31 @@ const OfferManagement = () => {
     try {
       const categoryIds = await offerApi.getOfferCategories(offer.id);
       setEditSelectedCategoryIds(categoryIds);
+
+      // Initialize settings for all categories belonging to this offer
+      const initialSettings: Record<number, { is_recurrent: boolean; hasUsageLimit: boolean; usage_limit: string }> = {};
+      categoryIds.forEach(id => {
+        // If there are saved settings in the description for this category, use them!
+        if (category_recurrence && category_recurrence[id]) {
+          initialSettings[id] = {
+            is_recurrent: !!category_recurrence[id].is_recurrent,
+            hasUsageLimit: !!category_recurrence[id].hasUsageLimit,
+            usage_limit: category_recurrence[id].usage_limit?.toString() || "",
+          };
+        } else {
+          // Otherwise, fall back to the offer's own settings
+          initialSettings[id] = {
+            is_recurrent: !!offer.is_recurrent,
+            hasUsageLimit: offer.usage_limit !== null && offer.usage_limit !== undefined,
+            usage_limit: offer.usage_limit?.toString() || "",
+          };
+        }
+      });
+      setEditCategorySettings(initialSettings);
     } catch (error) {
       console.error('Error loading offer categories:', error);
       setEditSelectedCategoryIds([]);
+      setEditCategorySettings({});
     }
     
     setIsEditDialogOpen(true);
@@ -239,8 +323,8 @@ const OfferManagement = () => {
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editFormData.name || editSelectedCategoryIds.length === 0) {
-      toast.error("Please fill all required fields and select at least one category");
+    if (!editFormData.name || !editFormData.valid_from || !editFormData.valid_to || editSelectedCategoryIds.length === 0) {
+      toast.error("Please fill all required fields (Name, Valid Dates, and Category)");
       return;
     }
 
@@ -253,37 +337,52 @@ const OfferManagement = () => {
       toast.error("Please enter a valid maximum discount amount");
       return;
     }
-    if (editFormData.is_recurrent && editFormData.hasUsageLimit) {
-      const limitVal = parseInt(editFormData.usage_limit);
-      if (isNaN(limitVal) || limitVal <= 0) {
-        toast.error("Please enter a valid usage limit (minimum 1)");
-        return;
+
+    // Validate recurrence settings for each selected category in Edit Form
+    for (const catId of editSelectedCategoryIds) {
+      const settings = editCategorySettings[catId];
+      if (settings?.is_recurrent && settings.hasUsageLimit) {
+        const limitVal = parseInt(settings.usage_limit);
+        const catName = categories.find(c => c.id === catId)?.name || `Category ${catId}`;
+        if (isNaN(limitVal) || limitVal <= 0) {
+          toast.error(`Please enter a valid usage limit (minimum 1) for ${catName}`);
+          return;
+        }
       }
     }
 
     setLoading(true);
     try {
+      // Serialize the recurrence settings for all selected categories into the description
+      const serializedDescription = serializeOfferDescription(editFormData.description, editCategorySettings);
+
+      // Use the settings of the first category as the default values for the offers table columns
+      const firstCatId = editSelectedCategoryIds[0];
+      const defaultSettings = editCategorySettings[firstCatId] || {
+        is_recurrent: false,
+        hasUsageLimit: false,
+        usage_limit: "",
+      };
+
       await offerApi.updateOffer(editingOffer.id, {
         name: editFormData.name,
-        description: editFormData.description,
+        description: serializedDescription,
         valid_from: editFormData.valid_from,
         valid_to: editFormData.valid_to,
-        category_ids: editSelectedCategoryIds,
-        category_id: editSelectedCategoryIds[0], // For backward compatibility
+        category_ids: editSelectedCategoryIds, // Associate with ALL selected categories!
+        category_id: firstCatId,
         min_bill_value: editFormData.hasMinBillValue ? parseFloat(editFormData.min_bill_value) : null,
         max_discount_amount: editFormData.hasMaxDiscount ? parseFloat(editFormData.max_discount_amount) : null,
-        is_recurrent: editFormData.is_recurrent,
-        usage_limit: editFormData.is_recurrent && editFormData.hasUsageLimit ? parseInt(editFormData.usage_limit) : null,
+        is_recurrent: defaultSettings.is_recurrent,
+        usage_limit: defaultSettings.is_recurrent && defaultSettings.hasUsageLimit ? parseInt(defaultSettings.usage_limit) : null,
       });
-      
+
       // Log offer update
       await logOfferActivity('update', editFormData.name, editingOffer.id, {
         categories: editSelectedCategoryIds.map(id => categories.find(c => c.id === id)?.name).join(', '),
         valid_from: editFormData.valid_from,
         valid_to: editFormData.valid_to,
         previous_name: editingOffer.name,
-        is_recurrent: editFormData.is_recurrent,
-        usage_limit: editFormData.is_recurrent && editFormData.hasUsageLimit ? editFormData.usage_limit : null
       });
       
       toast.success("Offer updated successfully");
@@ -531,7 +630,7 @@ const OfferManagement = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="valid_from">Valid From</Label>
+                <Label htmlFor="valid_from">Valid From *</Label>
                 <Input
                   id="valid_from"
                   type="date"
@@ -540,7 +639,7 @@ const OfferManagement = () => {
                 />
               </div>
               <div>
-                <Label htmlFor="valid_until">Valid Until</Label>
+                <Label htmlFor="valid_until">Valid Until *</Label>
                 <Input
                   id="valid_until"
                   type="date"
@@ -552,98 +651,137 @@ const OfferManagement = () => {
 
             <div>
               <Label htmlFor="category">Member Categories *</Label>
-              <div className="border rounded-md p-4 space-y-3 bg-background mt-2">
-                <p className="text-sm text-muted-foreground">Select one or more categories for this offer</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {categories.map((cat) => (
-                    <label
-                      key={cat.id}
-                      className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedCategoryIds.includes(cat.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedCategoryIds([...selectedCategoryIds, cat.id]);
-                          } else {
-                            setSelectedCategoryIds(selectedCategoryIds.filter(id => id !== cat.id));
-                          }
-                        }}
-                        className="h-4 w-4 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                      />
-                      <span className="text-sm font-medium">{cat.name}</span>
-                    </label>
-                  ))}
+              <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
+                <p className="text-sm text-muted-foreground">Select one or more categories and configure their recurrence settings</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {categories.map((cat) => {
+                    const isSelected = selectedCategoryIds.includes(cat.id);
+                    const settings = categorySettings[cat.id] || {
+                      is_recurrent: false,
+                      hasUsageLimit: false,
+                      usage_limit: "",
+                    };
+                    return (
+                      <div
+                        key={cat.id}
+                        className={`border rounded-lg p-4 transition-all duration-200 ${
+                          isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:bg-accent/30"
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`cat-${cat.id}`}
+                            checked={isSelected}
+                            onChange={(e) => handleCategoryToggle(cat.id, e.target.checked)}
+                            className="h-4 w-4 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
+                          />
+                          <Label htmlFor={`cat-${cat.id}`} className="font-semibold text-base cursor-pointer">
+                            {cat.name}
+                          </Label>
+                        </div>
+
+                        {isSelected && (
+                          <div className="mt-3 pl-6 border-l-2 border-primary/20 space-y-3 animate-fadeIn">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id={`recurrent-${cat.id}`}
+                                checked={settings.is_recurrent}
+                                onChange={(e) => {
+                                  setCategorySettings(prev => ({
+                                    ...prev,
+                                    [cat.id]: {
+                                      ...settings,
+                                      is_recurrent: e.target.checked
+                                    }
+                                  }));
+                                }}
+                                className="h-4 w-4 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
+                              />
+                              <Label htmlFor={`recurrent-${cat.id}`} className="cursor-pointer text-sm font-medium">
+                                Recurrent Offer
+                              </Label>
+                            </div>
+
+                            {settings.is_recurrent && (
+                              <div className="mt-2 pl-6 space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="radio"
+                                    id={`limit-unlimited-${cat.id}`}
+                                    name={`usage-limit-type-${cat.id}`}
+                                    checked={!settings.hasUsageLimit}
+                                    onChange={() => {
+                                      setCategorySettings(prev => ({
+                                        ...prev,
+                                        [cat.id]: {
+                                          ...settings,
+                                          hasUsageLimit: false
+                                        }
+                                      }));
+                                    }}
+                                    className="h-4 w-4 border-primary text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                                  />
+                                  <Label htmlFor={`limit-unlimited-${cat.id}`} className="cursor-pointer font-normal text-xs text-muted-foreground">
+                                    Unlimited Redemptions
+                                  </Label>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="radio"
+                                      id={`limit-defined-${cat.id}`}
+                                      name={`usage-limit-type-${cat.id}`}
+                                      checked={settings.hasUsageLimit}
+                                      onChange={() => {
+                                        setCategorySettings(prev => ({
+                                          ...prev,
+                                          [cat.id]: {
+                                            ...settings,
+                                            hasUsageLimit: true
+                                          }
+                                        }));
+                                      }}
+                                      className="h-4 w-4 border-primary text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                                    />
+                                    <Label htmlFor={`limit-defined-${cat.id}`} className="cursor-pointer font-normal text-xs text-muted-foreground">
+                                      Define Redemption Limit
+                                    </Label>
+                                  </div>
+
+                                  {settings.hasUsageLimit && (
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      placeholder="Limit (e.g., 3)"
+                                      value={settings.usage_limit}
+                                      onChange={(e) => {
+                                        setCategorySettings(prev => ({
+                                          ...prev,
+                                          [cat.id]: {
+                                            ...settings,
+                                            usage_limit: e.target.value
+                                          }
+                                        }));
+                                      }}
+                                      className="w-full max-w-[180px] h-8 text-xs mt-1"
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 {selectedCategoryIds.length === 0 && (
                   <p className="text-sm text-destructive">Please select at least one category</p>
                 )}
-              </div>
-            </div>
-
-            <div>
-              <Label>Recurrence & Usage Limit</Label>
-              <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
-                <div className="flex items-start space-x-3">
-                  <input
-                    type="checkbox"
-                    id="is_recurrent"
-                    checked={formData.is_recurrent}
-                    onChange={(e) => setFormData({ ...formData, is_recurrent: e.target.checked })}
-                    className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="is_recurrent" className="cursor-pointer font-medium">Recurrent Offer</Label>
-                    <p className="text-sm text-muted-foreground">Allow members to redeem this offer multiple times</p>
-                    
-                    {formData.is_recurrent && (
-                      <div className="mt-4 pl-6 border-l-2 border-muted space-y-3">
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            id="limit-unlimited"
-                            name="usage-limit-type"
-                            checked={!formData.hasUsageLimit}
-                            onChange={() => setFormData({ ...formData, hasUsageLimit: false })}
-                            className="h-4 w-4 border-primary text-primary focus:ring-2 focus:ring-primary"
-                          />
-                          <Label htmlFor="limit-unlimited" className="cursor-pointer font-normal text-sm">
-                            Unlimited Redemptions
-                          </Label>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="radio"
-                              id="limit-defined"
-                              name="usage-limit-type"
-                              checked={formData.hasUsageLimit}
-                              onChange={() => setFormData({ ...formData, hasUsageLimit: true })}
-                              className="h-4 w-4 border-primary text-primary focus:ring-2 focus:ring-primary"
-                            />
-                            <Label htmlFor="limit-defined" className="cursor-pointer font-normal text-sm">
-                              Define Redemption Limit
-                            </Label>
-                          </div>
-                          
-                          {formData.hasUsageLimit && (
-                            <Input
-                              type="number"
-                              min="1"
-                              step="1"
-                              placeholder="Enter max redemptions per member (e.g., 3)"
-                              value={formData.usage_limit}
-                              onChange={(e) => setFormData({ ...formData, usage_limit: e.target.value })}
-                              className="w-full max-w-xs mt-1"
-                            />
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -713,14 +851,14 @@ const OfferManagement = () => {
                   id="applyToExistingMembers"
                   checked={formData.applyToExistingMembers}
                   onChange={(e) => setFormData({ ...formData, applyToExistingMembers: e.target.checked })}
-                  className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                  className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
                 />
                 <div className="flex-1">
                   <Label htmlFor="applyToExistingMembers" className="cursor-pointer font-medium">
-                    Apply to All Existing Members
+                    Apply to All Member Categories
                   </Label>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Automatically assign this offer to all existing members in the selected categories
+                    Automatically assign this offer to all members in the selected categories
                   </p>
                 </div>
               </div>
@@ -743,7 +881,7 @@ const OfferManagement = () => {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Active Offers</CardTitle>
-                <CardDescription>Manage existing physical offers</CardDescription>
+                <CardDescription>Manage All Existing Offers</CardDescription>
               </div>
               {selectedOfferIds.size > 0 && (
                 <Button
@@ -804,15 +942,46 @@ const OfferManagement = () => {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{offer.description}</TableCell>
                     <TableCell>
-                      {offer.is_recurrent ? (
-                        <Badge variant="outline" className="border-primary text-primary bg-primary/5">
-                          Recurrent ({offer.usage_limit ? `Limit: ${offer.usage_limit}` : "Unlimited"})
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">
-                          Single Use
-                        </Badge>
-                      )}
+                      <div className="flex flex-col gap-1.5">
+                        {offer.category_name ? (
+                          offer.category_name.split(', ').map((name: string, index: number) => {
+                            const category = categories.find(c => c.name === name);
+                            const settings = category && offer.category_recurrence?.[category.id];
+                            if (settings) {
+                              return (
+                                <div key={index} className="flex items-center gap-1.5 text-xs">
+                                  <span className="font-semibold text-muted-foreground w-20 inline-block">{name}:</span>
+                                  {settings.is_recurrent ? (
+                                    <Badge variant="outline" className="h-5 py-0 border-primary text-primary bg-primary/5 text-[10px]">
+                                      Recurrent ({settings.hasUsageLimit && settings.usage_limit ? `Limit: ${settings.usage_limit}` : "Unlimited"})
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="h-5 py-0 text-muted-foreground text-[10px]">
+                                      Single Use
+                                    </Badge>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={index} className="flex items-center gap-1.5 text-xs">
+                                <span className="font-semibold text-muted-foreground w-20 inline-block">{name}:</span>
+                                {offer.is_recurrent ? (
+                                  <Badge variant="outline" className="h-5 py-0 border-primary text-primary bg-primary/5 text-[10px]">
+                                    Recurrent ({offer.usage_limit ? `Limit: ${offer.usage_limit}` : "Unlimited"})
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="h-5 py-0 text-muted-foreground text-[10px]">
+                                    Single Use
+                                  </Badge>
+                                )}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <span className="text-sm text-muted-foreground">No categories</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-sm">
                       {offer.valid_from && offer.valid_to
@@ -929,15 +1098,46 @@ const OfferManagement = () => {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{offer.description}</TableCell>
                   <TableCell>
-                    {offer.is_recurrent ? (
-                      <Badge variant="outline" className="border-primary text-primary bg-primary/5">
-                        Recurrent ({offer.usage_limit ? `Limit: ${offer.usage_limit}` : "Unlimited"})
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-muted-foreground">
-                        Single Use
-                      </Badge>
-                    )}
+                    <div className="flex flex-col gap-1.5">
+                      {offer.category_name ? (
+                        offer.category_name.split(', ').map((name: string, index: number) => {
+                          const category = categories.find(c => c.name === name);
+                          const settings = category && offer.category_recurrence?.[category.id];
+                          if (settings) {
+                            return (
+                              <div key={index} className="flex items-center gap-1.5 text-xs">
+                                <span className="font-semibold text-muted-foreground w-20 inline-block">{name}:</span>
+                                {settings.is_recurrent ? (
+                                  <Badge variant="outline" className="h-5 py-0 border-primary text-primary bg-primary/5 text-[10px]">
+                                    Recurrent ({settings.hasUsageLimit && settings.usage_limit ? `Limit: ${settings.usage_limit}` : "Unlimited"})
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="h-5 py-0 text-muted-foreground text-[10px]">
+                                    Single Use
+                                  </Badge>
+                                )}
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={index} className="flex items-center gap-1.5 text-xs">
+                              <span className="font-semibold text-muted-foreground w-20 inline-block">{name}:</span>
+                              {offer.is_recurrent ? (
+                                <Badge variant="outline" className="h-5 py-0 border-primary text-primary bg-primary/5 text-[10px]">
+                                  Recurrent ({offer.usage_limit ? `Limit: ${offer.usage_limit}` : "Unlimited"})
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="h-5 py-0 text-muted-foreground text-[10px]">
+                                  Single Use
+                                </Badge>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <span className="text-sm text-muted-foreground">No categories</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-sm">
                     {offer.valid_from && offer.valid_to
@@ -990,213 +1190,255 @@ const OfferManagement = () => {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl flex flex-col max-h-[85vh] p-0 overflow-hidden gap-0">
+          <DialogHeader className="p-6 pb-4 border-b">
             <DialogTitle>Edit Offer</DialogTitle>
             <DialogDescription>Update the offer details below</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEditSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-name">Offer Name *</Label>
-                <Input
-                  id="edit-name"
-                  value={editFormData.name}
-                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                  placeholder="e.g., Birthday Cake, Dinner Voucher"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="edit-description">Description</Label>
-              <Textarea
-                id="edit-description"
-                value={editFormData.description}
-                onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                placeholder="Details about the offer"
-                rows={2}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-valid_from">Valid From</Label>
-                <Input
-                  id="edit-valid_from"
-                  type="date"
-                  value={editFormData.valid_from}
-                  onChange={(e) => setEditFormData({ ...editFormData, valid_from: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-valid_to">Valid Until</Label>
-                <Input
-                  id="edit-valid_to"
-                  type="date"
-                  value={editFormData.valid_to}
-                  onChange={(e) => setEditFormData({ ...editFormData, valid_to: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="edit-category">Member Categories *</Label>
-              <div className="border rounded-md p-4 space-y-3 bg-background mt-2">
-                <p className="text-sm text-muted-foreground">Select one or more categories for this offer</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {categories.map((cat) => (
-                    <label
-                      key={cat.id}
-                      className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={editSelectedCategoryIds.includes(cat.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setEditSelectedCategoryIds([...editSelectedCategoryIds, cat.id]);
-                          } else {
-                            setEditSelectedCategoryIds(editSelectedCategoryIds.filter(id => id !== cat.id));
-                          }
-                        }}
-                        className="h-4 w-4 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                      />
-                      <span className="text-sm font-medium">{cat.name}</span>
-                    </label>
-                  ))}
-                </div>
-                {editSelectedCategoryIds.length === 0 && (
-                  <p className="text-sm text-destructive">Please select at least one category</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <Label>Recurrence & Usage Limit</Label>
-              <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
-                <div className="flex items-start space-x-3">
-                  <input
-                    type="checkbox"
-                    id="edit-is_recurrent"
-                    checked={editFormData.is_recurrent}
-                    onChange={(e) => setEditFormData({ ...editFormData, is_recurrent: e.target.checked })}
-                    className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          
+          <form onSubmit={handleEditSubmit} className="flex flex-col flex-1 overflow-hidden">
+            {/* Scrollable Content Container */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 max-h-[60vh] scrollbar-thin">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="edit-name">Offer Name *</Label>
+                  <Input
+                    id="edit-name"
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                    placeholder="e.g., Birthday Cake, Dinner Voucher"
                   />
-                  <div className="flex-1">
-                    <Label htmlFor="edit-is_recurrent" className="cursor-pointer font-medium">Recurrent Offer</Label>
-                    <p className="text-sm text-muted-foreground">Allow members to redeem this offer multiple times</p>
-                    
-                    {editFormData.is_recurrent && (
-                      <div className="mt-4 pl-6 border-l-2 border-muted space-y-3">
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            id="edit-limit-unlimited"
-                            name="edit-usage-limit-type"
-                            checked={!editFormData.hasUsageLimit}
-                            onChange={() => setEditFormData({ ...editFormData, hasUsageLimit: false })}
-                            className="h-4 w-4 border-primary text-primary focus:ring-2 focus:ring-primary"
-                          />
-                          <Label htmlFor="edit-limit-unlimited" className="cursor-pointer font-normal text-sm">
-                            Unlimited Redemptions
-                          </Label>
-                        </div>
-                        
-                        <div className="space-y-2">
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  value={editFormData.description}
+                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                  placeholder="Details about the offer"
+                  rows={2}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="edit-valid_from">Valid From *</Label>
+                  <Input
+                    id="edit-valid_from"
+                    type="date"
+                    value={editFormData.valid_from}
+                    onChange={(e) => setEditFormData({ ...editFormData, valid_from: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-valid_to">Valid Until *</Label>
+                  <Input
+                    id="edit-valid_to"
+                    type="date"
+                    value={editFormData.valid_to}
+                    onChange={(e) => setEditFormData({ ...editFormData, valid_to: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-category">Member Categories *</Label>
+                <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
+                  <p className="text-sm text-muted-foreground">Select one or more categories and configure their recurrence settings</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {categories.map((cat) => {
+                      const isSelected = editSelectedCategoryIds.includes(cat.id);
+                      const settings = editCategorySettings[cat.id] || {
+                        is_recurrent: false,
+                        hasUsageLimit: false,
+                        usage_limit: "",
+                      };
+                      return (
+                        <div
+                          key={cat.id}
+                          className={`border rounded-lg p-4 transition-all duration-200 ${
+                            isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:bg-accent/30"
+                          }`}
+                        >
                           <div className="flex items-center space-x-2">
                             <input
-                              type="radio"
-                              id="edit-limit-defined"
-                              name="edit-usage-limit-type"
-                              checked={editFormData.hasUsageLimit}
-                              onChange={() => setEditFormData({ ...editFormData, hasUsageLimit: true })}
-                              className="h-4 w-4 border-primary text-primary focus:ring-2 focus:ring-primary"
+                              type="checkbox"
+                              id={`edit-cat-${cat.id}`}
+                              checked={isSelected}
+                              onChange={(e) => handleEditCategoryToggle(cat.id, e.target.checked)}
+                              className="h-4 w-4 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
                             />
-                            <Label htmlFor="edit-limit-defined" className="cursor-pointer font-normal text-sm">
-                              Define Redemption Limit
+                            <Label htmlFor={`edit-cat-${cat.id}`} className="font-semibold text-base cursor-pointer">
+                              {cat.name}
                             </Label>
                           </div>
-                          
-                          {editFormData.hasUsageLimit && (
-                            <Input
-                              type="number"
-                              min="1"
-                              step="1"
-                              placeholder="Enter max redemptions per member (e.g., 3)"
-                              value={editFormData.usage_limit}
-                              onChange={(e) => setEditFormData({ ...editFormData, usage_limit: e.target.value })}
-                              className="w-full max-w-xs mt-1"
-                            />
+
+                          {isSelected && (
+                            <div className="mt-3 pl-6 border-l-2 border-primary/20 space-y-3 animate-fadeIn">
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  id={`edit-recurrent-${cat.id}`}
+                                  checked={settings.is_recurrent}
+                                  onChange={(e) => {
+                                    setEditCategorySettings(prev => ({
+                                      ...prev,
+                                      [cat.id]: {
+                                        ...settings,
+                                        is_recurrent: e.target.checked
+                                      }
+                                    }));
+                                  }}
+                                  className="h-4 w-4 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
+                                />
+                                <Label htmlFor={`edit-recurrent-${cat.id}`} className="cursor-pointer text-sm font-medium">
+                                  Recurrent Offer
+                                </Label>
+                              </div>
+
+                              {settings.is_recurrent && (
+                                <div className="mt-2 pl-6 space-y-2">
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="radio"
+                                      id={`edit-limit-unlimited-${cat.id}`}
+                                      name={`edit-usage-limit-type-${cat.id}`}
+                                      checked={!settings.hasUsageLimit}
+                                      onChange={() => {
+                                        setEditCategorySettings(prev => ({
+                                          ...prev,
+                                          [cat.id]: {
+                                            ...settings,
+                                            hasUsageLimit: false
+                                          }
+                                        }));
+                                      }}
+                                      className="h-4 w-4 border-primary text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                                    />
+                                    <Label htmlFor={`edit-limit-unlimited-${cat.id}`} className="cursor-pointer font-normal text-xs text-muted-foreground">
+                                      Unlimited Redemptions
+                                    </Label>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <div className="flex items-center space-x-2">
+                                      <input
+                                        type="radio"
+                                        id={`edit-limit-defined-${cat.id}`}
+                                        name={`edit-usage-limit-type-${cat.id}`}
+                                        checked={settings.hasUsageLimit}
+                                        onChange={() => {
+                                          setEditCategorySettings(prev => ({
+                                            ...prev,
+                                            [cat.id]: {
+                                              ...settings,
+                                              hasUsageLimit: true
+                                            }
+                                          }));
+                                        }}
+                                        className="h-4 w-4 border-primary text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                                      />
+                                      <Label htmlFor={`edit-limit-defined-${cat.id}`} className="cursor-pointer font-normal text-xs text-muted-foreground">
+                                        Define Redemption Limit
+                                      </Label>
+                                    </div>
+
+                                    {settings.hasUsageLimit && (
+                                      <Input
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        placeholder="Limit (e.g., 3)"
+                                        value={settings.usage_limit}
+                                        onChange={(e) => {
+                                          setEditCategorySettings(prev => ({
+                                            ...prev,
+                                            [cat.id]: {
+                                              ...settings,
+                                              usage_limit: e.target.value
+                                            }
+                                          }));
+                                        }}
+                                        className="w-full max-w-[180px] h-8 text-xs mt-1"
+                                      />
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
+                      );
+                    })}
+                  </div>
+                  {editSelectedCategoryIds.length === 0 && (
+                    <p className="text-sm text-destructive">Please select at least one category</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label>Discount Policy (Optional)</Label>
+                <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
+                  <p className="text-sm text-muted-foreground">Configure discount restrictions for this offer</p>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-start space-x-3">
+                      <input
+                        type="checkbox"
+                        id="edit-hasMinBillValue"
+                        checked={editFormData.hasMinBillValue}
+                        onChange={(e) => setEditFormData({ ...editFormData, hasMinBillValue: e.target.checked })}
+                        className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
+                      />
+                      <div className="flex-1">
+                        <Label htmlFor="edit-hasMinBillValue" className="cursor-pointer font-medium">Minimum Bill Value</Label>
+                        {editFormData.hasMinBillValue && (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Enter minimum bill amount"
+                            value={editFormData.min_bill_value}
+                            onChange={(e) => setEditFormData({ ...editFormData, min_bill_value: e.target.value })}
+                            className="mt-2"
+                          />
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <Label>Discount Policy (Optional)</Label>
-              <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
-                <p className="text-sm text-muted-foreground">Configure discount restrictions for this offer</p>
-                
-                <div className="space-y-3">
-                  <div className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      id="edit-hasMinBillValue"
-                      checked={editFormData.hasMinBillValue}
-                      onChange={(e) => setEditFormData({ ...editFormData, hasMinBillValue: e.target.checked })}
-                      className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                    />
-                    <div className="flex-1">
-                      <Label htmlFor="edit-hasMinBillValue" className="cursor-pointer">Minimum Bill Value</Label>
-                      {editFormData.hasMinBillValue && (
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="Enter minimum bill amount"
-                          value={editFormData.min_bill_value}
-                          onChange={(e) => setEditFormData({ ...editFormData, min_bill_value: e.target.value })}
-                          className="mt-2"
-                        />
-                      )}
                     </div>
-                  </div>
 
-                  <div className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      id="edit-hasMaxDiscount"
-                      checked={editFormData.hasMaxDiscount}
-                      onChange={(e) => setEditFormData({ ...editFormData, hasMaxDiscount: e.target.checked })}
-                      className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                    />
-                    <div className="flex-1">
-                      <Label htmlFor="edit-hasMaxDiscount" className="cursor-pointer">Maximum Discount Amount (for percentage discounts)</Label>
-                      {editFormData.hasMaxDiscount && (
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="Enter maximum discount cap"
-                          value={editFormData.max_discount_amount}
-                          onChange={(e) => setEditFormData({ ...editFormData, max_discount_amount: e.target.value })}
-                          className="mt-2"
-                        />
-                      )}
+                    <div className="flex items-start space-x-3">
+                      <input
+                        type="checkbox"
+                        id="edit-hasMaxDiscount"
+                        checked={editFormData.hasMaxDiscount}
+                        onChange={(e) => setEditFormData({ ...editFormData, hasMaxDiscount: e.target.checked })}
+                        className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
+                      />
+                      <div className="flex-1">
+                        <Label htmlFor="edit-hasMaxDiscount" className="cursor-pointer font-medium">Maximum Discount Amount (for percentage discounts)</Label>
+                        {editFormData.hasMaxDiscount && (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Enter maximum discount cap"
+                            value={editFormData.max_discount_amount}
+                            onChange={(e) => setEditFormData({ ...editFormData, max_discount_amount: e.target.value })}
+                            className="mt-2"
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            
-
-            <div className="flex justify-end gap-2">
+            {/* Fixed Footer Actions */}
+            <div className="flex justify-end gap-2 p-6 border-t bg-muted/20">
               <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 Cancel
               </Button>

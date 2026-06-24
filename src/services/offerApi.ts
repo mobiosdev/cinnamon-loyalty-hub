@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { validateAndNormalizeSriLankanMobile } from '@/utils/phoneUtils';
 
-interface PhysicalOffer {
+export interface PhysicalOffer {
   id?: string;
   name: string;
   description: string;
@@ -15,6 +15,11 @@ interface PhysicalOffer {
   max_discount_amount?: number;
   is_recurrent?: boolean;
   usage_limit?: number | null;
+  category_recurrence?: Record<number, {
+    is_recurrent: boolean;
+    hasUsageLimit: boolean;
+    usage_limit: string;
+  }>;
 }
 
 interface OfferRedemption {
@@ -35,6 +40,38 @@ interface AvailableOffer {
   min_bill_value?: number;
   max_discount_amount?: number;
 }
+
+const METADATA_PREFIX = '\n\n[Recurrence Settings: ';
+const METADATA_SUFFIX = ']';
+
+export const parseOfferDescription = (rawDescription: string | null) => {
+  if (!rawDescription) return { description: '', category_recurrence: {} };
+  
+  const startIndex = rawDescription.indexOf(METADATA_PREFIX);
+  if (startIndex === -1) {
+    return { description: rawDescription, category_recurrence: {} };
+  }
+  
+  const endIndex = rawDescription.indexOf(METADATA_SUFFIX, startIndex + METADATA_PREFIX.length);
+  if (endIndex === -1) {
+    return { description: rawDescription, category_recurrence: {} };
+  }
+  
+  const jsonStr = rawDescription.substring(startIndex + METADATA_PREFIX.length, endIndex);
+  try {
+    const category_recurrence = JSON.parse(jsonStr);
+    const description = rawDescription.substring(0, startIndex);
+    return { description, category_recurrence };
+  } catch (e) {
+    console.error('Error parsing offer recurrence metadata:', e);
+    return { description: rawDescription, category_recurrence: {} };
+  }
+};
+
+export const serializeOfferDescription = (description: string, category_recurrence: Record<number, any>) => {
+  const jsonStr = JSON.stringify(category_recurrence);
+  return `${description}${METADATA_PREFIX}${jsonStr}${METADATA_SUFFIX}`;
+};
 
 export const offerApi = {
   async getOffers(): Promise<PhysicalOffer[]> {
@@ -65,8 +102,12 @@ export const offerApi = {
             .filter(Boolean)
             .join(', ');
 
+          const { description, category_recurrence } = parseOfferDescription(offer.description);
+
           return {
             ...offer,
+            description,
+            category_recurrence,
             category_name: categoryNames || 'No category'
           };
         })
@@ -108,7 +149,13 @@ export const offerApi = {
         }
       }
 
-      return data;
+      const { description, category_recurrence } = parseOfferDescription(data.description);
+
+      return {
+        ...data,
+        description,
+        category_recurrence
+      };
     } catch (error) {
       console.error('Error creating offer:', error);
       throw error;
@@ -154,7 +201,13 @@ export const offerApi = {
         }
       }
 
-      return data;
+      const { description, category_recurrence } = parseOfferDescription(data.description);
+
+      return {
+        ...data,
+        description,
+        category_recurrence
+      };
     } catch (error) {
       console.error('Error updating offer:', error);
       throw error;
@@ -177,7 +230,7 @@ export const offerApi = {
       // First, get the member by phone number
       const { data: member, error: memberError } = await supabase
         .from('members')
-        .select('selected_offers, discount_enabled, mobile')
+        .select('selected_offers, discount_enabled, mobile, category_id')
         .in('mobile', searchFormats)
         .eq('is_active', true)
         .maybeSingle();
@@ -223,20 +276,36 @@ export const offerApi = {
         const count = redemptionCounts[offer.id] || 0;
         let isRedeemed = false;
 
-        if (offer.is_recurrent) {
-          if (offer.usage_limit !== null && offer.usage_limit !== undefined) {
-            isRedeemed = count >= offer.usage_limit;
+        const { description, category_recurrence } = parseOfferDescription(offer.description);
+        const memberCatId = member.category_id;
+        const settings = memberCatId ? category_recurrence[memberCatId] : null;
+
+        if (settings) {
+          if (settings.is_recurrent) {
+            if (settings.hasUsageLimit && settings.usage_limit) {
+              isRedeemed = count >= parseInt(settings.usage_limit);
+            } else {
+              isRedeemed = false; // Unlimited
+            }
           } else {
-            isRedeemed = false; // Unlimited
+            isRedeemed = count >= 1; // Single use
           }
         } else {
-          isRedeemed = count >= 1; // Default to single use
+          if (offer.is_recurrent) {
+            if (offer.usage_limit !== null && offer.usage_limit !== undefined) {
+              isRedeemed = count >= offer.usage_limit;
+            } else {
+              isRedeemed = false; // Unlimited
+            }
+          } else {
+            isRedeemed = count >= 1; // Default to single use
+          }
         }
 
         return {
           id: offer.id,
           name: offer.name,
-          description: offer.description,
+          description: description,
           is_redeemed: isRedeemed,
           min_bill_value: offer.min_bill_value,
           max_discount_amount: offer.max_discount_amount
@@ -302,7 +371,15 @@ export const offerApi = {
       return (data || [])
         .map((item: any) => item.offers)
         .filter(Boolean)
-        .filter((offer: any) => offer.is_active);
+        .filter((offer: any) => offer.is_active)
+        .map((offer: any) => {
+          const { description, category_recurrence } = parseOfferDescription(offer.description);
+          return {
+            ...offer,
+            description,
+            category_recurrence
+          };
+        });
     } catch (error) {
       console.error('Error fetching offers by category:', error);
       throw error;

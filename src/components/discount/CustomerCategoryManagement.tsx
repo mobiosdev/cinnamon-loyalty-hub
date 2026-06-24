@@ -7,12 +7,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Users, Plus, Trash2, Pencil } from "lucide-react";
+import { Users, Plus, Trash2, Pencil, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { categoryApi } from "@/services/categoryApi";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { logCategoryActivity } from "@/utils/auditLogger";
+import { logCategoryActivity, logOfferActivity } from "@/utils/auditLogger";
+import { Switch } from "@/components/ui/switch";
+import { supabase } from "@/integrations/supabase/client";
+import { offerApi, parseOfferDescription } from "@/services/offerApi";
 
 const CustomerCategoryManagement = () => {
   const [categories, setCategories] = useState<any[]>([]);
@@ -22,6 +25,10 @@ const CustomerCategoryManagement = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deletingCategoryId, setDeletingCategoryId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ name: "", description: "", valid_from: "", valid_to: "" });
+  const [isViewOffersOpen, setIsViewOffersOpen] = useState(false);
+  const [viewingCategory, setViewingCategory] = useState<any>(null);
+  const [categoryOffers, setCategoryOffers] = useState<any[]>([]);
+  const [loadingOffers, setLoadingOffers] = useState(false);
 
   useEffect(() => {
     loadCategories();
@@ -33,6 +40,71 @@ const CustomerCategoryManagement = () => {
       setCategories(data);
     } catch (error) {
       toast.error("Failed to load member categories");
+    }
+  };
+
+  const loadCategoryOffers = async (categoryId: number) => {
+    setLoadingOffers(true);
+    try {
+      const { data, error } = await supabase
+        .from('offer_categories')
+        .select(`
+          offers (*)
+        `)
+        .eq('category_id', categoryId);
+
+      if (error) throw error;
+
+      const mappedOffers = (data || [])
+        .map((item: any) => item.offers)
+        .filter(Boolean)
+        .filter((offer: any) => !offer.is_deleted)
+        .map((offer: any) => {
+          const { description, category_recurrence } = parseOfferDescription(offer.description);
+          return {
+            ...offer,
+            description,
+            category_recurrence
+          };
+        });
+
+      setCategoryOffers(mappedOffers);
+    } catch (error) {
+      console.error('Error loading category offers:', error);
+      toast.error("Failed to load offers for this category");
+    } finally {
+      setLoadingOffers(false);
+    }
+  };
+
+  const handleToggleOfferStatus = async (offerId: string, currentStatus: boolean) => {
+    // Optimistic Update: flip the state locally first
+    setCategoryOffers(prev =>
+      prev.map(offer =>
+        offer.id === offerId ? { ...offer, is_active: !currentStatus } : offer
+      )
+    );
+
+    try {
+      const offer = categoryOffers.find(o => o.id === offerId);
+      await offerApi.updateOffer(offerId, { is_active: !currentStatus });
+      
+      if (offer) {
+        await logOfferActivity('update', offer.name, offerId, {
+          action: !currentStatus ? 'enabled' : 'disabled',
+          status: !currentStatus ? 'active' : 'inactive'
+        });
+      }
+      
+      toast.success(`Offer ${!currentStatus ? "enabled" : "disabled"}`);
+    } catch (error) {
+      // Revert on error
+      setCategoryOffers(prev =>
+        prev.map(offer =>
+          offer.id === offerId ? { ...offer, is_active: currentStatus } : offer
+        )
+      );
+      toast.error("Failed to update offer status");
     }
   };
 
@@ -232,6 +304,18 @@ const CustomerCategoryManagement = () => {
                       <Button
                         variant="ghost"
                         size="icon"
+                        onClick={() => {
+                          setViewingCategory(cat);
+                          loadCategoryOffers(cat.id);
+                          setIsViewOffersOpen(true);
+                        }}
+                        title="View Active Offers"
+                      >
+                        <Eye className="h-4 w-4 text-primary" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => handleEditClick(cat)}
                       >
                         <Pencil className="h-4 w-4" />
@@ -314,6 +398,105 @@ const CustomerCategoryManagement = () => {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isViewOffersOpen} onOpenChange={setIsViewOffersOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-4 border-b">
+            <DialogTitle>Active Offers for {viewingCategory?.name}</DialogTitle>
+            <DialogDescription>View and manage offers assigned to this category</DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+            {loadingOffers ? (
+              <div className="flex justify-center items-center py-8">
+                <span className="text-sm text-muted-foreground">Loading offers...</span>
+              </div>
+            ) : categoryOffers.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No offers assigned to this category
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Offer Name</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Type & Limit</TableHead>
+                    <TableHead>Valid Period</TableHead>
+                    <TableHead className="text-right">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {categoryOffers.map((offer) => (
+                    <TableRow key={offer.id}>
+                      <TableCell className="font-medium">{offer.name}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{offer.description}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          {viewingCategory && (
+                            (() => {
+                              const settings = offer.category_recurrence?.[viewingCategory.id];
+                              if (settings) {
+                                return (
+                                  <div className="flex items-center gap-1.5 text-xs">
+                                    {settings.is_recurrent ? (
+                                      <Badge variant="outline" className="h-5 py-0 border-primary text-primary bg-primary/5 text-[10px]">
+                                        Recurrent ({settings.hasUsageLimit && settings.usage_limit ? `Limit: ${settings.usage_limit}` : "Unlimited"})
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="h-5 py-0 text-muted-foreground text-[10px]">
+                                        Single Use
+                                      </Badge>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  {offer.is_recurrent ? (
+                                    <Badge variant="outline" className="h-5 py-0 border-primary text-primary bg-primary/5 text-[10px]">
+                                      Recurrent ({offer.usage_limit ? `Limit: ${offer.usage_limit}` : "Unlimited"})
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="h-5 py-0 text-muted-foreground text-[10px]">
+                                      Single Use
+                                    </Badge>
+                                  )}
+                                </div>
+                              );
+                            })()
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {offer.valid_from && offer.valid_to
+                          ? `${new Date(offer.valid_from).toLocaleDateString()} - ${new Date(offer.valid_to).toLocaleDateString()}`
+                          : "No expiry"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-3">
+                          <Badge variant={offer.is_active ? "default" : "secondary"}>
+                            {offer.is_active ? "Active" : "Disabled"}
+                          </Badge>
+                          <Switch
+                            checked={offer.is_active}
+                            onCheckedChange={() => handleToggleOfferStatus(offer.id, offer.is_active)}
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+          <div className="flex justify-end p-6 border-t bg-muted/20">
+            <Button type="button" variant="outline" onClick={() => setIsViewOffersOpen(false)}>
+              Close
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
