@@ -102,6 +102,8 @@ export type Database = {
           description: string | null
           id: number
           name: string
+          valid_from: string | null
+          valid_to: string | null
         }
         Insert: {
           created_at?: string | null
@@ -109,6 +111,8 @@ export type Database = {
           description?: string | null
           id?: number
           name: string
+          valid_from?: string | null
+          valid_to?: string | null
         }
         Update: {
           created_at?: string | null
@@ -116,6 +120,8 @@ export type Database = {
           description?: string | null
           id?: number
           name?: string
+          valid_from?: string | null
+          valid_to?: string | null
         }
         Relationships: []
       }
@@ -172,6 +178,8 @@ export type Database = {
           category_id: number | null
           company_id: string | null
           created_at: string | null
+          date_of_birth: string | null
+          deactivation_note: string | null
           designation: string | null
           discount_amount: number | null
           discount_enabled: boolean | null
@@ -181,6 +189,7 @@ export type Database = {
           first_name: string
           id: string
           is_active: boolean | null
+          is_deleted: boolean | null
           last_name: string
           member_code: string | null
           mobile: string
@@ -195,6 +204,8 @@ export type Database = {
           category_id?: number | null
           company_id?: string | null
           created_at?: string | null
+          date_of_birth?: string | null
+          deactivation_note?: string | null
           designation?: string | null
           discount_amount?: number | null
           discount_enabled?: boolean | null
@@ -204,6 +215,7 @@ export type Database = {
           first_name: string
           id?: string
           is_active?: boolean | null
+          is_deleted?: boolean | null
           last_name: string
           member_code?: string | null
           mobile: string
@@ -218,6 +230,8 @@ export type Database = {
           category_id?: number | null
           company_id?: string | null
           created_at?: string | null
+          date_of_birth?: string | null
+          deactivation_note?: string | null
           designation?: string | null
           discount_amount?: number | null
           discount_enabled?: boolean | null
@@ -227,6 +241,7 @@ export type Database = {
           first_name?: string
           id?: string
           is_active?: boolean | null
+          is_deleted?: boolean | null
           last_name?: string
           member_code?: string | null
           mobile?: string
@@ -341,10 +356,12 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_deleted: boolean | null
+          is_recurrent: boolean | null
           max_discount_amount: number | null
           min_bill_value: number | null
           name: string
           updated_at: string | null
+          usage_limit: number | null
           valid_from: string
           valid_to: string
         }
@@ -355,10 +372,12 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_deleted?: boolean | null
+          is_recurrent?: boolean | null
           max_discount_amount?: number | null
           min_bill_value?: number | null
           name: string
           updated_at?: string | null
+          usage_limit?: number | null
           valid_from: string
           valid_to: string
         }
@@ -369,10 +388,12 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_deleted?: boolean | null
+          is_recurrent?: boolean | null
           max_discount_amount?: number | null
           min_bill_value?: number | null
           name?: string
           updated_at?: string | null
+          usage_limit?: number | null
           valid_from?: string
           valid_to?: string
         }

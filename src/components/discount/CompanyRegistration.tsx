@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Building2, User, Check, ChevronsUpDown, Upload, Loader2 } from "lucide-react";
+import { Plus, Building2, User, Check, ChevronsUpDown, Upload, Loader2, Calendar, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { companyApi } from "@/services/companyApi";
@@ -40,6 +40,7 @@ interface StaffMember {
   mobile: string;
   email: string;
   address: string;
+  dateOfBirth?: string;
   designation: string;
   registeredDate: string;
   renewDate: string;
@@ -88,6 +89,7 @@ const CompanyRegistration = () => {
     mobile: '',
     email: '',
     address: '',
+    dateOfBirth: '',
     designation: '',
     registeredDate: new Date().toISOString().split('T')[0],
     renewDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
@@ -224,6 +226,7 @@ const CompanyRegistration = () => {
       mobile: '',
       email: '',
       address: '',
+      dateOfBirth: '',
       designation: '',
       registeredDate: new Date().toISOString().split('T')[0],
       renewDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
@@ -310,6 +313,7 @@ const CompanyRegistration = () => {
       mobile: staff.mobile,
       email: staff.email,
       address: staff.address,
+      dateOfBirth: staff.date_of_birth?.split('T')[0] || '',
       designation: staff.designation,
       registeredDate: staff.registered_date?.split('T')[0] || '',
       renewDate: staff.renew_date?.split('T')[0] || '',
@@ -367,14 +371,16 @@ const CompanyRegistration = () => {
     e.preventDefault();
     
     // Validate company fields
-    if (!companyName || !companyAddress) {
-      toast.error('Please fill all required company fields (Name and Address)');
-      return;
-    }
+    // if (!companyName || !companyAddress) {
+    //   toast.error('Please fill all required company fields (Name and Address)');
+    //   return;
+    // }
 
     // Validate member fields
     if (!memberFormData.title || !memberFormData.first_name || !memberFormData.last_name || 
-        !memberFormData.mobile || !memberFormData.email || !memberFormData.designation) {
+        !memberFormData.mobile || !memberFormData.email 
+        // || !memberFormData.designation
+      ) {
       toast.error('Please fill all required member fields');
       return;
     }
@@ -450,6 +456,7 @@ const CompanyRegistration = () => {
           mobile: mobileValidation.normalized!,
           email: memberFormData.email || '',
           address: memberFormData.address || '',
+          date_of_birth: memberFormData.dateOfBirth || null,
           designation: memberFormData.designation || '',
           registered_date: memberFormData.registeredDate || new Date().toISOString().split('T')[0],
           renew_date: memberFormData.renewDate || new Date().toISOString().split('T')[0],
@@ -487,6 +494,7 @@ const CompanyRegistration = () => {
           mobile: mobileValidation.normalized!,
           email: memberFormData.email || '',
           address: memberFormData.address || '',
+          date_of_birth: memberFormData.dateOfBirth || null,
           designation: memberFormData.designation || '',
           registered_date: memberFormData.registeredDate || new Date().toISOString().split('T')[0],
           renew_date: memberFormData.renewDate || new Date().toISOString().split('T')[0],
@@ -566,230 +574,277 @@ const CompanyRegistration = () => {
             <CardTitle className="font-serif">Member Details</CardTitle>
           </div>
           <CardDescription>
-            Enter member details and company information for discount eligibility
+            Enter member details and company information for member registration
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleMemberSubmit} onKeyDown={handleKeyDown}>
-            <div className="space-y-6">
-              {/* Member Details Section */}
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Title *</Label>
-                    <Select 
-                      value={memberFormData.title} 
-                      onValueChange={(value) => setMemberFormData({...memberFormData, title: value})}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select title" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Mr">Mr.</SelectItem>
-                        <SelectItem value="Mrs">Mrs.</SelectItem>
-                        <SelectItem value="Ms">Ms.</SelectItem>
-                        <SelectItem value="Miss">Miss</SelectItem>
-                        <SelectItem value="Dr">Dr.</SelectItem>
-                        <SelectItem value="Prof">Prof.</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>First Name *</Label>
-                    <Input 
-                      value={memberFormData.first_name || ''} 
-                      onChange={(e) => setMemberFormData({...memberFormData, first_name: e.target.value})}
-                      placeholder="First name"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Last Name *</Label>
-                    <Input 
-                      value={memberFormData.last_name || ''} 
-                      onChange={(e) => setMemberFormData({...memberFormData, last_name: e.target.value})}
-                      placeholder="Last name"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Email *</Label>
-                    <Input 
-                      type="email"
-                      value={memberFormData.email || ''} 
-                      onChange={(e) => setMemberFormData({...memberFormData, email: e.target.value})}
-                      placeholder="email@example.com"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Mobile *</Label>
-                    <Input 
-                      value={memberFormData.mobile || ''} 
-                      onChange={(e) => setMemberFormData({...memberFormData, mobile: e.target.value})}
-                      placeholder="+94 77 123 4567"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Designation *</Label>
-                    <Input 
-                      value={memberFormData.designation || ''} 
-                      onChange={(e) => setMemberFormData({...memberFormData, designation: e.target.value})}
-                      placeholder="e.g. Sales Manager"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Address</Label>
-                    <Input 
-                      value={memberFormData.address || ''} 
-                      onChange={(e) => setMemberFormData({...memberFormData, address: e.target.value})}
-                      placeholder="Member address"
-                    />
-                  </div>
+             <div className="space-y-6">
+               {/* Member Details Cards */}
+               <div className="space-y-6">
+                 {/* Personal Information Card */}
+                 <Card className="border border-border/60 shadow-sm bg-card/30">
+                   <CardHeader className="pb-3">
+                     <div className="flex items-center gap-2">
+                       <User className="h-4 w-4 text-primary" />
+                       <CardTitle className="text-base font-semibold">Personal Information</CardTitle>
+                     </div>
+                   </CardHeader>
+                   <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                     <div className="space-y-2">
+                       <Label>Title *</Label>
+                       <Select 
+                         value={memberFormData.title} 
+                         onValueChange={(value) => setMemberFormData({...memberFormData, title: value})}
+                       >
+                         <SelectTrigger>
+                           <SelectValue placeholder="Select title" />
+                         </SelectTrigger>
+                         <SelectContent>
+                           <SelectItem value="Mr">Mr.</SelectItem>
+                           <SelectItem value="Mrs">Mrs.</SelectItem>
+                           <SelectItem value="Ms">Ms.</SelectItem>
+                           <SelectItem value="Miss">Miss</SelectItem>
+                           <SelectItem value="Dr">Dr.</SelectItem>
+                           <SelectItem value="Prof">Prof.</SelectItem>
+                         </SelectContent>
+                       </Select>
+                     </div>
+                     
+                     <div className="space-y-2">
+                       <Label>First Name *</Label>
+                       <Input 
+                         value={memberFormData.first_name || ''} 
+                         onChange={(e) => setMemberFormData({...memberFormData, first_name: e.target.value})}
+                         placeholder="First name"
+                       />
+                     </div>
+                     
+                     <div className="space-y-2">
+                       <Label>Last Name *</Label>
+                       <Input 
+                         value={memberFormData.last_name || ''} 
+                         onChange={(e) => setMemberFormData({...memberFormData, last_name: e.target.value})}
+                         placeholder="Last name"
+                       />
+                     </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="companyName">Company Name *</Label>
-                    <div className="relative">
-                      <Input
-                        id="companyName"
-                        value={companyName}
-                        onChange={(e) => setCompanyName(e.target.value)}
-                        onFocus={() => setOpenCompanySearch(true)}
-                        onBlur={() => setTimeout(() => setOpenCompanySearch(false), 200)}
-                        placeholder="Search or enter company name..."
-                        className="pr-10"
-                      />
-                      <ChevronsUpDown className="absolute right-3 top-3 h-4 w-4 opacity-50" />
-                      {openCompanySearch && companyName && (
-                        <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-md">
-                          <div className="max-h-60 overflow-auto p-1">
-                            {isLoadingCompanies ? (
-                              <div className="flex items-center justify-center p-4">
-                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                <span className="text-sm">Searching companies...</span>
-                              </div>
-                            ) : companiesError ? (
-                              <div className="p-2 text-sm text-destructive">
-                                {companiesError}
-                              </div>
-                            ) : companies.length > 0 ? (
-                              companies
-                                .filter(company =>
-                                  company.name.toLowerCase().includes(companyName.toLowerCase())
-                                )
-                                .map((company) => (
-                                  <div
-                                    key={company.id}
-                                    className="flex items-start gap-2 p-2 hover:bg-accent cursor-pointer rounded-sm"
-                                    onClick={() => handleSelectCompany(company)}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "h-4 w-4 mt-0.5 pointer-events-none",
-                                        selectedCompany?.id === company.id ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    <div className="flex-1">
-                                      <p className="font-medium text-sm">{company.name}</p>
-                                      <p className="text-xs text-muted-foreground">{company.address}</p>
-                                    </div>
-                                  </div>
-                                ))
-                            ) : (
-                              <div className="p-2 text-sm text-muted-foreground">
-                                No matching companies. Continue typing to add new company.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                     <div className="space-y-2">
+                       <Label>Date of Birth</Label>
+                       <Input 
+                         type="date"
+                         value={memberFormData.dateOfBirth || ''} 
+                         onChange={(e) => setMemberFormData({...memberFormData, dateOfBirth: e.target.value})}
+                       />
+                     </div>
+                     
+                     <div className="space-y-2">
+                       <Label>Email *</Label>
+                       <Input 
+                         type="email"
+                         value={memberFormData.email || ''} 
+                         onChange={(e) => setMemberFormData({...memberFormData, email: e.target.value})}
+                         placeholder="email@example.com"
+                       />
+                     </div>
+                     
+                     <div className="space-y-2">
+                       <Label>Mobile *</Label>
+                       <Input 
+                         value={memberFormData.mobile || ''} 
+                         onChange={(e) => setMemberFormData({...memberFormData, mobile: e.target.value})}
+                         placeholder="+94 77 123 4567"
+                       />
+                     </div>
+                     
+                     
+                     
+                     <div className="space-y-2 lg:col-span-2">
+                       <Label>Address</Label>
+                       <Input 
+                         value={memberFormData.address || ''} 
+                         onChange={(e) => setMemberFormData({...memberFormData, address: e.target.value})}
+                         placeholder="Member address"
+                       />
+                     </div>
+                   </CardContent>
+                 </Card>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="companyAddress">Company Address *</Label>
-                    <Input
-                      id="companyAddress"
-                      value={companyAddress}
-                      onChange={(e) => setCompanyAddress(e.target.value)}
-                      placeholder="Enter company address"
-                    />
-                  </div>
+                 {/* Company Information Card */}
+                 <Card className="border border-border/60 shadow-sm bg-card/30">
+                   <CardHeader className="pb-3">
+                     <div className="flex items-center gap-2">
+                       <Building2 className="h-4 w-4 text-primary" />
+                       <CardTitle className="text-base font-semibold">Company Information</CardTitle>
+                     </div>
+                   </CardHeader>
+                   <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                     <div className="space-y-2">
+                       <Label htmlFor="companyName">Company Name</Label>
+                       <div className="relative">
+                         <Input
+                           id="companyName"
+                           value={companyName}
+                           onChange={(e) => setCompanyName(e.target.value)}
+                           onFocus={() => setOpenCompanySearch(true)}
+                           onBlur={() => setTimeout(() => setOpenCompanySearch(false), 200)}
+                           placeholder="Search or enter company name..."
+                           className="pr-10"
+                         />
+                         <ChevronsUpDown className="absolute right-3 top-3 h-4 w-4 opacity-50" />
+                         {openCompanySearch && companyName && (
+                           <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-md">
+                             <div className="max-h-60 overflow-auto p-1">
+                               {isLoadingCompanies ? (
+                                 <div className="flex items-center justify-center p-4">
+                                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                   <span className="text-sm">Searching companies...</span>
+                                 </div>
+                               ) : companiesError ? (
+                                 <div className="p-2 text-sm text-destructive">
+                                   {companiesError}
+                                 </div>
+                               ) : companies.length > 0 ? (
+                                 companies
+                                   .filter(company =>
+                                     company.name.toLowerCase().includes(companyName.toLowerCase())
+                                   )
+                                   .map((company) => (
+                                     <div
+                                       key={company.id}
+                                       className="flex items-start gap-2 p-2 hover:bg-accent cursor-pointer rounded-sm"
+                                       onClick={() => handleSelectCompany(company)}
+                                     >
+                                       <Check
+                                         className={cn(
+                                           "h-4 w-4 mt-0.5 pointer-events-none",
+                                           selectedCompany?.id === company.id ? "opacity-100" : "opacity-0"
+                                         )}
+                                       />
+                                       <div className="flex-1">
+                                         <p className="font-medium text-sm">{company.name}</p>
+                                         <p className="text-xs text-muted-foreground">{company.address}</p>
+                                       </div>
+                                     </div>
+                                   ))
+                               ) : (
+                                 <div className="p-2 text-sm text-muted-foreground">
+                                   No matching companies. Continue typing to add new company.
+                                 </div>
+                               )}
+                             </div>
+                           </div>
+                         )}
+                       </div>
+                     </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="companyPhone">Company Phone</Label>
-                    <Input
-                      id="companyPhone"
-                      value={companyPhone}
-                      onChange={(e) => setCompanyPhone(e.target.value)}
-                      placeholder="Enter company phone number"
-                    />
-                  </div>
+                     <div className="space-y-2">
+                       <Label>Designation</Label>
+                       <Input 
+                         value={memberFormData.designation || ''} 
+                         onChange={(e) => setMemberFormData({...memberFormData, designation: e.target.value})}
+                         placeholder="e.g. Sales Manager"
+                       />
+                     </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="companyEmail">Company Email</Label>
-                    <Input
-                      id="companyEmail"
-                      type="email"
-                      value={companyEmail}
-                      onChange={(e) => setCompanyEmail(e.target.value)}
-                      placeholder="Enter company email"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Registration Date *</Label>
-                    <Input 
-                      type="date"
-                      value={memberFormData.registeredDate || ''} 
-                      onChange={(e) => setMemberFormData({...memberFormData, registeredDate: e.target.value})}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Renewal Date *</Label>
-                    <Input 
-                      type="date"
-                      value={memberFormData.renewDate || ''} 
-                      onChange={(e) => setMemberFormData({...memberFormData, renewDate: e.target.value})}
-                    />
-                  </div>
+                     <div className="space-y-2">
+                       <Label htmlFor="companyPhone">Company Phone</Label>
+                       <Input
+                         id="companyPhone"
+                         value={companyPhone}
+                         onChange={(e) => setCompanyPhone(e.target.value)}
+                         placeholder="Enter company phone number"
+                       />
+                     </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="managerName">Manager Name</Label>
-                    <Input
-                      id="managerName"
-                      value={companyFormData.manager_name}
-                      onChange={(e) => setCompanyFormData({...companyFormData, manager_name: e.target.value})}
-                      placeholder="Enter manager name"
-                    />
-                  </div>
+                     <div className="space-y-2 lg:col-span-2">
+                       <Label htmlFor="companyAddress">Company Address</Label>
+                       <Input
+                         id="companyAddress"
+                         value={companyAddress}
+                         onChange={(e) => setCompanyAddress(e.target.value)}
+                         placeholder="Enter company address"
+                       />
+                     </div>
 
-                  <div className="space-y-2">
-                    <Label>Member Category *</Label>
-                    <Select 
-                      value={memberFormData.category_id?.toString() || ''} 
-                      onValueChange={(value) => {
-                        setMemberFormData({...memberFormData, category_id: value ? parseInt(value) : undefined});
-                        setSelectedOfferIds([]); // Reset selected offers when category changes
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category (default: Member)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id.toString()}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                     
+
+                     <div className="space-y-2">
+                       <Label htmlFor="companyEmail">Company Email</Label>
+                       <Input
+                         id="companyEmail"
+                         type="email"
+                         value={companyEmail}
+                         onChange={(e) => setCompanyEmail(e.target.value)}
+                         placeholder="Enter company email"
+                       />
+                     </div>
+                   </CardContent>
+                 </Card>
+
+                 {/* Other Information Card */}
+                 <Card className="border border-border/60 shadow-sm bg-card/30">
+                   <CardHeader className="pb-3">
+                     <div className="flex items-center gap-2">
+                       <FileText className="h-4 w-4 text-primary" />
+                       <CardTitle className="text-base font-semibold">Membership & Other Information</CardTitle>
+                     </div>
+                   </CardHeader>
+                   <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                     <div className="space-y-2">
+                       <Label>Member Category *</Label>
+                       <Select 
+                         value={memberFormData.category_id?.toString() || ''} 
+                         onValueChange={(value) => {
+                           setMemberFormData({...memberFormData, category_id: value ? parseInt(value) : undefined});
+                           setSelectedOfferIds([]); // Reset selected offers when category changes
+                         }}
+                       >
+                         <SelectTrigger>
+                           <SelectValue placeholder="Select category (default: Member)" />
+                         </SelectTrigger>
+                         <SelectContent>
+                           {categories.map((cat) => (
+                             <SelectItem key={cat.id} value={cat.id.toString()}>
+                               {cat.name}
+                             </SelectItem>
+                           ))}
+                         </SelectContent>
+                       </Select>
+                     </div>
+                     
+                     <div className="space-y-2">
+                       <Label>Registration Date *</Label>
+                       <Input 
+                         type="date"
+                         value={memberFormData.registeredDate || ''} 
+                         onChange={(e) => setMemberFormData({...memberFormData, registeredDate: e.target.value})}
+                       />
+                     </div>
+                     
+                     <div className="space-y-2">
+                       <Label>Renewal Date *</Label>
+                       <Input 
+                         type="date"
+                         value={memberFormData.renewDate || ''} 
+                         onChange={(e) => setMemberFormData({...memberFormData, renewDate: e.target.value})}
+                       />
+                     </div>
+
+                     <div className="space-y-2">
+                       <Label htmlFor="managerName">Manager Name</Label>
+                       <Input
+                         id="managerName"
+                         value={companyFormData.manager_name}
+                         onChange={(e) => setCompanyFormData({...companyFormData, manager_name: e.target.value})}
+                         placeholder="Enter manager name"
+                       />
+                     </div>
+
+                     
+                   </CardContent>
+                 </Card>
+               </div>
 
                 {/* Member Category Benefits Subsection */}
                 {memberFormData.category_id && (
@@ -924,7 +979,6 @@ const CompanyRegistration = () => {
                   </div>
                 )}
               </div>
-            </div>
             
             <div className="flex justify-end gap-2 mt-6">
               <Button 

@@ -10,6 +10,8 @@ interface StaffMember {
   mobile: string;
   email?: string;
   address?: string;
+  date_of_birth?: string;
+  deactivation_note?: string;
   designation?: string;
   category_id?: number;
   registered_date?: string;
@@ -18,6 +20,7 @@ interface StaffMember {
   discount_amount?: number;
   discount_policy?: string;
   is_active?: boolean;
+  is_deleted?: boolean;
   created_at?: string;
   company_name?: string;
   category_name?: string;
@@ -60,6 +63,9 @@ export const staffApi = {
             name
           )
         `, { count: 'exact' });
+
+      // Only get members that are not deleted
+      query = query.or('is_deleted.eq.false,is_deleted.is.null');
 
       if (params.search) {
         query = query.or(`first_name.ilike.%${params.search}%,last_name.ilike.%${params.search}%,mobile.ilike.%${params.search}%`);
@@ -186,6 +192,7 @@ export const staffApi = {
         .select('*')
         .in('mobile', searchFormats)
         .eq('is_active', true)
+        .or('is_deleted.eq.false,is_deleted.is.null')
         .maybeSingle();
 
       if (error) {
@@ -204,11 +211,37 @@ export const staffApi = {
     }
   },
 
-  async deleteStaff(id: string): Promise<void> {
+  async getMemberByCode(code: string): Promise<StaffMember | null> {
+    try {
+      const { data, error } = await supabase
+        .from('members')
+        .select('*')
+        .eq('member_code', code)
+        .eq('is_active', true)
+        .or('is_deleted.eq.false,is_deleted.is.null')
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(error.message || 'Failed to fetch member by code');
+      }
+
+      if (!data) return null;
+
+      return {
+        ...data,
+        selected_offers: Array.isArray(data.selected_offers) ? data.selected_offers as string[] : []
+      };
+    } catch (error) {
+      console.error('Error fetching member by code:', error);
+      throw error;
+    }
+  },
+
+  async deactivateStaff(id: string, note: string): Promise<void> {
     try {
       const { error } = await supabase
         .from('members')
-        .update({ is_active: false })
+        .update({ is_active: false, deactivation_note: note })
         .eq('id', id);
 
       if (error) {
@@ -216,6 +249,22 @@ export const staffApi = {
       }
     } catch (error) {
       console.error('Error deactivating staff:', error);
+      throw error;
+    }
+  },
+
+  async deleteStaff(id: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('members')
+        .update({ is_deleted: true })
+        .eq('id', id);
+
+      if (error) {
+        throw new Error(error.message || 'Failed to delete member');
+      }
+    } catch (error) {
+      console.error('Error deleting staff:', error);
       throw error;
     }
   },

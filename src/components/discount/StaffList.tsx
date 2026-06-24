@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash } from "lucide-react";
+import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash, Ban } from "lucide-react";
 import { staffApi } from "@/services/staffApi";
 import { offerApi } from "@/services/offerApi";
 import { companyApi } from "@/services/companyApi";
@@ -47,6 +47,9 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
   const [categories, setCategories] = useState<any[]>([]);
   const [savingMember, setSavingMember] = useState(false);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+  const [showDeactivateAlert, setShowDeactivateAlert] = useState(false);
+  const [deactivationNote, setDeactivationNote] = useState("");
+  const [deactivatingMember, setDeactivatingMember] = useState(false);
   const [deletingMember, setDeletingMember] = useState(false);
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteAlert, setShowBulkDeleteAlert] = useState(false);
@@ -289,6 +292,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
         discount_policy: selectedMember.discount_policy || 'percentage',
         discount_amount: selectedMember.discount_amount || 0,
         is_active: selectedMember.is_active ?? true,
+        date_of_birth: selectedMember.date_of_birth || '',
       });
       
       setIsEditMode(true);
@@ -351,14 +355,64 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
           company: selectedMember.company_name,
           category: selectedMember.category_name,
           phone: selectedMember.mobile,
-          action: 'deactivated'
+          action: 'deleted'
         },
         {
           member_code: selectedMember.member_code,
           phone: selectedMember.mobile,
           name: `${selectedMember.first_name} ${selectedMember.last_name}`
         },
-        'Member Management',
+        'Member Management - Delete',
+        [{
+          field: 'is_deleted',
+          before: false,
+          after: true
+        }]
+      );
+
+      toast.success("Member deleted successfully");
+
+      setIsDetailsOpen(false);
+      setSelectedMember(null);
+      setShowDeleteAlert(false);
+      fetchStaff();
+    } catch (error) {
+      console.error('Error deleting member:', error);
+      toast.error("Failed to delete member");
+    } finally {
+      setDeletingMember(false);
+    }
+  };
+
+  const handleDeactivateMember = async () => {
+    if (!selectedMember) return;
+    if (!deactivationNote.trim()) {
+      toast.error("Deactivation note is mandatory");
+      return;
+    }
+
+    setDeactivatingMember(true);
+    try {
+      await staffApi.deactivateStaff(selectedMember.id!, deactivationNote);
+      
+      // Log the deactivation activity
+      await logMemberActivity(
+        'update',
+        `${selectedMember.first_name} ${selectedMember.last_name}`,
+        selectedMember.id,
+        {
+          company: selectedMember.company_name,
+          category: selectedMember.category_name,
+          phone: selectedMember.mobile,
+          action: 'deactivated',
+          note: deactivationNote
+        },
+        {
+          member_code: selectedMember.member_code,
+          phone: selectedMember.mobile,
+          name: `${selectedMember.first_name} ${selectedMember.last_name}`
+        },
+        'Member Management - Deactivate',
         [{
           field: 'is_active',
           before: true,
@@ -370,13 +424,14 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
 
       setIsDetailsOpen(false);
       setSelectedMember(null);
-      setShowDeleteAlert(false);
+      setShowDeactivateAlert(false);
+      setDeactivationNote("");
       fetchStaff();
     } catch (error) {
       console.error('Error deactivating member:', error);
       toast.error("Failed to deactivate member");
     } finally {
-      setDeletingMember(false);
+      setDeactivatingMember(false);
     }
   };
 
@@ -665,12 +720,23 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
+                    {selectedMember.is_active && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setShowDeactivateAlert(true)}
+                        className="h-8 w-8 text-orange-500 hover:text-orange-600 hover:bg-orange-500/10"
+                        title="Deactivate Member"
+                      >
+                        <Ban className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => setShowDeleteAlert(true)}
                       className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      title="Deactivate Member"
+                      title="Delete Member"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -734,6 +800,12 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                     {selectedMember.is_active ? 'Active' : 'Inactive'}
                   </Badge>
                 </div>
+                {!selectedMember.is_active && selectedMember.deactivation_note && (
+                  <div className="col-span-2 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 rounded-md p-3">
+                    <p className="text-sm font-semibold text-orange-700 dark:text-orange-400">Deactivation Note:</p>
+                    <p className="text-sm text-foreground mt-0.5">{selectedMember.deactivation_note}</p>
+                  </div>
+                )}
               </div>
 
               {/* Personal Details */}
@@ -747,6 +819,14 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Designation</p>
                     <p className="text-base">{selectedMember.designation || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Date of Birth</p>
+                    <p className="text-base">
+                      {selectedMember.date_of_birth 
+                        ? new Date(selectedMember.date_of_birth).toLocaleDateString() 
+                        : 'N/A'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Mobile</p>
@@ -1098,13 +1178,24 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                       </div>
                     </div>
 
-                    <div>
-                      <Label htmlFor="designation">Designation</Label>
-                      <Input
-                        id="designation"
-                        value={editFormData.designation}
-                        onChange={(e) => setEditFormData({ ...editFormData, designation: e.target.value })}
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="designation">Designation</Label>
+                        <Input
+                          id="designation"
+                          value={editFormData.designation}
+                          onChange={(e) => setEditFormData({ ...editFormData, designation: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="date_of_birth">Date of Birth</Label>
+                        <Input
+                          id="date_of_birth"
+                          type="date"
+                          value={editFormData.date_of_birth || ''}
+                          onChange={(e) => setEditFormData({ ...editFormData, date_of_birth: e.target.value })}
+                        />
+                      </div>
                     </div>
 
                     <div>
@@ -1214,10 +1305,10 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
       <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate Member</AlertDialogTitle>
+            <AlertDialogTitle>Delete Member</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to deactivate <span className="font-semibold">{selectedMember?.first_name} {selectedMember?.last_name}</span>? 
-              The member will be marked as inactive but their data will be preserved. You can reactivate them later by editing their profile.
+              Are you sure you want to delete <span className="font-semibold">{selectedMember?.first_name} {selectedMember?.last_name}</span>? 
+              This will mark the member as deleted. This action is irreversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1230,15 +1321,62 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
               {deletingMember ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  Deactivating...
+                  Deleting...
                 </>
               ) : (
-                'Deactivate Member'
+                'Delete Member'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Deactivate Confirmation Dialog */}
+      <AlertDialog open={showDeactivateAlert} onOpenChange={(open) => {
+        setShowDeactivateAlert(open);
+        if (!open) setDeactivationNote("");
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate Member</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <span>
+                Are you sure you want to deactivate <span className="font-semibold">{selectedMember?.first_name} {selectedMember?.last_name}</span>?
+              </span>
+              <div className="space-y-1.5 pt-2">
+                <Label htmlFor="deactivation-reason" className="text-foreground">Deactivation Note *</Label>
+                <Input
+                  id="deactivation-reason"
+                  placeholder="Enter reason for deactivation (mandatory)..."
+                  value={deactivationNote}
+                  onChange={(e) => setDeactivationNote(e.target.value)}
+                  className="w-full text-foreground"
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deactivatingMember} onClick={() => setDeactivationNote("")}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeactivateMember}
+              disabled={deactivatingMember || !deactivationNote.trim()}
+              className="bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              {deactivatingMember ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  Deactivating...
+                </>
+              ) : (
+                'Deactivate'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
       {/* Bulk Delete Confirmation Dialog */}
       <AlertDialog open={showBulkDeleteAlert} onOpenChange={setShowBulkDeleteAlert}>

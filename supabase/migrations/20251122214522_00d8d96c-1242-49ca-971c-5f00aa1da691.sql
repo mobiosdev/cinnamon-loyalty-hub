@@ -6,21 +6,23 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  new_code TEXT;
-  code_exists BOOLEAN;
+  max_num INTEGER;
+  next_num INTEGER;
+  default_start_num CONSTANT INTEGER := 1; -- default starting number if no member (e.g. 1, 2, 100)
 BEGIN
-  LOOP
-    -- Generate a code like MEM001234
-    new_code := 'MEM' || LPAD(FLOOR(RANDOM() * 1000000)::TEXT, 6, '0');
-    
-    -- Check if code already exists
-    SELECT EXISTS(SELECT 1 FROM members WHERE member_code = new_code) INTO code_exists;
-    
-    -- If code doesn't exist, return it
-    IF NOT code_exists THEN
-      RETURN new_code;
-    END IF;
-  END LOOP;
+  -- Get the maximum numeric suffix from codes matching 'MEM<digits>'
+  SELECT MAX(SUBSTRING(member_code FROM '^MEM([0-9]+)$')::INTEGER)
+  INTO max_num
+  FROM members
+  WHERE member_code ~ '^MEM[0-9]+$';
+
+  IF max_num IS NULL THEN
+    next_num := default_start_num;
+  ELSE
+    next_num := max_num + 1;
+  END IF;
+
+  RETURN 'MEM' || LPAD(next_num::TEXT, 5, '0');
 END;
 $$;
 

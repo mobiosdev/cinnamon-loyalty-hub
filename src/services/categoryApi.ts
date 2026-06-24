@@ -5,6 +5,8 @@ interface CustomerCategory {
   name: string;
   description: string;
   created_by: number;
+  valid_from?: string | null;
+  valid_to?: string | null;
 }
 
 export const categoryApi = {

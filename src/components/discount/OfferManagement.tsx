@@ -49,6 +49,9 @@ const OfferManagement = () => {
     hasMaxDiscount: false,
     max_discount_amount: "",
     applyToExistingMembers: false,
+    is_recurrent: false,
+    hasUsageLimit: false,
+    usage_limit: "",
   });
   const [editFormData, setEditFormData] = useState({
     name: "",
@@ -59,6 +62,9 @@ const OfferManagement = () => {
     min_bill_value: "",
     hasMaxDiscount: false,
     max_discount_amount: "",
+    is_recurrent: false,
+    hasUsageLimit: false,
+    usage_limit: "",
   });
 
   useEffect(() => {
@@ -100,6 +106,13 @@ const OfferManagement = () => {
       toast.error("Please enter a valid maximum discount amount");
       return;
     }
+    if (formData.is_recurrent && formData.hasUsageLimit) {
+      const limitVal = parseInt(formData.usage_limit);
+      if (isNaN(limitVal) || limitVal <= 0) {
+        toast.error("Please enter a valid usage limit (minimum 1)");
+        return;
+      }
+    }
 
     setLoading(true);
     try {
@@ -113,6 +126,8 @@ const OfferManagement = () => {
         category_id: selectedCategoryIds[0], // For backward compatibility
         min_bill_value: formData.hasMinBillValue ? parseFloat(formData.min_bill_value) : undefined,
         max_discount_amount: formData.hasMaxDiscount ? parseFloat(formData.max_discount_amount) : undefined,
+        is_recurrent: formData.is_recurrent,
+        usage_limit: formData.is_recurrent && formData.hasUsageLimit ? parseInt(formData.usage_limit) : null,
       });
       
       // Log offer creation
@@ -121,7 +136,9 @@ const OfferManagement = () => {
         valid_from: formData.valid_from,
         valid_to: formData.valid_until,
         min_bill_value: formData.hasMinBillValue ? formData.min_bill_value : null,
-        max_discount_amount: formData.hasMaxDiscount ? formData.max_discount_amount : null
+        max_discount_amount: formData.hasMaxDiscount ? formData.max_discount_amount : null,
+        is_recurrent: formData.is_recurrent,
+        usage_limit: formData.is_recurrent && formData.hasUsageLimit ? formData.usage_limit : null
       });
       
       // If apply to existing members is checked, call the edge function
@@ -159,6 +176,9 @@ const OfferManagement = () => {
         hasMaxDiscount: false,
         max_discount_amount: "",
         applyToExistingMembers: false,
+        is_recurrent: false,
+        hasUsageLimit: false,
+        usage_limit: "",
       });
       setSelectedCategoryIds([]);
       loadOffers();
@@ -200,6 +220,9 @@ const OfferManagement = () => {
       min_bill_value: offer.min_bill_value?.toString() || "",
       hasMaxDiscount: !!offer.max_discount_amount,
       max_discount_amount: offer.max_discount_amount?.toString() || "",
+      is_recurrent: !!offer.is_recurrent,
+      hasUsageLimit: offer.usage_limit !== null && offer.usage_limit !== undefined,
+      usage_limit: offer.usage_limit?.toString() || "",
     });
     
     // Load categories for this offer
@@ -230,6 +253,13 @@ const OfferManagement = () => {
       toast.error("Please enter a valid maximum discount amount");
       return;
     }
+    if (editFormData.is_recurrent && editFormData.hasUsageLimit) {
+      const limitVal = parseInt(editFormData.usage_limit);
+      if (isNaN(limitVal) || limitVal <= 0) {
+        toast.error("Please enter a valid usage limit (minimum 1)");
+        return;
+      }
+    }
 
     setLoading(true);
     try {
@@ -242,6 +272,8 @@ const OfferManagement = () => {
         category_id: editSelectedCategoryIds[0], // For backward compatibility
         min_bill_value: editFormData.hasMinBillValue ? parseFloat(editFormData.min_bill_value) : null,
         max_discount_amount: editFormData.hasMaxDiscount ? parseFloat(editFormData.max_discount_amount) : null,
+        is_recurrent: editFormData.is_recurrent,
+        usage_limit: editFormData.is_recurrent && editFormData.hasUsageLimit ? parseInt(editFormData.usage_limit) : null,
       });
       
       // Log offer update
@@ -249,7 +281,9 @@ const OfferManagement = () => {
         categories: editSelectedCategoryIds.map(id => categories.find(c => c.id === id)?.name).join(', '),
         valid_from: editFormData.valid_from,
         valid_to: editFormData.valid_to,
-        previous_name: editingOffer.name
+        previous_name: editingOffer.name,
+        is_recurrent: editFormData.is_recurrent,
+        usage_limit: editFormData.is_recurrent && editFormData.hasUsageLimit ? editFormData.usage_limit : null
       });
       
       toast.success("Offer updated successfully");
@@ -468,7 +502,7 @@ const OfferManagement = () => {
             <Gift className="h-5 w-5 text-primary" />
             <CardTitle>Create Offer</CardTitle>
           </div>
-          <CardDescription>Add cakes, vouchers, stays and other physical rewards</CardDescription>
+          <CardDescription>Create offers for member categories</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -549,6 +583,71 @@ const OfferManagement = () => {
             </div>
 
             <div>
+              <Label>Recurrence & Usage Limit</Label>
+              <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
+                <div className="flex items-start space-x-3">
+                  <input
+                    type="checkbox"
+                    id="is_recurrent"
+                    checked={formData.is_recurrent}
+                    onChange={(e) => setFormData({ ...formData, is_recurrent: e.target.checked })}
+                    className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="is_recurrent" className="cursor-pointer font-medium">Recurrent Offer</Label>
+                    <p className="text-sm text-muted-foreground">Allow members to redeem this offer multiple times</p>
+                    
+                    {formData.is_recurrent && (
+                      <div className="mt-4 pl-6 border-l-2 border-muted space-y-3">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            id="limit-unlimited"
+                            name="usage-limit-type"
+                            checked={!formData.hasUsageLimit}
+                            onChange={() => setFormData({ ...formData, hasUsageLimit: false })}
+                            className="h-4 w-4 border-primary text-primary focus:ring-2 focus:ring-primary"
+                          />
+                          <Label htmlFor="limit-unlimited" className="cursor-pointer font-normal text-sm">
+                            Unlimited Redemptions
+                          </Label>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id="limit-defined"
+                              name="usage-limit-type"
+                              checked={formData.hasUsageLimit}
+                              onChange={() => setFormData({ ...formData, hasUsageLimit: true })}
+                              className="h-4 w-4 border-primary text-primary focus:ring-2 focus:ring-primary"
+                            />
+                            <Label htmlFor="limit-defined" className="cursor-pointer font-normal text-sm">
+                              Define Redemption Limit
+                            </Label>
+                          </div>
+                          
+                          {formData.hasUsageLimit && (
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              placeholder="Enter max redemptions per member (e.g., 3)"
+                              value={formData.usage_limit}
+                              onChange={(e) => setFormData({ ...formData, usage_limit: e.target.value })}
+                              className="w-full max-w-xs mt-1"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
               <Label>Discount Policy (Optional)</Label>
               <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
                 <p className="text-sm text-muted-foreground">Configure discount restrictions for this offer</p>
@@ -604,6 +703,8 @@ const OfferManagement = () => {
                 </div>
               </div>
             </div>
+
+            
 
             <div className="border rounded-md p-4 bg-muted/50">
               <div className="flex items-start space-x-3">
@@ -671,6 +772,7 @@ const OfferManagement = () => {
                   <TableHead>Offer Name</TableHead>
                   <TableHead>Member Categories</TableHead>
                   <TableHead>Description</TableHead>
+                  <TableHead>Type & Limit</TableHead>
                   <TableHead>Valid Period</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
@@ -701,6 +803,17 @@ const OfferManagement = () => {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{offer.description}</TableCell>
+                    <TableCell>
+                      {offer.is_recurrent ? (
+                        <Badge variant="outline" className="border-primary text-primary bg-primary/5">
+                          Recurrent ({offer.usage_limit ? `Limit: ${offer.usage_limit}` : "Unlimited"})
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          Single Use
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm">
                       {offer.valid_from && offer.valid_to
                         ? `${new Date(offer.valid_from).toLocaleDateString()} - ${new Date(offer.valid_to).toLocaleDateString()}`
@@ -738,7 +851,7 @@ const OfferManagement = () => {
                 ))}
                 {activeOffers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground">
                       No active offers found
                     </TableCell>
                   </TableRow>
@@ -784,6 +897,7 @@ const OfferManagement = () => {
                   <TableHead>Offer Name</TableHead>
                   <TableHead>Member Categories</TableHead>
                   <TableHead>Description</TableHead>
+                  <TableHead>Type & Limit</TableHead>
                   <TableHead>Valid Period</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
@@ -814,6 +928,17 @@ const OfferManagement = () => {
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{offer.description}</TableCell>
+                  <TableCell>
+                    {offer.is_recurrent ? (
+                      <Badge variant="outline" className="border-primary text-primary bg-primary/5">
+                        Recurrent ({offer.usage_limit ? `Limit: ${offer.usage_limit}` : "Unlimited"})
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        Single Use
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="text-sm">
                     {offer.valid_from && offer.valid_to
                       ? `${new Date(offer.valid_from).toLocaleDateString()} - ${new Date(offer.valid_to).toLocaleDateString()}`
@@ -851,7 +976,7 @@ const OfferManagement = () => {
                 ))}
                 {pastOffers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground">
                       No past offers found
                     </TableCell>
                   </TableRow>
@@ -948,6 +1073,71 @@ const OfferManagement = () => {
             </div>
 
             <div>
+              <Label>Recurrence & Usage Limit</Label>
+              <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
+                <div className="flex items-start space-x-3">
+                  <input
+                    type="checkbox"
+                    id="edit-is_recurrent"
+                    checked={editFormData.is_recurrent}
+                    onChange={(e) => setEditFormData({ ...editFormData, is_recurrent: e.target.checked })}
+                    className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="edit-is_recurrent" className="cursor-pointer font-medium">Recurrent Offer</Label>
+                    <p className="text-sm text-muted-foreground">Allow members to redeem this offer multiple times</p>
+                    
+                    {editFormData.is_recurrent && (
+                      <div className="mt-4 pl-6 border-l-2 border-muted space-y-3">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            id="edit-limit-unlimited"
+                            name="edit-usage-limit-type"
+                            checked={!editFormData.hasUsageLimit}
+                            onChange={() => setEditFormData({ ...editFormData, hasUsageLimit: false })}
+                            className="h-4 w-4 border-primary text-primary focus:ring-2 focus:ring-primary"
+                          />
+                          <Label htmlFor="edit-limit-unlimited" className="cursor-pointer font-normal text-sm">
+                            Unlimited Redemptions
+                          </Label>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id="edit-limit-defined"
+                              name="edit-usage-limit-type"
+                              checked={editFormData.hasUsageLimit}
+                              onChange={() => setEditFormData({ ...editFormData, hasUsageLimit: true })}
+                              className="h-4 w-4 border-primary text-primary focus:ring-2 focus:ring-primary"
+                            />
+                            <Label htmlFor="edit-limit-defined" className="cursor-pointer font-normal text-sm">
+                              Define Redemption Limit
+                            </Label>
+                          </div>
+                          
+                          {editFormData.hasUsageLimit && (
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              placeholder="Enter max redemptions per member (e.g., 3)"
+                              value={editFormData.usage_limit}
+                              onChange={(e) => setEditFormData({ ...editFormData, usage_limit: e.target.value })}
+                              className="w-full max-w-xs mt-1"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
               <Label>Discount Policy (Optional)</Label>
               <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
                 <p className="text-sm text-muted-foreground">Configure discount restrictions for this offer</p>
@@ -1003,6 +1193,8 @@ const OfferManagement = () => {
                 </div>
               </div>
             </div>
+
+            
 
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>

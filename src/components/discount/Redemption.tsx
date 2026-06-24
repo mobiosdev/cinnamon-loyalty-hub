@@ -41,6 +41,7 @@ const Redemption = () => {
   const [step, setStep] = useState<RedemptionStep>("input");
   const [billNumber, setBillNumber] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
+  const [memberCode, setMemberCode] = useState("");
   const [otp, setOtp] = useState("");
   const [sentOtp, setSentOtp] = useState("");
   const [loading, setLoading] = useState(false);
@@ -90,21 +91,59 @@ const Redemption = () => {
   };
 
   const handleSendOTP = async () => {
-    if (!billNumber || !mobileNumber) {
-      toast.error("Please fill all fields");
-      return;
-    }
+    // if (!billNumber) {
+    //   toast.error("Please enter a bill number");
+    //   return;
+    // }
 
-    // Validate and normalize phone number
-    const phoneValidation = validateAndNormalizeSriLankanMobile(mobileNumber);
-    if (!phoneValidation.isValid) {
-      toast.error(phoneValidation.error || "Invalid mobile number");
+    if (!mobileNumber && !memberCode) {
+      toast.error("Please enter either a Mobile Number or Member Code");
       return;
     }
 
     setLoading(true);
 
     try {
+      let finalMobileNumber = "";
+      
+      if (memberCode) {
+        // Search by member code
+        const member = await staffApi.getMemberByCode(memberCode.trim().toUpperCase());
+        if (!member) {
+          toast.error("Member not found with the provided Member Code");
+          setLoading(false);
+          return;
+        }
+        if (!member.is_active) {
+          toast.error("This member account is inactive");
+          setLoading(false);
+          return;
+        }
+        finalMobileNumber = member.mobile;
+        setMobileNumber(member.mobile); // Populate phone number state
+      } else if (mobileNumber) {
+        // Search by phone number
+        const phoneValidation = validateAndNormalizeSriLankanMobile(mobileNumber);
+        if (!phoneValidation.isValid) {
+          toast.error(phoneValidation.error || "Invalid mobile number");
+          setLoading(false);
+          return;
+        }
+
+        const member = await staffApi.getMemberByPhone(phoneValidation.normalized!);
+        if (!member) {
+          toast.error("Member not found with the provided Mobile Number");
+          setLoading(false);
+          return;
+        }
+        if (!member.is_active) {
+          toast.error("This member account is inactive");
+          setLoading(false);
+          return;
+        }
+        finalMobileNumber = phoneValidation.normalized!;
+      }
+
       // Generate a 4-digit OTP code
       const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -114,7 +153,7 @@ const Redemption = () => {
           username: 'TW00001_ntb_demo_tr',
           password: 'tisJFd9jH@1aR',
           src: 'TWTEST',
-          dst: phoneValidation.normalized,
+          dst: finalMobileNumber,
           msg: 'Dear Member, The verification code for redeeming your discount at Cinnamon Grand is: '+generatedOtp+' Please use this code to complete your redemption. Kindly refrain from sharing this code with anyone else.',
           dr: '1'
         }
@@ -127,7 +166,7 @@ const Redemption = () => {
       setExpiryTime(expiryDate.toISOString());
       
       setStep("verify");
-      toast.success(`OTP sent to ${mobileNumber}`);
+      toast.success(`OTP sent to ${finalMobileNumber}`);
     } catch (error) {
       console.error("Error sending OTP SMS:", error);
       toast.error("Failed to send OTP");
@@ -268,6 +307,7 @@ const Redemption = () => {
     setStep("input");
     setBillNumber("");
     setMobileNumber("");
+    setMemberCode("");
     setOtp("");
     setSentOtp("");
     setMemberData(null);
@@ -279,7 +319,7 @@ const Redemption = () => {
   const renderInputStep = () => (
     <div className="space-y-4">
       <div>
-        <Label htmlFor="billNumber">Bill Number *</Label>
+        <Label htmlFor="billNumber">Bill Number</Label>
         <Input
           id="billNumber"
           value={billNumber}
@@ -290,7 +330,7 @@ const Redemption = () => {
       </div>
 
       <div>
-        <Label htmlFor="mobile">Customer Mobile Number *</Label>
+        <Label htmlFor="mobile">Customer Mobile Number</Label>
         <Input
           id="mobile"
           value={mobileNumber}
@@ -298,8 +338,25 @@ const Redemption = () => {
           placeholder="+94 XXX XXX XXX"
           className="text-lg"
         />
+      </div>
+
+      <div className="relative flex py-2 items-center">
+        <div className="flex-grow border-t border-muted"></div>
+        <span className="flex-shrink mx-4 text-muted-foreground text-xs uppercase">or</span>
+        <div className="flex-grow border-t border-muted"></div>
+      </div>
+
+      <div>
+        <Label htmlFor="memberCode">Member Code</Label>
+        <Input
+          id="memberCode"
+          value={memberCode}
+          onChange={(e) => setMemberCode(e.target.value)}
+          placeholder="e.g. MEM12345"
+          className="text-lg font-mono uppercase"
+        />
         <p className="text-xs text-muted-foreground mt-1">
-          OTP will be sent via SMS
+          Provide at least Mobile Number or Member Code to search the member
         </p>
       </div>
 

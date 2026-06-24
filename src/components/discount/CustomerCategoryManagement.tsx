@@ -17,11 +17,11 @@ import { logCategoryActivity } from "@/utils/auditLogger";
 const CustomerCategoryManagement = () => {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [categoryForm, setCategoryForm] = useState({ name: "", description: "" });
+  const [categoryForm, setCategoryForm] = useState({ name: "", description: "", valid_from: "", valid_to: "" });
   const [editingCategory, setEditingCategory] = useState<any>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deletingCategoryId, setDeletingCategoryId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", description: "" });
+  const [editForm, setEditForm] = useState({ name: "", description: "", valid_from: "", valid_to: "" });
 
   useEffect(() => {
     loadCategories();
@@ -47,8 +47,11 @@ const CustomerCategoryManagement = () => {
     setLoading(true);
     try {
       const result = await categoryApi.createCategory({
-        ...categoryForm,
+        name: categoryForm.name,
+        description: categoryForm.description,
         created_by: 1, // TODO: Get from auth
+        valid_from: categoryForm.valid_from || null,
+        valid_to: categoryForm.valid_to || null,
       });
       
       // Log category creation
@@ -57,7 +60,7 @@ const CustomerCategoryManagement = () => {
       });
       
       toast.success("Member category created successfully");
-      setCategoryForm({ name: "", description: "" });
+      setCategoryForm({ name: "", description: "", valid_from: "", valid_to: "" });
       loadCategories();
     } catch (error) {
       toast.error("Failed to create member category");
@@ -68,7 +71,12 @@ const CustomerCategoryManagement = () => {
 
   const handleEditClick = (category: any) => {
     setEditingCategory(category);
-    setEditForm({ name: category.name, description: category.description || "" });
+    setEditForm({ 
+      name: category.name, 
+      description: category.description || "",
+      valid_from: category.valid_from?.split('T')[0] || "",
+      valid_to: category.valid_to?.split('T')[0] || ""
+    });
     setIsEditDialogOpen(true);
   };
 
@@ -81,7 +89,12 @@ const CustomerCategoryManagement = () => {
 
     setLoading(true);
     try {
-      await categoryApi.updateCategory(editingCategory.id, editForm);
+      await categoryApi.updateCategory(editingCategory.id, {
+        name: editForm.name,
+        description: editForm.description,
+        valid_from: editForm.valid_from || null,
+        valid_to: editForm.valid_to || null,
+      });
       
       // Log category update
       await logCategoryActivity('update', editForm.name, editingCategory.id?.toString(), {
@@ -138,7 +151,7 @@ const CustomerCategoryManagement = () => {
             <Users className="h-5 w-5 text-primary" />
             <CardTitle>Create Member Category</CardTitle>
           </div>
-          <CardDescription>Define member categories like General, Premium, VIP</CardDescription>
+          <CardDescription>Define member categories</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleCreateCategory} className="space-y-4">
@@ -161,6 +174,26 @@ const CustomerCategoryManagement = () => {
                 rows={3}
               />
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="validFrom">Valid From</Label>
+                <Input
+                  id="validFrom"
+                  type="date"
+                  value={categoryForm.valid_from}
+                  onChange={(e) => setCategoryForm({ ...categoryForm, valid_from: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="validTo">Valid To</Label>
+                <Input
+                  id="validTo"
+                  type="date"
+                  value={categoryForm.valid_to}
+                  onChange={(e) => setCategoryForm({ ...categoryForm, valid_to: e.target.value })}
+                />
+              </div>
+            </div>
             <div className="flex justify-end">
               <Button type="submit" disabled={loading} size="sm">
                 <Plus className="mr-2 h-4 w-4" />
@@ -182,6 +215,8 @@ const CustomerCategoryManagement = () => {
               <TableRow>
                 <TableHead>Category Name</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead>Valid From</TableHead>
+                <TableHead>Valid To</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -190,6 +225,8 @@ const CustomerCategoryManagement = () => {
                 <TableRow key={cat.id}>
                   <TableCell className="font-medium">{cat.name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{cat.description || "—"}</TableCell>
+                  <TableCell className="text-sm">{cat.valid_from ? new Date(cat.valid_from).toLocaleDateString() : "—"}</TableCell>
+                  <TableCell className="text-sm">{cat.valid_to ? new Date(cat.valid_to).toLocaleDateString() : "—"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button
@@ -212,7 +249,7 @@ const CustomerCategoryManagement = () => {
               ))}
               {categories.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
                     No member categories created yet
                   </TableCell>
                 </TableRow>
@@ -247,6 +284,26 @@ const CustomerCategoryManagement = () => {
                 placeholder="Description of this category"
                 rows={3}
               />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-validFrom">Valid From</Label>
+                <Input
+                  id="edit-validFrom"
+                  type="date"
+                  value={editForm.valid_from}
+                  onChange={(e) => setEditForm({ ...editForm, valid_from: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-validTo">Valid To</Label>
+                <Input
+                  id="edit-validTo"
+                  type="date"
+                  value={editForm.valid_to}
+                  onChange={(e) => setEditForm({ ...editForm, valid_to: e.target.value })}
+                />
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>

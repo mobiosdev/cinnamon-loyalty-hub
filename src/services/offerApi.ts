@@ -13,6 +13,8 @@ interface PhysicalOffer {
   category_name?: string;
   min_bill_value?: number;
   max_discount_amount?: number;
+  is_recurrent?: boolean;
+  usage_limit?: number | null;
 }
 
 interface OfferRedemption {
@@ -30,6 +32,8 @@ interface AvailableOffer {
   name: string;
   description: string;
   is_redeemed: boolean;
+  min_bill_value?: number;
+  max_discount_amount?: number;
 }
 
 export const offerApi = {
@@ -205,16 +209,39 @@ export const offerApi = {
 
       if (redemptionsError) throw redemptionsError;
 
-      const redeemedOfferIds = new Set(redemptions?.map(r => r.offer_id) || []);
+      // Group active redemptions by offer_id to get the count
+      const redemptionCounts: Record<string, number> = {};
+      if (redemptions) {
+        for (const r of redemptions) {
+          if (r.offer_id) {
+            redemptionCounts[r.offer_id] = (redemptionCounts[r.offer_id] || 0) + 1;
+          }
+        }
+      }
 
-      return (offers || []).map(offer => ({
-        id: offer.id,
-        name: offer.name,
-        description: offer.description,
-        is_redeemed: redeemedOfferIds.has(offer.id),
-        min_bill_value: offer.min_bill_value,
-        max_discount_amount: offer.max_discount_amount
-      }));
+      return (offers || []).map(offer => {
+        const count = redemptionCounts[offer.id] || 0;
+        let isRedeemed = false;
+
+        if (offer.is_recurrent) {
+          if (offer.usage_limit !== null && offer.usage_limit !== undefined) {
+            isRedeemed = count >= offer.usage_limit;
+          } else {
+            isRedeemed = false; // Unlimited
+          }
+        } else {
+          isRedeemed = count >= 1; // Default to single use
+        }
+
+        return {
+          id: offer.id,
+          name: offer.name,
+          description: offer.description,
+          is_redeemed: isRedeemed,
+          min_bill_value: offer.min_bill_value,
+          max_discount_amount: offer.max_discount_amount
+        };
+      });
     } catch (error) {
       console.error('Error fetching available offers:', error);
       throw error;

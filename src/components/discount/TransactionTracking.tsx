@@ -37,7 +37,8 @@ const TransactionTracking = () => {
   const [displayedTransactions, setDisplayedTransactions] = useState<Transaction[]>([]);
   const [offers, setOffers] = useState<Array<{ id: string; name: string }>>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [offerFilter, setOfferFilter] = useState<string>("all");
   
   // Popover open states for calendars
@@ -61,19 +62,61 @@ const TransactionTracking = () => {
     totalPages: 1
   });
 
-  // Fetch available offers
-  const fetchOffers = async () => {
+  // Fetch available categories
+  const fetchCategories = async () => {
     try {
       const { data, error } = await supabase
-        .from('offers')
+        .from('customer_categories')
         .select('id, name')
-        .eq('is_active', true)
         .order('name', { ascending: true });
 
       if (error) {
-        console.error('Error fetching offers:', error);
+        console.error('Error fetching categories:', error);
       } else if (data) {
-        setOffers(data);
+        setCategories(data);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  // Fetch available offers, optionally filtered by category
+  const fetchOffers = async (categoryId?: string) => {
+    try {
+      if (!categoryId || categoryId === 'all') {
+        const { data, error } = await supabase
+          .from('offers')
+          .select('id, name')
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching offers:', error);
+        } else if (data) {
+          setOffers(data);
+        }
+      } else {
+        const { data, error } = await supabase
+          .from('offer_categories')
+          .select(`
+            offers (
+              id,
+              name,
+              is_active
+            )
+          `)
+          .eq('category_id', parseInt(categoryId));
+
+        if (error) {
+          console.error('Error fetching offers for category:', error);
+        } else if (data) {
+          const filteredOffers = data
+            .map((item: any) => item.offers)
+            .filter((offer: any) => offer && offer.is_active)
+            .map((offer: any) => ({ id: offer.id, name: offer.name }));
+          filteredOffers.sort((a, b) => a.name.localeCompare(b.name));
+          setOffers(filteredOffers);
+        }
       }
     } catch (error) {
       console.error('Error fetching offers:', error);
@@ -91,22 +134,48 @@ const TransactionTracking = () => {
       // Fetch discount redemptions
       let discountQuery = supabase
         .from('discount_redemptions')
-        .select(`
-          id,
-          bill_number,
-          customer_phone,
-          discount_amount,
-          discount_type,
-          discount_value,
-          redeemed_at,
-          members!discount_redemptions_member_id_fkey (
-            first_name,
-            last_name,
-            companies (name),
-            customer_categories (name)
-          )
-        `, { count: 'exact' })
+        .select(
+          categoryFilter !== 'all'
+            ? `
+              id,
+              bill_number,
+              customer_phone,
+              discount_amount,
+              discount_type,
+              discount_value,
+              redeemed_at,
+              members!discount_redemptions_member_id_fkey!inner (
+                first_name,
+                last_name,
+                category_id,
+                companies (name),
+                customer_categories (name)
+              )
+            `
+            : `
+              id,
+              bill_number,
+              customer_phone,
+              discount_amount,
+              discount_type,
+              discount_value,
+              redeemed_at,
+              members!discount_redemptions_member_id_fkey (
+                first_name,
+                last_name,
+                category_id,
+                companies (name),
+                customer_categories (name)
+              )
+            `,
+          { count: 'exact' }
+        )
         .order('redeemed_at', { ascending: false });
+
+      // Apply category filter to discount redemptions query if selected
+      if (categoryFilter !== 'all') {
+        discountQuery = discountQuery.eq('members.category_id', parseInt(categoryFilter));
+      }
 
       // Apply search filter
       if (searchTerm) {
@@ -155,9 +224,9 @@ const TransactionTracking = () => {
 
       let allTransactions: Transaction[] = [];
 
-      // Determine what to fetch based on filters
-      const shouldFetchDiscounts = typeFilter === 'all' || typeFilter === 'discount';
-      const shouldFetchOffers = (typeFilter === 'all' || typeFilter === 'offer');
+      // Always fetch both discounts and offers
+      const shouldFetchDiscounts = true;
+      const shouldFetchOffers = true;
 
       // Fetch discounts
       if (shouldFetchDiscounts) {
@@ -184,7 +253,6 @@ const TransactionTracking = () => {
         }
       }
 
-      // Fetch offers
       // Fetch offers
       if (shouldFetchOffers) {
         // Apply offer filter if selected
@@ -222,6 +290,7 @@ const TransactionTracking = () => {
               mobile,
               first_name,
               last_name,
+              category_id,
               companies (name),
               customer_categories (name)
             `)
@@ -262,14 +331,23 @@ const TransactionTracking = () => {
           const offerTransactions: Transaction[] = offerData
             .filter((item: any) => item.offers)
             .map((item: any) => {
-              const memberData = findMember(item.customer_phone) || {};
+              const memberData = findMember(item.customer_phone);
+              
+              // If filtering by a specific category, we must have a matching member of that category
+              if (categoryFilter !== 'all') {
+                if (!memberData || memberData.category_id?.toString() !== categoryFilter) {
+                  return null;
+                }
+              }
+
+              const mData = memberData || {};
               return {
                 id: item.id,
                 bill_number: item.bill_number || 'N/A',
                 customer_phone: item.customer_phone,
-                member_name: memberData.first_name ? `${memberData.first_name} ${memberData.last_name}` : 'Unknown',
-                company_name: memberData.companies?.name || 'N/A',
-                category_name: memberData.customer_categories?.name || 'N/A',
+                member_name: mData.first_name ? `${mData.first_name} ${mData.last_name}` : 'Unknown',
+                company_name: mData.companies?.name || 'N/A',
+                category_name: mData.customer_categories?.name || 'N/A',
                 discount_amount: 0,
                 discount_type: 'offer',
                 discount_value: 0,
@@ -277,7 +355,8 @@ const TransactionTracking = () => {
                 type: 'offer',
                 offer_name: item.offers?.name || 'N/A'
               };
-            });
+            })
+            .filter(Boolean) as Transaction[];
           allTransactions = [...allTransactions, ...offerTransactions];
         }
       }
@@ -316,14 +395,19 @@ const TransactionTracking = () => {
   };
 
   useEffect(() => {
-    fetchOffers();
+    fetchCategories();
     fetchTransactions();
   }, []);
 
   useEffect(() => {
+    fetchOffers(categoryFilter);
+    setOfferFilter('all');
+  }, [categoryFilter]);
+
+  useEffect(() => {
     setCurrentPage(1);
     fetchTransactions();
-  }, [typeFilter, offerFilter, dateFrom, dateTo]);
+  }, [categoryFilter, offerFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     updateDisplayedTransactions(allTransactions, currentPage, pageSize);
@@ -531,31 +615,28 @@ const TransactionTracking = () => {
             </div>
           </div>
 
-          {/* Transaction Type Filter with Offer Filter and Buttons */}
+          {/* Member Category Filter with Offer Filter and Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div className="space-y-2">
-              <Label htmlFor="type">
+              <Label htmlFor="category">
                 <Filter className="inline h-4 w-4 mr-1" />
-                Transaction Type
+                Member Category
               </Label>
               <Select 
-                value={typeFilter} 
-                onValueChange={(value) => {
-                  setTypeFilter(value);
-                  // Reset offer filter when switching to discount only
-                  if (value === 'discount') {
-                    setOfferFilter('all');
-                  }
-                }}
+                value={categoryFilter} 
+                onValueChange={setCategoryFilter}
                 disabled={loading}
               >
-                <SelectTrigger id="type">
-                  <SelectValue placeholder="Select type" />
+                <SelectTrigger id="category">
+                  <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="discount">Discounts</SelectItem>
-                  <SelectItem value="offer">Offers</SelectItem>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id.toString()}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -568,7 +649,7 @@ const TransactionTracking = () => {
               <Select 
                 value={offerFilter} 
                 onValueChange={setOfferFilter}
-                disabled={loading || typeFilter === 'discount'}
+                disabled={loading}
               >
                 <SelectTrigger id="offer">
                   <SelectValue placeholder="Select offer" />
