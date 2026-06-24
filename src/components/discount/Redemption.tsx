@@ -395,6 +395,8 @@ const Redemption = () => {
       
       if (transformedData.length === 0) {
         toast.info("No matching members found");
+      } else if (transformedData.length === 1) {
+        handleSelectMember(transformedData[0]);
       } else {
         toast.success(`Found ${transformedData.length} matching member(s)`);
       }
@@ -501,28 +503,40 @@ const Redemption = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {searchResults.map((member) => (
-                  <TableRow 
-                    key={member.id} 
-                    className="cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => handleSelectMember(member)}
-                  >
-                    <TableCell className="font-mono font-semibold text-xs">{member.member_code || 'N/A'}</TableCell>
-                    <TableCell className="text-xs font-medium">{`${member.title || ''} ${member.first_name} ${member.last_name}`}</TableCell>
-                    <TableCell className="text-xs">{member.company_name || 'N/A'}</TableCell>
-                    <TableCell className="text-xs">
-                      <Badge variant={getCategoryBadgeVariant(member.category_name)} className="text-[10px] py-0 px-1.5">
-                        {member.category_name || 'N/A'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{member.mobile}</TableCell>
-                    <TableCell className="text-xs">
-                      <Badge variant={member.is_active ? "default" : "secondary"} className="text-[10px] py-0 px-1.5">
-                        {member.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {searchResults.map((member) => {
+                  const isSelected = 
+                    (memberCode.trim() !== "" && member.member_code?.toUpperCase() === memberCode.trim().toUpperCase()) ||
+                    (mobileNumber.trim() !== "" && member.mobile === mobileNumber.trim());
+
+                  return (
+                    <TableRow 
+                      key={member.id} 
+                      className={cn(
+                        "cursor-pointer hover:bg-muted/50 transition-colors",
+                        isSelected && "bg-muted font-medium"
+                      )}
+                      onClick={() => handleSelectMember(member)}
+                    >
+                      <TableCell className={cn(
+                        "font-mono font-semibold text-xs",
+                        isSelected && "border-l-2 border-l-primary pl-2"
+                      )}>{member.member_code || 'N/A'}</TableCell>
+                      <TableCell className="text-xs font-medium">{`${member.title || ''} ${member.first_name} ${member.last_name}`}</TableCell>
+                      <TableCell className="text-xs">{member.company_name || 'N/A'}</TableCell>
+                      <TableCell className="text-xs">
+                        <Badge variant={getCategoryBadgeVariant(member.category_name)} className="text-[10px] py-0 px-1.5">
+                          {member.category_name || 'N/A'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{member.mobile}</TableCell>
+                      <TableCell className="text-xs">
+                        <Badge variant={member.is_active ? "default" : "secondary"} className="text-[10px] py-0 px-1.5">
+                          {member.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -821,7 +835,7 @@ const Redemption = () => {
             <CardTitle className="font-serif">Redemption</CardTitle>
           </div>
           <CardDescription>
-            Verify members and redeme benifits
+            Verify members and redeem benefits
           </CardDescription>
         </CardHeader>
 

@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash, Ban, Building2, User, Check, ChevronsUpDown, Calendar, FileText } from "lucide-react";
+import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash, Ban, Building2, User, Check, ChevronsUpDown, Calendar, FileText, QrCode, Download } from "lucide-react";
 import { staffApi } from "@/services/staffApi";
 import { offerApi } from "@/services/offerApi";
 import { companyApi } from "@/services/companyApi";
@@ -37,6 +37,28 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [revealedPhones, setRevealedPhones] = useState<Set<string>>(new Set());
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [qrMember, setQrMember] = useState<any>(null);
+
+  const handleDownloadQR = async (memberCode: string) => {
+    try {
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(memberCode)}`;
+      const response = await fetch(qrUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${memberCode}_qr.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success("QR Code downloaded successfully!");
+    } catch (error) {
+      console.error("Failed to download QR code", error);
+      toast.error("Failed to download QR code. Please try again.");
+    }
+  };
   const [memberOffers, setMemberOffers] = useState<any[]>([]);
   const [redeemedOffers, setRedeemedOffers] = useState<any[]>([]);
   const [discountRedemptions, setDiscountRedemptions] = useState<any[]>([]);
@@ -830,14 +852,30 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleViewDetails(member)}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      View
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewDetails(member)}
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        View
+                      </Button>
+                      {member.member_code && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setQrMember(member);
+                            setQrDialogOpen(true);
+                          }}
+                          className="text-primary hover:text-primary-foreground hover:bg-primary"
+                        >
+                          <QrCode className="h-4 w-4 mr-1" />
+                          QR
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1640,6 +1678,46 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* QR Code Dialog */}
+      <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
+        <DialogContent className="sm:max-w-md flex flex-col items-center p-6 gap-4">
+          <DialogHeader className="w-full text-center">
+            <DialogTitle className="text-xl font-bold flex items-center justify-center gap-2">
+              <QrCode className="h-5 w-5 text-primary" />
+              Member QR Code
+            </DialogTitle>
+            <DialogDescription className="text-sm text-center">
+              QR Code for {qrMember?.first_name} {qrMember?.last_name}
+            </DialogDescription>
+          </DialogHeader>
+
+          {qrMember && (
+            <div className="flex flex-col items-center gap-4 w-full">
+              <div className="bg-white p-4 rounded-xl border-2 border-border shadow-sm">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrMember.member_code)}`}
+                  alt={`QR code for ${qrMember.member_code}`}
+                  className="w-[200px] h-[200px]"
+                />
+              </div>
+
+              <div className="text-center space-y-1">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Member Code</p>
+                <p className="text-lg font-mono font-bold text-primary">{qrMember.member_code}</p>
+              </div>
+
+              <Button
+                onClick={() => handleDownloadQR(qrMember.member_code)}
+                className="w-full mt-2 gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Download QR Code
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
