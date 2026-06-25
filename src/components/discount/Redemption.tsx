@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import axios from "axios";
 import { cn } from "@/lib/utils";
+import { QrScannerDialog } from "./QrScannerDialog";
 
 type RedemptionStep = "input" | "verify" | "benefits";
 
@@ -43,6 +44,7 @@ const Redemption = () => {
   const [billNumber, setBillNumber] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
   const [memberCode, setMemberCode] = useState("");
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [otp, setOtp] = useState("");
   const [sentOtp, setSentOtp] = useState("");
   const [loading, setLoading] = useState(false);
@@ -353,6 +355,50 @@ const Redemption = () => {
     toast.success(`Selected member: ${member.first_name} ${member.last_name}`);
   };
 
+  const handleQrScanSuccess = async (decodedText: string) => {
+    let parsedCode = decodedText.trim();
+    try {
+      if (parsedCode.startsWith("http://") || parsedCode.startsWith("https://")) {
+        const url = new URL(parsedCode);
+        const codeParam = url.searchParams.get("code") || url.searchParams.get("member_code");
+        if (codeParam) {
+          parsedCode = codeParam;
+        } else {
+          const paths = url.pathname.split("/").filter(Boolean);
+          if (paths.length > 0) {
+            parsedCode = paths[paths.length - 1];
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to parse scanned URL, using raw value:", e);
+    }
+
+    const uppercaseCode = parsedCode.toUpperCase();
+    setMemberCode(uppercaseCode);
+    setLoading(true);
+
+    try {
+      const member = await staffApi.getMemberByCode(uppercaseCode);
+      if (!member) {
+        toast.error(`Member not found with code: ${uppercaseCode}`);
+        return;
+      }
+      if (!member.is_active) {
+        toast.error(`Member account associated with code ${uppercaseCode} is inactive`);
+        return;
+      }
+
+      handleSelectMember(member);
+      toast.success(`Found and selected member: ${member.first_name} ${member.last_name}`);
+    } catch (error) {
+      console.error("Error looking up member by scanned QR code:", error);
+      toast.error("Failed to lookup member from scanned QR code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleNameSearch = async () => {
     if (!searchNameQuery.trim()) {
       toast.error("Please enter a name to search");
@@ -565,7 +611,7 @@ const Redemption = () => {
           variant="outline" 
           size="lg" 
           className="w-full border-dashed border-primary/40 hover:border-primary/80 hover:bg-primary/5 text-primary"
-          onClick={() => toast.info("QR Code scanner opening...")}
+          onClick={() => setIsScannerOpen(true)}
         >
           <QrCode className="mr-2 h-5 w-5" />
           Click to Scan QR Code
@@ -845,6 +891,12 @@ const Redemption = () => {
           {step === "benefits" && renderBenefitsStep()}
         </CardContent>
       </Card>
+
+      <QrScannerDialog
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanSuccess={handleQrScanSuccess}
+      />
     </div>
   );
 };
