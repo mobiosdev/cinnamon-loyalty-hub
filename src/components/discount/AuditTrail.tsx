@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Loader2, Search, Eye, Activity, Shield, Users, FileText, Gift, Building2, ChevronLeft, ChevronRight, Clock, User as UserIcon, Info } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { auditApi } from "@/services/auditApi";
 import { format, formatDistanceToNow } from "date-fns";
 
 interface AuditLog {
@@ -36,7 +36,11 @@ interface PhoneView {
   };
 }
 
-export function AuditTrail() {
+interface AuditTrailProps {
+  parentActiveTab?: string;
+}
+
+export function AuditTrail({ parentActiveTab }: AuditTrailProps) {
   const [activeTab, setActiveTab] = useState("user-activity");
   const [viewMode, setViewMode] = useState<"timeline" | "table">("timeline");
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -57,36 +61,40 @@ export function AuditTrail() {
     }
   }, [activeTab, currentPage, filterAction, filterEntityType, searchTerm]);
 
+  useEffect(() => {
+    if (parentActiveTab === "audit") {
+      if (activeTab === "phone-views") {
+        fetchPhoneViews();
+      } else {
+        fetchAuditLogs();
+      }
+    }
+  }, [parentActiveTab]);
+
   const fetchAuditLogs = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('audit_logs')
-        .select('*', { count: 'exact' })
-        .order('performed_at', { ascending: false })
-        .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
-
-      // Filter by entity type
+      const data = await auditApi.getAuditLogs({
+        limit: 100,
+        search: searchTerm || undefined,
+      });
+      
+      // Filter in memory for entity type and action if selected (to preserve existing UI behaviors)
+      let filteredData = data || [];
       if (filterEntityType !== 'all') {
-        query = query.eq('entity_type', filterEntityType);
+        filteredData = filteredData.filter((log: any) => log.entity_type === filterEntityType);
       }
-
-      // Filter by action
       if (filterAction !== 'all') {
-        query = query.eq('action', filterAction);
+        filteredData = filteredData.filter((log: any) => log.action === filterAction);
       }
 
-      // Search filter
-      if (searchTerm) {
-        query = query.or(`entity_name.ilike.%${searchTerm}%,performed_by.ilike.%${searchTerm}%,action.ilike.%${searchTerm}%`);
-      }
+      // Pagination
+      const count = filteredData.length;
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
-      const { data, error, count } = await query;
-
-      if (error) throw error;
-
-      setAuditLogs(data || []);
-      setTotalPages(Math.ceil((count || 0) / itemsPerPage));
+      setAuditLogs(paginatedData);
+      setTotalPages(Math.ceil(count / itemsPerPage));
     } catch (error) {
       console.error("Error fetching audit logs:", error);
       toast.error("Failed to load audit logs");
@@ -98,30 +106,18 @@ export function AuditTrail() {
   const fetchPhoneViews = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('phone_number_views')
-        .select(`
-          *,
-          members (
-            first_name,
-            last_name,
-            mobile,
-            member_code
-          )
-        `, { count: 'exact' })
-        .order('viewed_at', { ascending: false })
-        .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
+      const data = await auditApi.getPhoneViews({
+        limit: 100,
+        search: searchTerm || undefined,
+      });
 
-      if (searchTerm) {
-        query = query.or(`viewer_info.ilike.%${searchTerm}%`);
-      }
+      // Pagination
+      const count = data.length;
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const paginatedData = data.slice(startIndex, startIndex + itemsPerPage);
 
-      const { data, error, count } = await query;
-
-      if (error) throw error;
-
-      setPhoneViews(data || []);
-      setTotalPages(Math.ceil((count || 0) / itemsPerPage));
+      setPhoneViews(paginatedData);
+      setTotalPages(Math.ceil(count / itemsPerPage));
     } catch (error) {
       console.error("Error fetching phone views:", error);
       toast.error("Failed to load phone view logs");

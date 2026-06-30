@@ -11,8 +11,9 @@ import { staffApi } from "@/services/staffApi";
 import { offerApi } from "@/services/offerApi";
 import { companyApi } from "@/services/companyApi";
 import { categoryApi } from "@/services/categoryApi";
+import { auditApi } from "@/services/auditApi";
+import { redemptionApi } from "@/services/redemptionApi";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { maskPhoneNumber, formatPhoneForDisplay, validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
@@ -148,23 +149,14 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
       try {
         // Get viewer information (in production, this would come from authenticated user)
         const viewerName = "Admin User"; // TODO: Replace with actual authenticated user name
-        const viewerTimestamp = new Date().toLocaleString();
         
-        const { error } = await supabase
-          .from('phone_number_views')
-          .insert({
-            member_id: memberId,
-            viewer_info: viewerName,
-            viewed_at: new Date().toISOString()
-          });
+        await auditApi.logPhoneView(memberId, viewerName);
 
-        if (error) {
-          console.error("Error logging phone view:", error);
-          toast.error("Failed to log phone view");
-          return;
-        }
-
-        setRevealedPhones(prev => new Set(prev).add(memberId));
+        setRevealedPhones(prev => {
+          const newSet = new Set(prev);
+          newSet.add(memberId);
+          return newSet;
+        });
         toast.success(`Phone number revealed - View logged for ${viewerName}`);
       } catch (error) {
         console.error("Error logging phone view:", error);
@@ -183,12 +175,8 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
       // Get selected offers
       const selectedOfferIds = Array.isArray(member.selected_offers) ? member.selected_offers : [];
       if (selectedOfferIds.length > 0) {
-        const { data: offers, error: offersError } = await supabase
-          .from('offers')
-          .select('id, name, description, valid_from, valid_to')
-          .in('id', selectedOfferIds);
-        
-        if (offersError) throw offersError;
+        const allOffers = await offerApi.getOffers();
+        const offers = allOffers.filter((o: any) => selectedOfferIds.includes(o.id));
         setMemberOffers(offers || []);
       } else {
         setMemberOffers([]);
@@ -203,44 +191,30 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
       
       console.log('Searching for redemptions with phone formats:', phoneFormats);
       
-      const { data: redemptions, error: redemptionsError } = await supabase
-        .from('offer_redemptions')
-        .select(`
-          id,
-          redeemed_at,
-          bill_number,
-          customer_phone,
-          status,
-          reactivated_at,
-          reactivated_by,
-          offers (
-            id,
-            name,
-            description
-          )
-        `)
-        .in('customer_phone', phoneFormats)
-        .order('redeemed_at', { ascending: false });
+      const allRedemptions = await offerApi.getRedemptions();
+      const redemptions = allRedemptions
+        .filter((r: any) => phoneFormats.includes(r.customer_phone))
+        .map((r: any) => ({
+          ...r,
+          offers: {
+            id: r.offer_id,
+            name: r.offer_name,
+            description: r.offer_description || ''
+          }
+        }));
       
-      if (redemptionsError) throw redemptionsError;
-      
-      console.log('Found all redemptions:', redemptions?.length || 0, redemptions);
-      console.log('Selected offers:', memberOffers);
-      
-      setRedeemedOffers(redemptions || []);
+      console.log('Found all redemptions:', redemptions.length, redemptions);
+      setRedeemedOffers(redemptions);
 
       // Get discount redemptions
-      const { data: discountRedemptions, error: discountError } = await supabase
-        .from('discount_redemptions')
-        .select('*')
-        .in('customer_phone', phoneFormats)
-        .order('redeemed_at', { ascending: false });
+      const transactions = await redemptionApi.getTransactions({
+        searchTerm: member.mobile,
+      });
+      const discountRedemptions = transactions.filter((t: any) => t.type === 'discount');
       
-      if (discountError) throw discountError;
+      console.log('Found discount redemptions:', discountRedemptions.length);
+      setDiscountRedemptions(discountRedemptions);
       
-      console.log('Found discount redemptions:', discountRedemptions?.length || 0);
-      
-      setDiscountRedemptions(discountRedemptions || []);
     } catch (error) {
       console.error('Error fetching member offers:', error);
       toast.error('Failed to load member offers');
@@ -591,7 +565,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
 
     setDeactivatingMember(true);
     try {
-      await staffApi.deactivateStaff(selectedMember.id!, deactivationNote);
+      await staffApi.updateStaff(selectedMember.id!, { is_active: false, deactivation_note: deactivationNote });
       
       // Log the deactivation activity
       await logMemberActivity(

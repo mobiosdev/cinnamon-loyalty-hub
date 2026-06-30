@@ -14,7 +14,6 @@ import { Gift, Plus, Pencil, Trash2, Trash, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { offerApi, serializeOfferDescription, parseOfferDescription } from "@/services/offerApi";
 import { categoryApi } from "@/services/categoryApi";
-import { supabase } from "@/integrations/supabase/client";
 import { logOfferActivity } from "@/utils/auditLogger";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -210,11 +209,16 @@ const OfferManagement = () => {
       // If apply to existing members is checked, assign the offer
       if (formData.applyToExistingMembers) {
         try {
-          await supabase.functions.invoke('assign-offer-to-members', {
-            body: {
+          const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
+          await fetch(`${apiBase}/offers/assign-to-members`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
               offer_id: createdOffer.id,
               category_ids: selectedCategoryIds,
-            },
+            }),
           });
         } catch (assignError) {
           console.error(`Error assigning offer to members:`, assignError);

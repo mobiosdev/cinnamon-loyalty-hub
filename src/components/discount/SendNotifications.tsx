@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Send, Users, Search } from "lucide-react";
 import { toast } from "sonner";
 import { offerApi } from "@/services/offerApi";
-import { supabase } from "@/integrations/supabase/client";
+import { categoryApi } from "@/services/categoryApi";
+import { staffApi } from "@/services/staffApi";
 import { SendMessageDialog } from "./SendMessageDialog";
 import {
   Pagination,
@@ -51,6 +52,7 @@ const SendNotifications = () => {
     setLoading(true);
     try {
       const offersData = await offerApi.getOffers();
+      const categoriesData = await categoryApi.getCategories();
       
       // For each offer, get its categories and count members
       const offersWithCategories = await Promise.all(
@@ -60,22 +62,18 @@ const SendNotifications = () => {
           // Get member count for each category
           const categoriesWithCounts = await Promise.all(
             categoryIds.map(async (categoryId) => {
-              const { data: categoryData } = await supabase
-                .from('customer_categories')
-                .select('id, name')
-                .eq('id', categoryId)
-                .single();
-
-              const { count } = await supabase
-                .from('members')
-                .select('*', { count: 'exact', head: true })
-                .eq('category_id', categoryId)
-                .eq('is_active', true);
+              const categoryInfo = categoriesData.find(c => c.id === categoryId);
+              
+              const membersResp = await staffApi.getStaff({
+                category_id: categoryId.toString(),
+                is_active: true,
+                limit: 1
+              });
 
               return {
                 id: categoryId,
-                name: categoryData?.name || 'Unknown',
-                memberCount: count || 0,
+                name: categoryInfo?.name || 'Unknown',
+                memberCount: membersResp.pagination?.total || 0,
               };
             })
           );
@@ -100,8 +98,8 @@ const SendNotifications = () => {
 
       setOffers(offersWithCategories);
     } catch (error) {
-      console.error('Error loading offers:', error);
-      toast.error("Failed to load offers");
+      console.error('Error loading offers with categories:', error);
+      toast.error('Failed to load offers and categories');
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,6 @@
-import { supabase } from '@/integrations/supabase/client';
+import { apiManager } from '@/app/apiManager';
 
-interface Company {
+export interface Company {
   id?: string;
   company_code: string;
   name: string;
@@ -20,71 +20,19 @@ interface CompanySearchParams {
 
 export const companyApi = {
   async searchCompanies(params: CompanySearchParams = {}): Promise<Company[]> {
-    try {
-      let query = supabase
-        .from('companies')
-        .select('*')
-        .order('name');
+    const queryParams = new URLSearchParams();
+    if (params.name) queryParams.append('name', params.name);
+    if (params.page) queryParams.append('page', params.page.toString());
+    if (params.limit) queryParams.append('limit', params.limit.toString());
 
-      if (params.name) {
-        query = query.ilike('name', `%${params.name}%`);
-      }
-
-      if (params.limit) {
-        const from = params.page ? (params.page - 1) * params.limit : 0;
-        const to = from + params.limit - 1;
-        query = query.range(from, to);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        throw new Error(`Failed to fetch companies: ${error.message}`);
-      }
-
-      return data || [];
-    } catch (error) {
-      console.error('Error fetching companies:', error);
-      throw error;
-    }
+    return apiManager.get<Company[]>(`/companies?${queryParams.toString()}`);
   },
 
   async createCompany(companyData: Omit<Company, 'id' | 'created_at' | 'updated_at'>): Promise<Company> {
-    try {
-      const { data, error } = await supabase
-        .from('companies')
-        .insert([companyData])
-        .select()
-        .single();
-
-      if (error) {
-        throw new Error(`Failed to create company: ${error.message}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error creating company:', error);
-      throw error;
-    }
+    return apiManager.post<Company>('/companies', companyData);
   },
 
   async updateCompany(id: string, companyData: Partial<Omit<Company, 'id' | 'created_at' | 'updated_at'>>): Promise<Company> {
-    try {
-      const { data, error } = await supabase
-        .from('companies')
-        .update(companyData)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        throw new Error(`Failed to update company: ${error.message}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error updating company:', error);
-      throw error;
-    }
+    return apiManager.put<Company>(`/companies/${id}`, companyData);
   }
 };

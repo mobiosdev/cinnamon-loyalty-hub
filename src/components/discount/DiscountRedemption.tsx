@@ -45,7 +45,8 @@ const DiscountRedemption = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${import.meta.env.API_BASE_URL}/transaction/send-otp`, {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
+      const response = await fetch(`${apiBase}/transaction/send-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -84,7 +85,8 @@ const DiscountRedemption = () => {
     setLoading(true);
 
     try {
-      const verifyResponse = await fetch(`${import.meta.env.API_BASE_URL}/transaction/verify-otp`, {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
+      const verifyResponse = await fetch(`${apiBase}/transaction/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -97,7 +99,7 @@ const DiscountRedemption = () => {
       const verifyData = await verifyResponse.json();
       if (!verifyResponse.ok) throw new Error(verifyData.message || "OTP verification failed");
 
-      const pendingResponse = await fetch(`${import.meta.env.API_BASE_URL}/transaction/pending`, {
+      const pendingResponse = await fetch(`${apiBase}/transaction/pending`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

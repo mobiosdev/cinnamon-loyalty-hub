@@ -21,7 +21,6 @@ import { StaffList } from "./StaffList";
 import { Checkbox } from "@/components/ui/checkbox";
 import { logCompanyActivity, logMemberActivity } from "@/utils/auditLogger";
 import { validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
-import { supabase } from "@/integrations/supabase/client";
 
 interface Company {
   id: string;
@@ -523,11 +522,10 @@ const CompanyRegistration = () => {
                 resolvedCompanyName = cName;
               } else {
                 try {
-                  const { data: existingCompanies } = await supabase
-                    .from('companies')
-                    .select('id, name')
-                    .ilike('name', cName)
-                    .limit(1);
+                  const existingCompanies = await companyApi.searchCompanies({
+                    name: cName,
+                    limit: 1
+                  });
 
                   const existingCompany = existingCompanies?.[0];
 

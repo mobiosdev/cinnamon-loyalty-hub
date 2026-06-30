@@ -14,7 +14,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { logCategoryActivity, logOfferActivity } from "@/utils/auditLogger";
 import { Switch } from "@/components/ui/switch";
-import { supabase } from "@/integrations/supabase/client";
 import { offerApi, parseOfferDescription } from "@/services/offerApi";
 
 const CustomerCategoryManagement = () => {
@@ -46,28 +45,7 @@ const CustomerCategoryManagement = () => {
   const loadCategoryOffers = async (categoryId: number) => {
     setLoadingOffers(true);
     try {
-      const { data, error } = await supabase
-        .from('offer_categories')
-        .select(`
-          offers (*)
-        `)
-        .eq('category_id', categoryId);
-
-      if (error) throw error;
-
-      const mappedOffers = (data || [])
-        .map((item: any) => item.offers)
-        .filter(Boolean)
-        .filter((offer: any) => !offer.is_deleted)
-        .map((offer: any) => {
-          const { description, category_recurrence } = parseOfferDescription(offer.description);
-          return {
-            ...offer,
-            description,
-            category_recurrence
-          };
-        });
-
+      const mappedOffers = await offerApi.getOffersByCategory(categoryId);
       setCategoryOffers(mappedOffers);
     } catch (error) {
       console.error('Error loading category offers:', error);

@@ -12,8 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Send, Users } from "lucide-react";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { staffApi } from "@/services/staffApi";
 
 interface SendMessageDialogProps {
   offer: {
@@ -44,14 +43,22 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
   const getMemberPhones = async () => {
     try {
       const categoryIds = offer.categories.map(cat => cat.id);
-      const { data: members, error } = await supabase
-        .from('members')
-        .select('mobile, first_name, last_name')
-        .in('category_id', categoryIds)
-        .eq('is_active', true);
-
-      if (error) throw error;
-      return members || [];
+      
+      const membersLists = await Promise.all(
+        categoryIds.map(async (catId) => {
+          const res = await staffApi.getStaff({
+            category_id: catId.toString(),
+            is_active: true,
+            limit: 1000
+          });
+          return res.data;
+        })
+      );
+      
+      const allMembers = membersLists.flat();
+      const uniqueMembers = Array.from(new Map(allMembers.map(m => [m.id, m])).values());
+      
+      return uniqueMembers;
     } catch (error) {
       console.error('Error fetching member phones:', error);
       throw error;

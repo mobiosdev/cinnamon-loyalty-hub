@@ -17,22 +17,24 @@ const OfferRedemption = () => {
   const [billNumber, setBillNumber] = useState("");
   const [availableOffers, setAvailableOffers] = useState<any[]>([]);
   const [selectedOffer, setSelectedOffer] = useState<any>(null);
+  const [member, setMember] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const handleCheckOffers = async () => {
     if (!customerPhone || !billNumber) {
-      toast.error("Please enter phone number and bill number");
+      toast.error("Please enter search criteria and bill number");
       return;
     }
 
     setLoading(true);
     try {
-      const offers = await offerApi.getAvailableOffers(customerPhone);
-      if (offers.length === 0) {
-        toast.error("No offers available for this customer");
+      const response = await offerApi.getAvailableOffers(customerPhone);
+      if (!response.member) {
+        toast.error("No member found matching this search criteria");
         return;
       }
-      setAvailableOffers(offers);
+      setMember(response.member);
+      setAvailableOffers(response.offers);
       setStep("select");
     } catch (error) {
       toast.error("Failed to fetch offers");
@@ -47,11 +49,16 @@ const OfferRedemption = () => {
       return;
     }
 
+    if (!member) {
+      toast.error("No member details found");
+      return;
+    }
+
     setLoading(true);
     try {
       await offerApi.redeemOffer({
         offer_id: offer.id,
-        customer_phone: customerPhone,
+        customer_phone: member.mobile,
         bill_number: billNumber,
         redeemed_by: 1, // TODO: Get from auth
       });
@@ -61,12 +68,14 @@ const OfferRedemption = () => {
         activityType: 'offer_redemption',
         entityType: 'redemption',
         entityId: offer.id,
-        entityName: customerPhone,
+        entityName: member.mobile,
         action: 'redeem',
         details: {
           offer_name: offer.name,
           bill_number: billNumber,
-          customer_phone: customerPhone
+          customer_phone: member.mobile,
+          member_name: `${member.first_name} ${member.last_name}`,
+          member_code: member.member_code
         }
       });
       
@@ -86,6 +95,7 @@ const OfferRedemption = () => {
     setBillNumber("");
     setAvailableOffers([]);
     setSelectedOffer(null);
+    setMember(null);
   };
 
   return (
@@ -105,12 +115,12 @@ const OfferRedemption = () => {
           {step === "input" && (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="customerPhone">Customer Phone Number *</Label>
+                <Label htmlFor="customerPhone">Search Member (Phone, Code, or Name) *</Label>
                 <Input
                   id="customerPhone"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="+94 XXX XXX XXX"
+                  placeholder="Enter mobile, member code, or name"
                   className="text-lg"
                 />
               </div>
@@ -134,39 +144,46 @@ const OfferRedemption = () => {
 
           {step === "select" && (
             <div className="space-y-4">
-              <div className="bg-muted rounded-lg p-4">
-                <p className="text-sm font-medium">Customer: {customerPhone}</p>
+              <div className="bg-muted rounded-lg p-4 space-y-1">
+                <p className="text-sm font-medium">Customer: {member?.first_name} {member?.last_name} ({member?.member_code || 'N/A'})</p>
+                <p className="text-sm text-muted-foreground">Mobile: {member?.mobile}</p>
                 <p className="text-sm text-muted-foreground">Bill: {billNumber}</p>
               </div>
 
               <div>
                 <h3 className="font-medium mb-3">Available Offers</h3>
                 <div className="space-y-3">
-                  {availableOffers.map((offer) => (
-                    <Card key={offer.id} className={offer.is_redeemed ? "opacity-50" : ""}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-medium">{offer.name}</h4>
-                            <p className="text-sm text-muted-foreground">{offer.description}</p>
+                  {availableOffers.length === 0 ? (
+                    <div className="text-center py-6 text-muted-foreground bg-card border rounded-lg">
+                      No offers are assigned to this member.
+                    </div>
+                  ) : (
+                    availableOffers.map((offer) => (
+                      <Card key={offer.id} className={offer.is_redeemed ? "opacity-50" : ""}>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <h4 className="font-medium">{offer.name}</h4>
+                              <p className="text-sm text-muted-foreground">{offer.description}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {offer.is_redeemed ? (
+                                <Badge variant="secondary">Already Redeemed</Badge>
+                              ) : (
+                                <Button
+                                  onClick={() => handleRedeemOffer(offer)}
+                                  disabled={loading}
+                                  size="sm"
+                                >
+                                  Redeem
+                                </Button>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            {offer.is_redeemed ? (
-                              <Badge variant="secondary">Already Redeemed</Badge>
-                            ) : (
-                              <Button
-                                onClick={() => handleRedeemOffer(offer)}
-                                disabled={loading}
-                                size="sm"
-                              >
-                                Redeem
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -189,7 +206,11 @@ const OfferRedemption = () => {
               <div className="bg-card border rounded-lg p-6 space-y-3 text-left">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Customer:</span>
-                  <span className="font-medium">{customerPhone}</span>
+                  <span className="font-medium">{member?.first_name} {member?.last_name} ({member?.member_code || 'N/A'})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Mobile:</span>
+                  <span className="font-medium">{member?.mobile}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Bill Number:</span>

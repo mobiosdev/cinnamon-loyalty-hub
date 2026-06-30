@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { auditApi } from '@/services/auditApi';
 
 interface AuditLogParams {
   activityType: string;
@@ -47,23 +47,17 @@ export const logActivity = async ({
       })
     };
 
-    const { error } = await supabase
-      .from('audit_logs')
-      .insert({
-        activity_type: activityType,
-        entity_type: entityType,
-        entity_id: entityId || null,
-        entity_name: entityName || null,
-        action,
-        details: enrichedDetails,
-        performed_by: performedBy,
-        ip_address: null, // Can be enhanced to capture actual IP
-        user_agent: navigator.userAgent
-      });
-
-    if (error) {
-      console.error('Error logging activity:', error);
-    }
+    await auditApi.logActivity({
+      activity_type: activityType,
+      entity_type: entityType,
+      entity_id: entityId || null,
+      entity_name: entityName || null,
+      action,
+      details: enrichedDetails,
+      performed_by: performedBy,
+      ip_address: null,
+      user_agent: navigator.userAgent
+    });
   } catch (error) {
     console.error('Error logging activity:', error);
   }

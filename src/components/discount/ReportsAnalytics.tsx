@@ -9,9 +9,9 @@ import {
   BarChart3, Download, TrendingUp, Users, DollarSign, 
   Calendar as CalendarIcon, Package, FileText, PieChart, Activity, AlertCircle 
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, eachDayOfInterval, startOfDay } from "date-fns";
+import { redemptionApi } from "@/services/redemptionApi";
 import { 
   LineChart, Line, BarChart, Bar, PieChart as RechartsPie, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList
@@ -101,7 +101,11 @@ const CustomCompanyLabel = (props: any) => {
   );
 };
 
-const ReportsAnalytics = () => {
+interface ReportsAnalyticsProps {
+  activeTab?: string;
+}
+
+const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<ReportStats>({
     totalMembers: 0,
@@ -138,48 +142,35 @@ const ReportsAnalytics = () => {
     try {
       setLoading(true);
 
-      // Build date filter
-      const fromDate = dateFrom ? startOfDay(dateFrom).toISOString() : undefined;
-      const toDate = dateTo ? new Date(dateTo.setHours(23, 59, 59, 999)).toISOString() : undefined;
+      const formattedDateFrom = dateFrom ? startOfDay(dateFrom).toISOString() : undefined;
+      const formattedDateTo = dateTo ? (() => {
+        const endOfDay = new Date(dateTo);
+        endOfDay.setHours(23, 59, 59, 999);
+        return endOfDay.toISOString();
+      })() : undefined;
 
-      // Fetch member stats
-      const { data: members, error: membersError } = await supabase
-        .from('members')
-        .select('*, companies(name), customer_categories(name)');
-
-      if (membersError) throw membersError;
-
-      // Fetch discount redemptions
-      let discountQuery = supabase
-        .from('discount_redemptions')
-        .select('*, members(first_name, last_name, companies(name), customer_categories(name))');
+      const payload = await redemptionApi.getReportData({
+        dateFrom: formattedDateFrom,
+        dateTo: formattedDateTo,
+      });
       
-      if (fromDate) discountQuery = discountQuery.gte('redeemed_at', fromDate);
-      if (toDate) discountQuery = discountQuery.lte('redeemed_at', toDate);
-
-      const { data: discounts, error: discountsError } = await discountQuery;
-      if (discountsError) throw discountsError;
-
-      // Fetch offer redemptions
-      let offerQuery = supabase
-        .from('offer_redemptions')
-        .select('*, offers(name)');
-      
-      if (fromDate) offerQuery = offerQuery.gte('redeemed_at', fromDate);
-      if (toDate) offerQuery = offerQuery.lte('redeemed_at', toDate);
-
-      const { data: offers, error: offersError } = await offerQuery;
-      if (offersError) throw offersError;
+      const members = payload.members || [];
+      const discounts = payload.discounts || [];
+      const offers = payload.offers || [];
+      const allOffers = payload.allOffers || [];
+      const offerCategories = payload.offerCategories || [];
+      const offerRedemptionsData = payload.offerRedemptionsData || [];
+      const discountRedemptionsData = payload.discountRedemptionsData || [];
 
       // Calculate stats
-      const totalDiscountValue = discounts?.reduce((sum, d) => sum + (Number(d.discount_amount) || 0), 0) || 0;
+      const totalDiscountValue = discounts?.reduce((sum: number, d: any) => sum + (Number(d.discount_amount) || 0), 0) || 0;
       const totalTransactions = (discounts?.length || 0) + (offers?.length || 0);
       const averageDiscount = discounts?.length ? totalDiscountValue / discounts.length : 0;
-      const activeMembers = members?.filter(m => m.is_active).length || 0;
+      const activeMembers = members?.filter((m: any) => m.is_active).length || 0;
 
       // Company analysis
       const companyMap = new Map<string, { transactions: number; amount: number }>();
-      discounts?.forEach(d => {
+      discounts?.forEach((d: any) => {
         const companyName = d.members?.companies?.name || 'Unknown';
         const current = companyMap.get(companyName) || { transactions: 0, amount: 0 };
         companyMap.set(companyName, {
@@ -190,12 +181,12 @@ const ReportsAnalytics = () => {
 
       const companiesArray = Array.from(companyMap.entries())
         .map(([name, data]) => ({ name, ...data }))
-        .sort((a, b) => b.transactions - a.transactions)
+        .sort((a: any, b: any) => b.transactions - a.transactions)
         .slice(0, 5);
 
       // Category analysis
       const categoryMap = new Map<string, { value: number; members: number }>();
-      members?.forEach(m => {
+      members?.forEach((m: any) => {
         const categoryName = m.customer_categories?.name || 'Unknown';
         const current = categoryMap.get(categoryName) || { value: 0, members: 0 };
         categoryMap.set(categoryName, {
@@ -283,34 +274,6 @@ const ReportsAnalytics = () => {
       setCompanyData(companiesArray);
       setCategoryData(categoriesArray);
       setOfferData(offersArray);
-
-      // Fetch member-offer audit data
-      const { data: allOffers, error: allOffersError } = await supabase
-        .from('offers')
-        .select('*')
-        .eq('is_active', true);
-
-      if (allOffersError) throw allOffersError;
-
-      const { data: offerCategories, error: offerCategoriesError } = await supabase
-        .from('offer_categories')
-        .select('*');
-
-      if (offerCategoriesError) throw offerCategoriesError;
-
-      // Fetch offer redemptions for member audit with full details
-      const { data: offerRedemptionsData, error: offerRedemptionsError } = await supabase
-        .from('offer_redemptions')
-        .select('customer_phone, offer_id, redeemed_at, bill_number');
-
-      if (offerRedemptionsError) throw offerRedemptionsError;
-
-      // Fetch discount redemptions for member audit
-      const { data: discountRedemptionsData, error: discountRedemptionsError } = await supabase
-        .from('discount_redemptions')
-        .select('customer_phone, discount_type, discount_value, redeemed_at, bill_number');
-
-      if (discountRedemptionsError) throw discountRedemptionsError;
 
       // Build audit data
       const auditData = members?.map(member => {
@@ -406,6 +369,13 @@ const ReportsAnalytics = () => {
     fetchReportData();
     setCurrentPage(1);
   }, [dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (activeTab === 'reports') {
+      fetchReportData();
+      setCurrentPage(1);
+    }
+  }, [activeTab]);
 
   // Export functions
   const exportToExcel = () => {
@@ -515,11 +485,16 @@ const ReportsAnalytics = () => {
 
   const fixMemberOffers = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('fix-member-offers', {
-        method: 'POST'
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
+      const response = await fetch(`${apiBase}/offers/fix-member-offers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error('Failed to fix offers');
+      const data = await response.json();
       
       if (data?.success) {
         toast.success(`Fixed ${data.fixed_count} members with missing offers`);

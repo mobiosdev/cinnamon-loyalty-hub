@@ -9,13 +9,6 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   
   return {
-    define: {
-      'import.meta.env.API_BASE_URL': JSON.stringify(
-        mode === 'production' 
-          ? 'https://cinnamon-demo.text-ware.com/api/api' 
-          : 'http://localhost:7050/api'
-      ),
-    },
     server: {
       host: "::",
       port: 8080,

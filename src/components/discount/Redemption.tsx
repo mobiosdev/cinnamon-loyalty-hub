@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,8 @@ import { toast } from "sonner";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { offerApi } from "@/services/offerApi";
 import { staffApi } from "@/services/staffApi";
+import { redemptionApi } from "@/services/redemptionApi";
 import { validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
-import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import axios from "axios";
 import { cn } from "@/lib/utils";
@@ -49,6 +49,7 @@ const Redemption = () => {
   const [sentOtp, setSentOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [expiryTime, setExpiryTime] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState<number>(0);
   
   // Member and benefits data
   const [memberData, setMemberData] = useState<MemberData | null>(null);
@@ -61,6 +62,31 @@ const Redemption = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchingNames, setSearchingNames] = useState(false);
   const [remark, setRemark] = useState("");
+
+  // Countdown timer for OTP
+  useEffect(() => {
+    if (!expiryTime || step !== "verify") {
+      setSecondsLeft(0);
+      return;
+    }
+
+    const calculateSecondsLeft = () => {
+      const diff = new Date(expiryTime).getTime() - Date.now();
+      return Math.max(0, Math.floor(diff / 1000));
+    };
+
+    setSecondsLeft(calculateSecondsLeft());
+
+    const timer = setInterval(() => {
+      const left = calculateSecondsLeft();
+      setSecondsLeft(left);
+      if (left <= 0) {
+        clearInterval(timer);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [expiryTime, step]);
 
   const getCategoryBadgeVariant = (categoryName: string): "default" | "secondary" | "destructive" | "outline" => {
     const categoryColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -89,32 +115,27 @@ const Redemption = () => {
     return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   };
 
+  const formatTimeLeft = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const fetchDiscountHistory = async (phone: string) => {
     try {
-      // Normalize phone for search
-      const phoneValidation = validateAndNormalizeSriLankanMobile(phone);
-      const searchFormats = [
-        phoneValidation.isValid ? phoneValidation.normalized : phone,
-        phoneValidation.isValid ? `+${phoneValidation.normalized}` : phone,
-        phone
-      ];
+      const data = await redemptionApi.getTransactions({ searchTerm: phone });
+      const mapped = (data || [])
+        .filter((t: any) => t.type === 'discount')
+        .map((t: any) => ({
+          ...t,
+          members: {
+            first_name: t.member_name.split(' ')[0] || '',
+            last_name: t.member_name.split(' ').slice(1).join(' ') || '',
+            member_code: t.member_code
+          }
+        }));
 
-      const { data, error } = await supabase
-        .from('discount_redemptions')
-        .select(`
-          *,
-          members (
-            first_name,
-            last_name,
-            member_code
-          )
-        `)
-        .in('customer_phone', searchFormats)
-        .order('redeemed_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      setDiscountHistory(data || []);
+      setDiscountHistory(mapped);
     } catch (error) {
       console.error('Error fetching discount history:', error);
     }
@@ -276,19 +297,15 @@ const Redemption = () => {
       const phoneToSave = phoneValidation.isValid ? phoneValidation.normalized! : mobileNumber;
 
       // Save discount redemption to database
-      const { error } = await supabase
-        .from('discount_redemptions')
-        .insert({
-          member_id: memberData.id,
-          bill_number: billNumber,
-          customer_phone: phoneToSave,
-          discount_type: memberData.discount_amount > 0 ? 'fixed' : 'percentage',
-          discount_value: memberData.discount_amount > 0 ? memberData.discount_amount : memberData.discount_percentage,
-          discount_amount: null, // Could be calculated if you have bill amount
-          redeemed_by: 1 // TODO: Get from auth
-        });
-
-      if (error) throw error;
+      await redemptionApi.redeemDiscount({
+        member_id: memberData.id,
+        bill_number: billNumber,
+        customer_phone: phoneToSave,
+        discount_type: memberData.discount_amount > 0 ? 'fixed' : 'percentage',
+        discount_value: memberData.discount_amount > 0 ? memberData.discount_amount : memberData.discount_percentage,
+        discount_amount: null,
+        redeemed_by: 1
+      });
 
       // Fetch updated history
       await fetchDiscountHistory(phoneToSave);
@@ -407,36 +424,13 @@ const Redemption = () => {
     
     setSearchingNames(true);
     try {
-      let query = supabase
-        .from('members')
-        .select(`
-          *,
-          companies (
-            name
-          ),
-          customer_categories (
-            name
-          )
-        `);
-
-      // Only get active and non-deleted members
-      query = query.eq('is_active', true).or('is_deleted.eq.false,is_deleted.is.null');
-
-      const trimmedQuery = searchNameQuery.trim();
-      if (trimmedQuery) {
-        query = query.or(`first_name.ilike.%${trimmedQuery}%,last_name.ilike.%${trimmedQuery}%`);
-      }
-
-      const { data, error } = await query.limit(10);
+      const result = await staffApi.getStaff({
+        search: searchNameQuery.trim(),
+        is_active: true,
+        limit: 10
+      });
+      const transformedData = result.data || [];
       
-      if (error) throw error;
-      
-      const transformedData = (data || []).map((member: any) => ({
-        ...member,
-        company_name: member.companies?.name,
-        category_name: member.customer_categories?.name,
-      }));
-
       setSearchResults(transformedData);
       
       if (transformedData.length === 0) {
@@ -631,9 +625,15 @@ const Redemption = () => {
         <p className="text-sm font-medium">Bill Number: {billNumber}</p>
         <p className="text-sm text-muted-foreground">OTP sent to: {mobileNumber}</p>
         {expiryTime && (
-          <p className="text-xs text-muted-foreground">
-            OTP expires at: {formatExpiryTime(expiryTime)}
-          </p>
+          <div className="text-xs text-muted-foreground">
+            {secondsLeft > 0 ? (
+              <p>OTP expires in: <span className="font-mono font-bold text-foreground">{formatTimeLeft(secondsLeft)}</span></p>
+            ) : (
+              <p className="text-destructive font-semibold flex items-center gap-1">
+                <AlertCircle className="h-3.5 w-3.5" /> OTP has expired
+              </p>
+            )}
+          </div>
         )}
         {sentOtp && (
           <p className="text-xs font-medium text-primary mt-2">
@@ -653,9 +653,37 @@ const Redemption = () => {
             </InputOTPGroup>
           </InputOTP>
         </div>
-        <Button onClick={handleVerifyOTP} disabled={loading} size="lg" className="w-full">
-          {loading ? "Verifying..." : "Verify OTP & Load Benefits"}
-        </Button>
+        
+        <div className="space-y-2 pt-2">
+          <Button onClick={handleVerifyOTP} disabled={loading || secondsLeft <= 0} size="lg" className="w-full">
+            {loading ? "Verifying..." : "Verify OTP & Load Benefits"}
+          </Button>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <Button 
+              onClick={handleSendOTP} 
+              disabled={loading} 
+              variant="outline" 
+              className={cn(
+                "w-full",
+                secondsLeft <= 0 && "border-primary text-primary animate-pulse font-semibold"
+              )}
+            >
+              {loading ? "Sending..." : "Resend OTP"}
+            </Button>
+            <Button 
+              onClick={() => {
+                setOtp("");
+                setStep("input");
+              }} 
+              disabled={loading} 
+              variant="ghost" 
+              className="w-full"
+            >
+              Back
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

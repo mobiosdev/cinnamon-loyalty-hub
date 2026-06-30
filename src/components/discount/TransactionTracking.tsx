@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Search, Filter, ChevronLeft, ChevronRight, Loader2, Calendar as CalendarIcon, Download } from "lucide-react";
+import { FileText, Search, Filter, ChevronLeft, ChevronRight, Loader2, Calendar as CalendarIcon, Download, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -14,7 +14,9 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { categoryApi } from "@/services/categoryApi";
+import { offerApi } from "@/services/offerApi";
+import { redemptionApi } from "@/services/redemptionApi";
 import { toast } from "sonner";
 
 export interface Transaction {
@@ -32,7 +34,11 @@ export interface Transaction {
   offer_name?: string;
 }
 
-const TransactionTracking = () => {
+interface TransactionTrackingProps {
+  activeTab?: string;
+}
+
+const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [displayedTransactions, setDisplayedTransactions] = useState<Transaction[]>([]);
   const [offers, setOffers] = useState<Array<{ id: string; name: string }>>([]);
@@ -65,16 +71,8 @@ const TransactionTracking = () => {
   // Fetch available categories
   const fetchCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from('customer_categories')
-        .select('id, name')
-        .order('name', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching categories:', error);
-      } else if (data) {
-        setCategories(data);
-      }
+      const data = await categoryApi.getCategories();
+      setCategories(data.map(c => ({ id: c.id!, name: c.name })));
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -84,290 +82,42 @@ const TransactionTracking = () => {
   const fetchOffers = async (categoryId?: string) => {
     try {
       if (!categoryId || categoryId === 'all') {
-        const { data, error } = await supabase
-          .from('offers')
-          .select('id, name')
-          .eq('is_active', true)
-          .order('name', { ascending: true });
-
-        if (error) {
-          console.error('Error fetching offers:', error);
-        } else if (data) {
-          setOffers(data);
-        }
+        const data = await offerApi.getOffers();
+        setOffers(data.map(o => ({ id: o.id!, name: o.name })));
       } else {
-        const { data, error } = await supabase
-          .from('offer_categories')
-          .select(`
-            offers (
-              id,
-              name,
-              is_active
-            )
-          `)
-          .eq('category_id', parseInt(categoryId));
-
-        if (error) {
-          console.error('Error fetching offers for category:', error);
-        } else if (data) {
-          const filteredOffers = data
-            .map((item: any) => item.offers)
-            .filter((offer: any) => offer && offer.is_active)
-            .map((offer: any) => ({ id: offer.id, name: offer.name }));
-          filteredOffers.sort((a, b) => a.name.localeCompare(b.name));
-          setOffers(filteredOffers);
-        }
+        const data = await offerApi.getOffersByCategory(parseInt(categoryId, 10));
+        setOffers(data.map(o => ({ id: o.id!, name: o.name })));
       }
     } catch (error) {
       console.error('Error fetching offers:', error);
     }
   };
 
-  // Fetch transactions from Supabase
-  const fetchTransactions = async () => {
+  // Fetch transactions from NestJS backend
+  const fetchTransactions = async (overrideSearchTerm?: string) => {
     try {
       setLoading(true);
       
-      const from = 0;
-      const to = 1000; // Fetch all matching records
-
-      // Fetch discount redemptions
-      let discountQuery = supabase
-        .from('discount_redemptions')
-        .select(
-          categoryFilter !== 'all'
-            ? `
-              id,
-              bill_number,
-              customer_phone,
-              discount_amount,
-              discount_type,
-              discount_value,
-              redeemed_at,
-              members!discount_redemptions_member_id_fkey!inner (
-                first_name,
-                last_name,
-                category_id,
-                companies (name),
-                customer_categories (name)
-              )
-            `
-            : `
-              id,
-              bill_number,
-              customer_phone,
-              discount_amount,
-              discount_type,
-              discount_value,
-              redeemed_at,
-              members!discount_redemptions_member_id_fkey (
-                first_name,
-                last_name,
-                category_id,
-                companies (name),
-                customer_categories (name)
-              )
-            `,
-          { count: 'exact' }
-        )
-        .order('redeemed_at', { ascending: false });
-
-      // Apply category filter to discount redemptions query if selected
-      if (categoryFilter !== 'all') {
-        discountQuery = discountQuery.eq('members.category_id', parseInt(categoryFilter));
-      }
-
-      // Apply search filter
-      if (searchTerm) {
-        discountQuery = discountQuery.or(`bill_number.ilike.%${searchTerm}%,customer_phone.ilike.%${searchTerm}%`);
-      }
-
-      // Apply date range filters
-      if (dateFrom) {
-        discountQuery = discountQuery.gte('redeemed_at', dateFrom.toISOString());
-      }
-      if (dateTo) {
+      const effectiveSearch = overrideSearchTerm !== undefined ? overrideSearchTerm : searchTerm;
+      const formattedDateTo = dateTo ? (() => {
         const endOfDay = new Date(dateTo);
         endOfDay.setHours(23, 59, 59, 999);
-        discountQuery = discountQuery.lte('redeemed_at', endOfDay.toISOString());
-      }
+        return endOfDay.toISOString();
+      })() : undefined;
 
-      // Fetch offer redemptions
-      let offerQuery = supabase
-        .from('offer_redemptions')
-        .select(`
-          id,
-          bill_number,
-          customer_phone,
-          redeemed_at,
-          offers (
-            id,
-            name
-          )
-        `, { count: 'exact' })
-        .order('redeemed_at', { ascending: false });
+      const data = await redemptionApi.getTransactions({
+        categoryFilter,
+        offerFilter,
+        searchTerm: effectiveSearch,
+        dateFrom: dateFrom?.toISOString(),
+        dateTo: formattedDateTo,
+      });
+      const allTx: Transaction[] = data || [];
 
-      // Apply search filter
-      if (searchTerm) {
-        offerQuery = offerQuery.or(`bill_number.ilike.%${searchTerm}%,customer_phone.ilike.%${searchTerm}%`);
-      }
-
-      // Apply date range filters
-      if (dateFrom) {
-        offerQuery = offerQuery.gte('redeemed_at', dateFrom.toISOString());
-      }
-      if (dateTo) {
-        const endOfDay = new Date(dateTo);
-        endOfDay.setHours(23, 59, 59, 999);
-        offerQuery = offerQuery.lte('redeemed_at', endOfDay.toISOString());
-      }
-
-      let allTransactions: Transaction[] = [];
-
-      // Always fetch both discounts and offers
-      const shouldFetchDiscounts = true;
-      const shouldFetchOffers = true;
-
-      // Fetch discounts
-      if (shouldFetchDiscounts) {
-        const { data: discountData, error: discountError } = await discountQuery.range(from, to);
-        
-        if (discountError) {
-          console.error('Error fetching discount redemptions:', discountError);
-          toast.error('Failed to fetch discount transactions');
-        } else if (discountData) {
-          const discountTransactions: Transaction[] = discountData.map((item: any) => ({
-            id: item.id,
-            bill_number: item.bill_number,
-            customer_phone: item.customer_phone,
-            member_name: item.members ? `${item.members.first_name} ${item.members.last_name}` : 'Unknown',
-            company_name: item.members?.companies?.name || 'N/A',
-            category_name: item.members?.customer_categories?.name || 'N/A',
-            discount_amount: item.discount_amount,
-            discount_type: item.discount_type,
-            discount_value: item.discount_value,
-            redeemed_at: item.redeemed_at,
-            type: 'discount'
-          }));
-          allTransactions = [...allTransactions, ...discountTransactions];
-        }
-      }
-
-      // Fetch offers
-      if (shouldFetchOffers) {
-        // Apply offer filter if selected
-        if (offerFilter !== 'all') {
-          offerQuery = offerQuery.eq('offer_id', offerFilter);
-        }
-
-        const { data: offerData, error: offerError } = await offerQuery.range(from, to);
-        
-        if (offerError) {
-          console.error('Error fetching offer redemptions:', offerError);
-          toast.error('Failed to fetch offer transactions');
-        } else if (offerData && offerData.length > 0) {
-          // Get unique phone numbers and prepare variations for matching
-          const phoneNumbers = [...new Set(offerData.map((item: any) => item.customer_phone))];
-          
-          // Create all phone number variations for better matching
-          const allPhoneVariations: string[] = [];
-          phoneNumbers.forEach(phone => {
-            allPhoneVariations.push(phone);
-            // Add with + prefix if not present
-            if (!phone.startsWith('+')) {
-              allPhoneVariations.push('+' + phone);
-            }
-            // Add without + if present
-            if (phone.startsWith('+')) {
-              allPhoneVariations.push(phone.substring(1));
-            }
-          });
-
-          // Fetch member data for these phone numbers with all variations
-          const { data: membersData } = await supabase
-            .from('members')
-            .select(`
-              mobile,
-              first_name,
-              last_name,
-              category_id,
-              companies (name),
-              customer_categories (name)
-            `)
-            .in('mobile', allPhoneVariations);
-
-          // Create a map for quick lookup with normalized phone numbers
-          const memberMap = new Map();
-          if (membersData) {
-            membersData.forEach((member: any) => {
-              // Normalize phone number (remove + and leading zeros)
-              const normalizedPhone = member.mobile.replace(/^\+/, '').replace(/^0+/, '');
-              memberMap.set(normalizedPhone, member);
-              // Also store with original format
-              memberMap.set(member.mobile, member);
-            });
-          }
-
-          // Helper function to find member by phone with fuzzy matching
-          const findMember = (phone: string) => {
-            // Try exact match first
-            if (memberMap.has(phone)) return memberMap.get(phone);
-            
-            // Try with + prefix
-            if (memberMap.has('+' + phone)) return memberMap.get('+' + phone);
-            
-            // Try without + prefix
-            if (phone.startsWith('+') && memberMap.has(phone.substring(1))) {
-              return memberMap.get(phone.substring(1));
-            }
-            
-            // Try normalized version (remove + and leading zeros)
-            const normalizedPhone = phone.replace(/^\+/, '').replace(/^0+/, '');
-            if (memberMap.has(normalizedPhone)) return memberMap.get(normalizedPhone);
-            
-            return null;
-          };
-
-          const offerTransactions: Transaction[] = offerData
-            .filter((item: any) => item.offers)
-            .map((item: any) => {
-              const memberData = findMember(item.customer_phone);
-              
-              // If filtering by a specific category, we must have a matching member of that category
-              if (categoryFilter !== 'all') {
-                if (!memberData || memberData.category_id?.toString() !== categoryFilter) {
-                  return null;
-                }
-              }
-
-              const mData = memberData || {};
-              return {
-                id: item.id,
-                bill_number: item.bill_number || 'N/A',
-                customer_phone: item.customer_phone,
-                member_name: mData.first_name ? `${mData.first_name} ${mData.last_name}` : 'Unknown',
-                company_name: mData.companies?.name || 'N/A',
-                category_name: mData.customer_categories?.name || 'N/A',
-                discount_amount: 0,
-                discount_type: 'offer',
-                discount_value: 0,
-                redeemed_at: item.redeemed_at,
-                type: 'offer',
-                offer_name: item.offers?.name || 'N/A'
-              };
-            })
-            .filter(Boolean) as Transaction[];
-          allTransactions = [...allTransactions, ...offerTransactions];
-        }
-      }
-
-      // Sort by date
-      allTransactions.sort((a, b) => new Date(b.redeemed_at).getTime() - new Date(a.redeemed_at).getTime());
-
-      setAllTransactions(allTransactions);
+      setAllTransactions(allTx);
       
       // Calculate pagination
-      const total = allTransactions.length;
+      const total = allTx.length;
       const totalPages = Math.ceil(total / pageSize);
       
       setPagination({
@@ -378,13 +128,18 @@ const TransactionTracking = () => {
       });
 
       // Update displayed transactions based on current page
-      updateDisplayedTransactions(allTransactions, currentPage, pageSize);
+      updateDisplayedTransactions(allTx, currentPage, pageSize);
     } catch (error) {
       console.error('Error fetching transactions:', error);
       toast.error('Failed to fetch transactions');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleClearSearch = () => {
+    setSearchTerm("");
+    fetchTransactions("");
   };
 
   // Update displayed transactions for current page
@@ -398,6 +153,12 @@ const TransactionTracking = () => {
     fetchCategories();
     fetchTransactions();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'transactions') {
+      fetchTransactions();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     fetchOffers(categoryFilter);
@@ -600,18 +361,31 @@ const TransactionTracking = () => {
                 <Search className="inline h-4 w-4 mr-1" />
                 Search
               </Label>
-              <Input
-                id="search"
-                placeholder="Search by bill number or phone..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    fetchTransactions();
-                  }
-                }}
-                disabled={loading}
-              />
+              <div className="relative">
+                <Input
+                  id="search"
+                  placeholder="Search by bill number or phone..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      fetchTransactions();
+                    }
+                  }}
+                  disabled={loading}
+                  className="pr-8"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    title="Clear search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

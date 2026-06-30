@@ -117,11 +117,11 @@ const DiscountManagement = () => {
           </TabsContent>
 
           <TabsContent value="transactions" className="space-y-4">
-            <TransactionTracking />
+            <TransactionTracking activeTab={activeTab} />
           </TabsContent>
 
           <TabsContent value="reports" className="space-y-4">
-            <ReportsAnalytics />
+            <ReportsAnalytics activeTab={activeTab} />
           </TabsContent>
 
           <TabsContent value="offers" className="space-y-4">
@@ -133,7 +133,7 @@ const DiscountManagement = () => {
           </TabsContent>
 
           <TabsContent value="audit" className="space-y-4">
-            <AuditTrail />
+            <AuditTrail parentActiveTab={activeTab} />
           </TabsContent>
 
           <TabsContent value="notifications" className="space-y-4">
