@@ -95,4 +95,8 @@ export const staffApi = {
       throw error;
     }
   },
+
+  async sendCardEmail(id: string, email: string): Promise<any> {
+    return apiManager.post<any>(`/members/${id}/send-card`, { email });
+  },
 };

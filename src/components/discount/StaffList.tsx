@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash, Ban, Building2, User, Check, ChevronsUpDown, Calendar, FileText, QrCode, Download } from "lucide-react";
+import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash, Ban, Building2, User, Check, ChevronsUpDown, Calendar, FileText, QrCode, Download, CreditCard } from "lucide-react";
 import { staffApi } from "@/services/staffApi";
 import { offerApi } from "@/services/offerApi";
 import { companyApi } from "@/services/companyApi";
@@ -23,6 +23,7 @@ import { logCompanyActivity, logMemberActivity } from "@/utils/auditLogger";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { MembershipCard } from "./MembershipCard";
 
 interface StaffListProps {
   isReload?: boolean;
@@ -40,6 +41,8 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
   const [revealedPhones, setRevealedPhones] = useState<Set<string>>(new Set());
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [qrMember, setQrMember] = useState<any>(null);
+  const [cardDialogOpen, setCardDialogOpen] = useState(false);
+  const [cardMember, setCardMember] = useState<any>(null);
 
   const handleDownloadQR = async (memberCode: string) => {
     try {
@@ -836,18 +839,32 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                         View
                       </Button>
                       {member.member_code && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setQrMember(member);
-                            setQrDialogOpen(true);
-                          }}
-                          className="text-primary hover:text-primary-foreground hover:bg-primary"
-                        >
-                          <QrCode className="h-4 w-4 mr-1" />
-                          QR
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setQrMember(member);
+                              setQrDialogOpen(true);
+                            }}
+                            className="text-primary hover:text-primary-foreground hover:bg-primary"
+                          >
+                            <QrCode className="h-4 w-4 mr-1" />
+                            QR
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setCardMember(member);
+                              setCardDialogOpen(true);
+                            }}
+                            className="text-amber-600 hover:text-white hover:bg-amber-600"
+                          >
+                            <CreditCard className="h-4 w-4 mr-1" />
+                            Card
+                          </Button>
+                        </>
                       )}
                     </div>
                   </TableCell>
@@ -1692,6 +1709,13 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Membership Card Dialog */}
+      <MembershipCard
+        open={cardDialogOpen}
+        onOpenChange={setCardDialogOpen}
+        member={cardMember}
+      />
     </div>
   );
 }
