@@ -30,7 +30,7 @@ const DiscountManagement = () => {
               />
               <div className="border-l border-border pl-4">
                 <h1 className="text-2xl font-serif font-semibold text-foreground">
-                  Discount Management
+                  Member Portal
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   Corporate Benefits & Member Discount System

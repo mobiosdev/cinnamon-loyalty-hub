@@ -55,7 +55,7 @@ const Login = () => {
           </div>
           <CardTitle className="text-2xl text-center">Welcome Back</CardTitle>
           <CardDescription className="text-center">
-            Enter your credentials to access the discount management system
+            Enter your credentials to access the Member Portal system
           </CardDescription>
         </CardHeader>
         <CardContent>
