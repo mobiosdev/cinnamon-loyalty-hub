@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash, Ban, Building2, User, Check, ChevronsUpDown, Calendar, FileText, QrCode, Download, CreditCard } from "lucide-react";
+import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash, Ban, Building2, User, Check, ChevronsUpDown, Calendar, FileText, QrCode, Download, CreditCard, Send } from "lucide-react";
 import { staffApi } from "@/services/staffApi";
 import { offerApi } from "@/services/offerApi";
 import { companyApi } from "@/services/companyApi";
@@ -42,6 +42,122 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
   const [qrMember, setQrMember] = useState<any>(null);
   const [cardDialogOpen, setCardDialogOpen] = useState(false);
   const [cardMember, setCardMember] = useState<any>(null);
+  const [sendingQr, setSendingQr] = useState(false);
+
+  const handleSendQR = async (member: any) => {
+    if (!member) return;
+
+    if (!member.email && !member.mobile) {
+      toast.error("Member does not have a registered email address or mobile number.");
+      return;
+    }
+
+    setSendingQr(true);
+    let emailSent = false;
+    let smsSent = false;
+    let errors: string[] = [];
+
+    // 1. Send via email if registered
+    if (member.email) {
+      try {
+        const memberName = `${member.title || ''} ${member.first_name} ${member.last_name}`.trim();
+        const expiryDate = member.renew_date
+          ? new Date(member.renew_date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+          : 'N/A';
+        const categoryName = member.category_name || 'Member';
+
+        const { data, error } = await supabase.functions.invoke('send-membership-card', {
+          body: {
+            to_email: member.email,
+            member_name: memberName,
+            member_code: member.member_code,
+            category_name: categoryName,
+            expiry_date: expiryDate,
+          },
+        });
+
+        if (error) {
+          throw new Error(error.message || 'Failed to send email');
+        }
+        if (data?.error) {
+          throw new Error(data.error);
+        }
+        emailSent = true;
+      } catch (err: any) {
+        console.error("Failed to send QR via email:", err);
+        errors.push(`Email: ${err.message || 'Unknown error'}`);
+      }
+    }
+
+    // 2. Send via SMS if registered
+    if (member.mobile) {
+      try {
+        const phoneValidation = validateAndNormalizeSriLankanMobile(member.mobile);
+        if (!phoneValidation.isValid) {
+          throw new Error(phoneValidation.error || "Invalid mobile number");
+        }
+        const finalMobileNumber = phoneValidation.normalized!;
+        const memberName = `${member.title || ''} ${member.first_name} ${member.last_name}`.trim();
+        const expiryDate = member.renew_date
+          ? new Date(member.renew_date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+          : 'N/A';
+        const categoryName = member.category_name || 'Member';
+
+        // Message text containing QR Code link and member's e-card details
+        const smsMessage = `Dear ${memberName}, here are your Cinnamon Grand digital membership details. Membership No: ${member.member_code}, Category: ${categoryName}, Expiry: ${expiryDate}. View your digital QR Code & Card here: https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(member.member_code)}`;
+        
+        const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://msg.text-ware.com/send_sms.php';
+        const smsUsername = import.meta.env.VITE_SMS_USERNAME || 'TW00001_ntb_demo_tr';
+        const smsPassword = import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
+        const smsSrc = import.meta.env.VITE_SMS_SRC || 'TWTEST';
+
+        const smsUrl = new URL(smsApiUrl);
+        smsUrl.searchParams.append('username', smsUsername);
+        smsUrl.searchParams.append('password', smsPassword);
+        smsUrl.searchParams.append('src', smsSrc);
+        smsUrl.searchParams.append('dst', finalMobileNumber);
+        smsUrl.searchParams.append('msg', smsMessage);
+        smsUrl.searchParams.append('dr', '1');
+
+        const smsResponse = await fetch(smsUrl.toString());
+        if (!smsResponse.ok) {
+          throw new Error('Failed to send SMS');
+        }
+        smsSent = true;
+      } catch (err: any) {
+        console.error("Failed to send QR via SMS:", err);
+        errors.push(`SMS: ${err.message || 'Unknown error'}`);
+      }
+    }
+
+    setSendingQr(false);
+
+    if (errors.length === 0) {
+      let successMsg = "QR Code & E-Card sent successfully";
+      if (emailSent && smsSent) {
+        successMsg += ` to email (${member.email}) and mobile (${member.mobile})`;
+      } else if (emailSent) {
+        successMsg += ` to email (${member.email})`;
+      } else if (smsSent) {
+        successMsg += ` to mobile (${member.mobile})`;
+      }
+      toast.success(successMsg);
+      
+      try {
+        await logMemberActivity(
+          "update",
+          `${member.first_name} ${member.last_name}`,
+          member.id,
+          { info: `Sent QR & E-Card to email: ${member.email || 'N/A'}, mobile: ${member.mobile || 'N/A'}` }
+        );
+      } catch (logErr) {
+        console.error("Failed to write audit log:", logErr);
+      }
+      setQrDialogOpen(false);
+    } else {
+      toast.error(`Failed to send details: ${errors.join(', ')}`);
+    }
+  };
 
   const handleDownloadQR = async (memberCode: string) => {
     try {
@@ -1725,11 +1841,21 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
               </div>
 
               <Button
-                onClick={() => handleDownloadQR(qrMember.member_code)}
-                className="w-full mt-2 gap-2"
+                onClick={() => handleSendQR(qrMember)}
+                disabled={sendingQr}
+                className="w-full mt-2 gap-2 bg-amber-600 hover:bg-amber-700 text-white"
               >
-                <Download className="h-4 w-4" />
-                Download QR Code
+                {sendingQr ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Send QR
+                  </>
+                )}
               </Button>
             </div>
           )}

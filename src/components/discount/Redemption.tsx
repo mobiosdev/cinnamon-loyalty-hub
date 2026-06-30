@@ -178,11 +178,16 @@ const Redemption = () => {
       const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
       // Call SMS API
-      await axios.get('https://msg.text-ware.com/send_sms.php', {
+      const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://msg.text-ware.com/send_sms.php';
+      const smsUsername = import.meta.env.VITE_SMS_USERNAME || 'TW00001_ntb_demo_tr';
+      const smsPassword = import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
+      const smsSrc = import.meta.env.VITE_SMS_SRC || 'TWTEST';
+
+      await axios.get(smsApiUrl, {
         params: {
-          username: 'TW00001_ntb_demo_tr',
-          password: 'tisJFd9jH@1aR',
-          src: 'TWTEST',
+          username: smsUsername,
+          password: smsPassword,
+          src: smsSrc,
           dst: finalMobileNumber,
           msg: 'Dear Member, The verification code for redeeming your discount at Cinnamon Grand is: '+generatedOtp+' Please use this code to complete your redemption. Kindly refrain from sharing this code with anyone else.',
           dr: '1'
