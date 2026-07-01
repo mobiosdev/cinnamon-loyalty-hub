@@ -32,9 +32,9 @@ const DiscountManagement = () => {
                 <h1 className="text-2xl font-serif font-semibold text-foreground">
                   Member Portal
                 </h1>
-                <p className="text-sm text-muted-foreground">
+                {/* <p className="text-sm text-muted-foreground">
                   Corporate Benefits & Member Discount System
-                </p>
+                </p> */}
               </div>
             </div>
           </div>

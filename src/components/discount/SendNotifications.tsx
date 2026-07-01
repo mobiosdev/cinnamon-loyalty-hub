@@ -4,11 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageSquare, Send, Users, Search } from "lucide-react";
 import { toast } from "sonner";
 import { offerApi } from "@/services/offerApi";
 import { supabase } from "@/integrations/supabase/client";
 import { SendMessageDialog } from "./SendMessageDialog";
+import CategoryNotificationPanel from "./CategoryNotificationPanel";
+import IndividualNotificationPanel from "./IndividualNotificationPanel";
+import SentNotificationsHistory from "./SentNotificationsHistory";
 import {
   Pagination,
   PaginationContent,
@@ -151,166 +155,191 @@ const SendNotifications = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-primary" />
             <div>
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-primary" />
-                <CardTitle>Send Notifications</CardTitle>
-              </div>
+              <CardTitle>Send Notifications</CardTitle>
               <CardDescription>
-                Send SMS or WhatsApp notifications to members about available offers
+                Send SMS or WhatsApp notifications to member groups, categories or individuals.
               </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative w-80">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search offers by name, description, or category..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <p className="text-muted-foreground">Loading offers...</p>
-            </div>
-          ) : filteredOffers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">
-                {searchQuery ? "No offers found matching your search" : "No offers available"}
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[200px]">Offer Name</TableHead>
-                      <TableHead className="w-[250px]">Description</TableHead>
-                      <TableHead className="w-[180px]">Valid Period</TableHead>
-                      <TableHead className="w-[220px]">Categories</TableHead>
-                      <TableHead className="w-[120px] text-center">Total Members</TableHead>
-                      <TableHead className="w-[100px]">Status</TableHead>
-                      <TableHead className="w-[140px] text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedOffers.map((offer) => (
-                      <TableRow key={offer.id}>
-                        <TableCell className="font-medium">{offer.name}</TableCell>
-                        <TableCell>
-                          <div className="max-w-[250px] truncate" title={offer.description}>
-                            {offer.description || 'No description'}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm whitespace-nowrap">
-                          <div className="flex flex-col gap-0.5">
-                            <span>{formatDate(offer.valid_from)}</span>
-                            <span className="text-muted-foreground">to {formatDate(offer.valid_to)}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1.5">
-                            {offer.categories.map((cat) => (
-                              <div key={cat.id} className="flex items-center gap-2 text-sm">
-                                <Badge variant="outline" className="text-xs">{cat.name}</Badge>
-                                <span className="text-muted-foreground flex items-center gap-1 text-xs">
-                                  <Users className="h-3 w-3" />
-                                  {cat.memberCount}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="secondary" className="font-semibold">
-                            {offer.totalMembers}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={offer.is_active ? "default" : "secondary"}>
-                            {offer.is_active ? "Active" : "Inactive"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            onClick={() => handleSendMessage(offer)}
-                            disabled={offer.totalMembers === 0 || !offer.is_active}
-                            className="gap-2"
-                          >
-                            <Send className="h-4 w-4" />
-                            Send
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+          <Tabs defaultValue="reminders" className="w-full">
+            <TabsList className="grid w-full grid-cols-4 max-w-2xl mb-6">
+              <TabsTrigger value="reminders">Offer Reminders</TabsTrigger>
+              <TabsTrigger value="categories">By Category</TabsTrigger>
+              <TabsTrigger value="individuals">Individual Members</TabsTrigger>
+              <TabsTrigger value="history">Sent History</TabsTrigger>
+            </TabsList>
+
+            {/* Tab 1: Offer Reminders */}
+            <TabsContent value="reminders" className="space-y-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="relative w-80">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search offers..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredOffers.length)} of {filteredOffers.length} offers
-                  </p>
-                  <Pagination>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                          className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                        />
-                      </PaginationItem>
-                      
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                        // Show first page, last page, current page, and pages around current
-                        if (
-                          page === 1 ||
-                          page === totalPages ||
-                          (page >= currentPage - 1 && page <= currentPage + 1)
-                        ) {
-                          return (
-                            <PaginationItem key={page}>
-                              <PaginationLink
-                                onClick={() => setCurrentPage(page)}
-                                isActive={currentPage === page}
-                                className="cursor-pointer"
-                              >
-                                {page}
-                              </PaginationLink>
-                            </PaginationItem>
-                          );
-                        } else if (page === currentPage - 2 || page === currentPage + 2) {
-                          return (
-                            <PaginationItem key={page}>
-                              <PaginationEllipsis />
-                            </PaginationItem>
-                          );
-                        }
-                        return null;
-                      })}
-                      
-                      <PaginationItem>
-                        <PaginationNext
-                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                          className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <p className="text-muted-foreground">Loading offers...</p>
                 </div>
+              ) : filteredOffers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">
+                    {searchQuery ? "No offers found matching your search" : "No offers available"}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[200px]">Offer Name</TableHead>
+                          <TableHead className="w-[250px]">Description</TableHead>
+                          <TableHead className="w-[180px]">Valid Period</TableHead>
+                          <TableHead className="w-[220px]">Categories</TableHead>
+                          <TableHead className="w-[120px] text-center">Total Members</TableHead>
+                          <TableHead className="w-[100px]">Status</TableHead>
+                          <TableHead className="w-[140px] text-right">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedOffers.map((offer) => (
+                          <TableRow key={offer.id}>
+                            <TableCell className="font-medium">{offer.name}</TableCell>
+                            <TableCell>
+                              <div className="max-w-[250px] truncate" title={offer.description}>
+                                {offer.description || 'No description'}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm whitespace-nowrap">
+                              <div className="flex flex-col gap-0.5">
+                                <span>{formatDate(offer.valid_from)}</span>
+                                <span className="text-muted-foreground">to {formatDate(offer.valid_to)}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1.5">
+                                {offer.categories.map((cat) => (
+                                  <div key={cat.id} className="flex items-center gap-2 text-sm">
+                                    <Badge variant="outline" className="text-xs">{cat.name}</Badge>
+                                    <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                                      <Users className="h-3 w-3" />
+                                      {cat.memberCount}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="secondary" className="font-semibold">
+                                {offer.totalMembers}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={offer.is_active ? "default" : "secondary"}>
+                                {offer.is_active ? "Active" : "Inactive"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSendMessage(offer)}
+                                disabled={offer.totalMembers === 0 || !offer.is_active}
+                                className="gap-2"
+                              >
+                                <Send className="h-4 w-4" />
+                                Send
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-muted-foreground">
+                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredOffers.length)} of {filteredOffers.length} offers
+                      </p>
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                              className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
+                          </PaginationItem>
+                          
+                          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                            if (
+                              page === 1 ||
+                              page === totalPages ||
+                              (page >= currentPage - 1 && page <= currentPage + 1)
+                            ) {
+                              return (
+                                <PaginationItem key={page}>
+                                  <PaginationLink
+                                    onClick={() => setCurrentPage(page)}
+                                    isActive={currentPage === page}
+                                    className="cursor-pointer"
+                                  >
+                                    {page}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              );
+                            } else if (page === currentPage - 2 || page === currentPage + 2) {
+                              return (
+                                <PaginationItem key={page}>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              );
+                            }
+                            return null;
+                          })}
+                          
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                              className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
+                </>
               )}
-            </>
-          )}
+            </TabsContent>
+
+            {/* Tab 2: By Category */}
+            <TabsContent value="categories" className="pt-2">
+              <CategoryNotificationPanel />
+            </TabsContent>
+
+            {/* Tab 3: Individual Members */}
+            <TabsContent value="individuals" className="pt-2">
+              <IndividualNotificationPanel />
+            </TabsContent>
+
+            {/* Tab 4: Sent History */}
+            <TabsContent value="history" className="pt-2">
+              <SentNotificationsHistory />
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
