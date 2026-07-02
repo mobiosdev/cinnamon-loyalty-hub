@@ -3,10 +3,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Download, CreditCard, Share2, Mail, Loader2, CheckCircle2 } from "lucide-react";
+import { Download, CreditCard, Share2, Mail, Loader2, CheckCircle2, Send } from "lucide-react";
 import { toast } from "sonner";
 import cinnamonLogo from "@/assets/cinnamon-logo.png";
 import { staffApi } from "@/services/staffApi";
+import { auditApi } from "@/services/auditApi";
+import { validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
 
 interface MembershipCardProps {
   open: boolean;
@@ -30,6 +32,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
   const [emailSent, setEmailSent] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
   const [showEmailInput, setShowEmailInput] = useState(false);
+  const [sendingCard, setSendingCard] = useState(false);
 
   if (!member) return null;
 
@@ -181,6 +184,99 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
     }
   };
 
+  const handleSendCard = async () => {
+    if (!member.email && !member.mobile) {
+      toast.error("Member does not have a registered email address or mobile number.");
+      return;
+    }
+
+    setSendingCard(true);
+    let emailSent = false;
+    let smsSent = false;
+    let errors: string[] = [];
+
+    // 1. Send via email if registered
+    if (member.email && member.id) {
+      try {
+        const response = await staffApi.sendCardEmail(member.id, member.email);
+        if (response && response.success) {
+          emailSent = true;
+        } else {
+          throw new Error(response?.message || 'Failed to send email');
+        }
+      } catch (err: any) {
+        console.error("Failed to send membership card email:", err);
+        errors.push(`Email: ${err.message || 'Unknown error'}`);
+      }
+    }
+
+    // 2. Send via SMS if registered
+    if (member.mobile) {
+      try {
+        const phoneValidation = validateAndNormalizeSriLankanMobile(member.mobile);
+        if (!phoneValidation.isValid) {
+          throw new Error(phoneValidation.error || "Invalid mobile number");
+        }
+        const finalMobileNumber = phoneValidation.normalized!;
+
+        const smsMessage = `🏨 Cinnamon Grand Colombo\n${categoryName.toUpperCase()} MEMBERSHIP CARD\n\n👤 Member: ${memberName}\n🔢 Membership No: ${memberCode}\n📅 Expiry Date: ${expiryDate}\n\nView your digital QR Code: https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(memberCode)}`;
+
+        const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://msg.text-ware.com/send_sms.php';
+        const smsUsername = import.meta.env.VITE_SMS_USERNAME || 'TW00001_ntb_demo_tr';
+        const smsPassword = import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
+        const smsSrc = import.meta.env.VITE_SMS_SRC || 'TWTEST';
+
+        const smsUrl = new URL(smsApiUrl);
+        smsUrl.searchParams.append('username', smsUsername);
+        smsUrl.searchParams.append('password', smsPassword);
+        smsUrl.searchParams.append('src', smsSrc);
+        smsUrl.searchParams.append('dst', finalMobileNumber);
+        smsUrl.searchParams.append('msg', smsMessage);
+        smsUrl.searchParams.append('dr', '1');
+
+        const response = await fetch(smsUrl.toString());
+        if (!response.ok) {
+          throw new Error('Failed to send SMS');
+        }
+
+        smsSent = true;
+      } catch (err: any) {
+        console.error("Failed to send membership card SMS:", err);
+        errors.push(`SMS: ${err.message || 'Unknown error'}`);
+      }
+    }
+
+    setSendingCard(false);
+
+    if (errors.length === 0) {
+      let successMsg = "Membership card sent successfully";
+      if (emailSent && smsSent) {
+        successMsg += ` to email (${member.email}) and mobile (${member.mobile})`;
+      } else if (emailSent) {
+        successMsg += ` to email (${member.email})`;
+      } else if (smsSent) {
+        successMsg += ` to mobile (${member.mobile})`;
+      }
+      toast.success(successMsg);
+
+      try {
+        await auditApi.logActivity({
+          activity_type: 'member_management',
+          entity_type: 'member',
+          entity_id: member.id || null,
+          entity_name: memberName,
+          action: 'update',
+          details: { info: `Sent membership card to email: ${member.email || 'N/A'}, mobile: ${member.mobile || 'N/A'}` },
+          performed_by: 'Admin User',
+        });
+      } catch (logErr) {
+        console.error("Failed to write audit log:", logErr);
+      }
+    } else {
+      toast.error(`Failed to send membership card: ${errors.join(', ')}`);
+    }
+  };
+
   const handleOpenEmailInput = () => {
     setShowEmailInput(true);
     setEmailAddress(member.email || "");
@@ -325,8 +421,8 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
                 padding: '20px 24px',
               }}
             >
-              {/* Top Row: Logo + QR */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              {/* Top: Logo */}
+              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                 {/* Logo area */}
                 <div style={{ 
                   display: 'flex', 
@@ -345,23 +441,6 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
                       width: 'auto',
                       objectFit: 'contain',
                     }} 
-                  />
-                </div>
-
-                {/* QR Code */}
-                <div
-                  style={{
-                    backgroundColor: 'rgba(255,255,255,0.95)',
-                    borderRadius: '8px',
-                    padding: '4px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                  }}
-                >
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(memberCode)}`}
-                    alt="QR Code"
-                    style={{ width: '60px', height: '60px' }}
-                    crossOrigin="anonymous"
                   />
                 </div>
               </div>
@@ -383,54 +462,73 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
                 </p>
               </div>
 
-              {/* Bottom: Member Details */}
-              <div style={{ marginTop: 'auto' }}>
-                <p
+              {/* Bottom: Member Details + QR Code */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
+                <div>
+                  <p
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: '#f0e6d3',
+                      letterSpacing: '1px',
+                      textTransform: 'uppercase',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    {memberName}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: '10px',
+                      color: 'rgba(240, 230, 211, 0.8)',
+                      letterSpacing: '1.5px',
+                      textTransform: 'uppercase',
+                      fontFamily: "'Inter', sans-serif",
+                      fontWeight: 600,
+                    }}
+                  >
+                    MEMBERSHIP NO: {memberCode}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: '10px',
+                      color: 'rgba(240, 230, 211, 0.8)',
+                      letterSpacing: '1.5px',
+                      textTransform: 'uppercase',
+                      fontFamily: "'Inter', sans-serif",
+                      fontWeight: 600,
+                    }}
+                  >
+                    EXPIRY DATE: {expiryDate}
+                  </p>
+                </div>
+
+                {/* QR Code */}
+                <div
                   style={{
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    color: '#f0e6d3',
-                    letterSpacing: '1px',
-                    textTransform: 'uppercase',
-                    marginBottom: '4px',
+                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    borderRadius: '8px',
+                    padding: '4px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                   }}
                 >
-                  {memberName}
-                </p>
-                <p
-                  style={{
-                    fontSize: '10px',
-                    color: 'rgba(240, 230, 211, 0.8)',
-                    letterSpacing: '1.5px',
-                    textTransform: 'uppercase',
-                    fontFamily: "'Inter', sans-serif",
-                    fontWeight: 600,
-                  }}
-                >
-                  MEMBERSHIP NO: {memberCode}
-                </p>
-                <p
-                  style={{
-                    fontSize: '10px',
-                    color: 'rgba(240, 230, 211, 0.8)',
-                    letterSpacing: '1.5px',
-                    textTransform: 'uppercase',
-                    fontFamily: "'Inter', sans-serif",
-                    fontWeight: 600,
-                  }}
-                >
-                  EXPIRY DATE: {expiryDate}
-                </p>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(memberCode)}`}
+                    alt="QR Code"
+                    style={{ width: '60px', height: '60px' }}
+                    crossOrigin="anonymous"
+                  />
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="w-full max-w-[420px] flex gap-2">
+        <div className="w-full max-w-[420px] grid grid-cols-2 gap-2">
           <Button
             onClick={handleDownloadCard}
-            className="flex-1 gap-2"
+            className="gap-2"
             variant="default"
           >
             <Download className="h-4 w-4" />
@@ -438,7 +536,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
           </Button>
           <Button
             onClick={handleShare}
-            className="flex-1 gap-2"
+            className="gap-2"
             variant="outline"
           >
             <Share2 className="h-4 w-4" />
@@ -446,11 +544,29 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
           </Button>
           <Button
             onClick={handleOpenEmailInput}
-            className="flex-1 gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+            className="gap-2 bg-amber-600 hover:bg-amber-700 text-white"
             variant="default"
           >
             <Mail className="h-4 w-4" />
             Email
+          </Button>
+          <Button
+            onClick={handleSendCard}
+            disabled={sendingCard}
+            className="gap-2 bg-primary hover:bg-primary/90 text-white"
+            variant="default"
+          >
+            {sendingCard ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Send Card
+              </>
+            )}
           </Button>
         </div>
 
