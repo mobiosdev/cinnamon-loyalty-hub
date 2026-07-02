@@ -167,10 +167,10 @@ const SendNotifications = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <Tabs defaultValue="reminders" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 max-w-2xl mb-6">
+            <TabsList className="grid w-full grid-cols-3 max-w-xl mb-6">
               <TabsTrigger value="reminders">Offer Reminders</TabsTrigger>
-              <TabsTrigger value="categories">By Category</TabsTrigger>
-              <TabsTrigger value="individuals">Individual Members</TabsTrigger>
+              {/* <TabsTrigger value="categories">By Category</TabsTrigger> */}
+              <TabsTrigger value="individuals">Offer To Individual Members</TabsTrigger>
               <TabsTrigger value="history">Sent History</TabsTrigger>
             </TabsList>
 
@@ -326,9 +326,9 @@ const SendNotifications = () => {
             </TabsContent>
 
             {/* Tab 2: By Category */}
-            <TabsContent value="categories" className="pt-2">
+            {/* <TabsContent value="categories" className="pt-2">
               <CategoryNotificationPanel />
-            </TabsContent>
+            </TabsContent> */}
 
             {/* Tab 3: Individual Members */}
             <TabsContent value="individuals" className="pt-2">

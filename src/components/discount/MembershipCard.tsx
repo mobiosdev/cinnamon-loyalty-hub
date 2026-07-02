@@ -455,8 +455,8 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
                 padding: '20px 24px',
               }}
             >
-              {/* Top Row: Logo + QR */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              {/* Top: Logo */}
+              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                 {/* Logo area */}
                 <div style={{ 
                   display: 'flex', 
@@ -475,23 +475,6 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
                       width: 'auto',
                       objectFit: 'contain',
                     }} 
-                  />
-                </div>
-
-                {/* QR Code */}
-                <div
-                  style={{
-                    backgroundColor: 'rgba(255,255,255,0.95)',
-                    borderRadius: '8px',
-                    padding: '4px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                  }}
-                >
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(memberCode)}`}
-                    alt="QR Code"
-                    style={{ width: '60px', height: '60px' }}
-                    crossOrigin="anonymous"
                   />
                 </div>
               </div>
@@ -513,44 +496,63 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
                 </p>
               </div>
 
-              {/* Bottom: Member Details */}
-              <div style={{ marginTop: 'auto' }}>
-                <p
+              {/* Bottom: Member Details + QR Code */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
+                <div>
+                  <p
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: '#f0e6d3',
+                      letterSpacing: '1px',
+                      textTransform: 'uppercase',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    {memberName}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: '10px',
+                      color: 'rgba(240, 230, 211, 0.8)',
+                      letterSpacing: '1.5px',
+                      textTransform: 'uppercase',
+                      fontFamily: "'Inter', sans-serif",
+                      fontWeight: 600,
+                    }}
+                  >
+                    MEMBERSHIP NO: {memberCode}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: '10px',
+                      color: 'rgba(240, 230, 211, 0.8)',
+                      letterSpacing: '1.5px',
+                      textTransform: 'uppercase',
+                      fontFamily: "'Inter', sans-serif",
+                      fontWeight: 600,
+                    }}
+                  >
+                    EXPIRY DATE: {expiryDate}
+                  </p>
+                </div>
+
+                {/* QR Code */}
+                <div
                   style={{
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    color: '#f0e6d3',
-                    letterSpacing: '1px',
-                    textTransform: 'uppercase',
-                    marginBottom: '4px',
+                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    borderRadius: '8px',
+                    padding: '4px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                   }}
                 >
-                  {memberName}
-                </p>
-                <p
-                  style={{
-                    fontSize: '10px',
-                    color: 'rgba(240, 230, 211, 0.8)',
-                    letterSpacing: '1.5px',
-                    textTransform: 'uppercase',
-                    fontFamily: "'Inter', sans-serif",
-                    fontWeight: 600,
-                  }}
-                >
-                  MEMBERSHIP NO: {memberCode}
-                </p>
-                <p
-                  style={{
-                    fontSize: '10px',
-                    color: 'rgba(240, 230, 211, 0.8)',
-                    letterSpacing: '1.5px',
-                    textTransform: 'uppercase',
-                    fontFamily: "'Inter', sans-serif",
-                    fontWeight: 600,
-                  }}
-                >
-                  EXPIRY DATE: {expiryDate}
-                </p>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(memberCode)}`}
+                    alt="QR Code"
+                    style={{ width: '60px', height: '60px' }}
+                    crossOrigin="anonymous"
+                  />
+                </div>
               </div>
             </div>
           </div>

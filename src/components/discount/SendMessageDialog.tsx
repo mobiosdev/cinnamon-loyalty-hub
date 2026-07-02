@@ -73,11 +73,57 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
   // Filter options state
   const [excludeRedeemed, setExcludeRedeemed] = useState(true);
 
+  // All categories selection state
+  const [allCategories, setAllCategories] = useState<{ id: number; name: string; memberCount?: number }[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+
+  // Load categories
   useEffect(() => {
     if (isOpen) {
+      loadAllCategories();
+      setSelectedCategoryIds(offer.categories.map((c) => c.id));
+    }
+  }, [isOpen, offer.categories]);
+
+  const loadAllCategories = async () => {
+    try {
+      const { data: cats, error } = await supabase
+        .from("customer_categories")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+
+      const catsWithCounts = await Promise.all(
+        (cats || []).map(async (cat) => {
+          const { count } = await supabase
+            .from("members")
+            .select("*", { count: "exact", head: true })
+            .eq("category_id", cat.id)
+            .eq("is_active", true)
+            .or("is_deleted.eq.false,is_deleted.is.null");
+          return { id: cat.id, name: cat.name, memberCount: count || 0 };
+        })
+      );
+      setAllCategories(catsWithCounts);
+    } catch (err) {
+      console.error("Error loading categories in modal:", err);
+    }
+  };
+
+  const handleToggleCategory = (catId: number) => {
+    const isDefault = offer.categories.some((c) => c.id === catId);
+    if (isDefault) return;
+
+    setSelectedCategoryIds((prev) =>
+      prev.includes(catId) ? prev.filter((id) => id !== catId) : [...prev, catId]
+    );
+  };
+
+  useEffect(() => {
+    if (isOpen && selectedCategoryIds.length > 0) {
       calculateRecipients();
     }
-  }, [isOpen, offer.id, manualNumbers, applyFilterToManual, excludeRedeemed]);
+  }, [isOpen, offer.id, manualNumbers, applyFilterToManual, excludeRedeemed, selectedCategoryIds]);
 
   const calculateRecipients = async () => {
     setLoading(true);
@@ -95,11 +141,10 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
       const offerUsageLimit = offerDetails.usage_limit;
 
       // 2. Fetch all active members in target categories
-      const categoryIds = offer.categories.map((cat) => cat.id);
       const { data: catMembers, error: membersError } = await supabase
         .from("members")
         .select("mobile, first_name, last_name, category_id")
-        .in("category_id", categoryIds)
+        .in("category_id", selectedCategoryIds)
         .eq("is_active", true)
         .or("is_deleted.eq.false,is_deleted.is.null");
       if (membersError) throw membersError;
@@ -285,7 +330,9 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
     }
   };
 
-  const categoryRecipientsCount = offer.categories.reduce((acc, cat) => acc + cat.memberCount, 0);
+  const categoryRecipientsCount = allCategories
+    .filter((cat) => selectedCategoryIds.includes(cat.id))
+    .reduce((acc, cat) => acc + (cat.memberCount || 0), 0);
   const totalRawRecipients = categoryRecipientsCount + manualNumbers.length;
 
   return (
@@ -304,22 +351,48 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
         <div className="space-y-4">
           {/* Target Categories */}
           <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <Users className="h-4 w-4 text-primary" />
-                Target Categories
-              </div>
+            <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+              <Users className="h-4 w-4 text-primary" />
+              Target Categories
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {offer.categories.map((cat) => (
-                <Badge key={cat.id} variant="secondary" className="gap-1 font-medium">
-                  {cat.name}
-                  <span className="text-xs text-muted-foreground">
-                    ({cat.memberCount} total)
-                  </span>
-                </Badge>
-              ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto border rounded p-2 bg-background">
+              {allCategories.length === 0 ? (
+                <div className="text-xs text-muted-foreground p-1 animate-pulse">Loading categories...</div>
+              ) : (
+                allCategories.map((cat) => {
+                  const isDefault = offer.categories.some((c) => c.id === cat.id);
+                  const isSelected = selectedCategoryIds.includes(cat.id);
+
+                  return (
+                    <div
+                      key={cat.id}
+                      className={`flex items-center justify-between p-1.5 rounded text-xs select-none ${
+                        isDefault
+                          ? "bg-primary/5 text-foreground opacity-90 cursor-not-allowed"
+                          : "hover:bg-muted/40 cursor-pointer"
+                      }`}
+                      onClick={() => !isDefault && handleToggleCategory(cat.id)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id={`dialog-cat-${cat.id}`}
+                          checked={isSelected}
+                          disabled={isDefault}
+                          onCheckedChange={() => {}}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="font-medium">
+                          {cat.name} {isDefault && <span className="text-[10px] text-primary">(Default target)</span>}
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] py-0 px-1">
+                        {cat.memberCount} members
+                      </Badge>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
