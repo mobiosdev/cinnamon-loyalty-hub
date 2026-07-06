@@ -47,6 +47,7 @@ const Redemption = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [otp, setOtp] = useState("");
   const [sentOtp, setSentOtp] = useState("");
+  const [staffId, setStaffId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [expiryTime, setExpiryTime] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
@@ -142,11 +143,11 @@ const Redemption = () => {
   };
 
   const handleSendOTP = async () => {
-    // if (!billNumber) {
-    //   toast.error("Please enter a bill number");
-    //   return;
-    // }
-
+    if (!billNumber) {
+      toast.error("Please enter a Bill Number");
+      return;
+    }
+    
     if (!mobileNumber && !memberCode) {
       toast.error("Please enter either a Mobile Number or Member Code");
       return;
@@ -195,52 +196,41 @@ const Redemption = () => {
         finalMobileNumber = phoneValidation.normalized!;
       }
 
-      // Generate a 4-digit OTP code
-      const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
-
-      // Call SMS API
-      await axios.get('https://msg.text-ware.com/send_sms.php', {
-        params: {
-          username: 'TW00001_ntb_demo_tr',
-          password: 'tisJFd9jH@1aR',
-          src: 'TWTEST',
-          dst: finalMobileNumber,
-          msg: 'Dear Member, The verification code for redeeming your discount at Cinnamon Grand is: '+generatedOtp+' Please use this code to complete your redemption. Kindly refrain from sharing this code with anyone else.',
-          dr: '1'
-        }
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
+      const response = await fetch(`${apiBase}/transaction/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mobile: finalMobileNumber,
+          notes: `OTP for redeeming benefits on bill #${billNumber}`,
+          user_id: 1,
+          bill_number: billNumber,
+        }),
       });
-      
-      setSentOtp(generatedOtp);
-      
-      // Set expiry time (5 minutes from now)
-      const expiryDate = new Date(Date.now() + 5 * 60 * 1000);
-      setExpiryTime(expiryDate.toISOString());
-      
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Failed to send OTP");
+
+      setStaffId(data.data.staff_id);
+      setExpiryTime(data.data.expiry_time);
       setStep("verify");
-      toast.success(`OTP sent to ${finalMobileNumber}`);
+      toast.success(data.message || `OTP sent to ${finalMobileNumber}`);
     } catch (error) {
-      console.error("Error sending OTP SMS:", error);
-      toast.error("Failed to send OTP");
+      console.error("Error sending OTP:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to send OTP");
     } finally {
       setLoading(false);
     }
   };
 
   const handleVerifyOTP = async () => {
-    if (otp.length !== 4) {
-      toast.error("Please enter complete OTP");
+    if (otp.length !== 6) {
+      toast.error("Please enter a 6-digit OTP");
       return;
     }
 
-    // Check expiry
-    if (expiryTime && new Date() > new Date(expiryTime)) {
-      toast.error("OTP has expired. Please request a new one.");
-      return;
-    }
-
-    // Validate OTP - accept either the sent OTP or "1234" for testing fallback
-    if (otp !== sentOtp && otp !== "1234") {
-      toast.error("Invalid OTP. Please enter the code sent to your mobile.");
+    if (!staffId) {
+      toast.error("Invalid session. Please try again.");
       return;
     }
 
@@ -249,6 +239,20 @@ const Redemption = () => {
     try {
       const phoneValidation = validateAndNormalizeSriLankanMobile(mobileNumber);
       const cleanMobile = phoneValidation.normalized!;
+
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
+      const verifyResponse = await fetch(`${apiBase}/transaction/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mobile: cleanMobile,
+          otp,
+          staff_id: staffId,
+        }),
+      });
+
+      const verifyData = await verifyResponse.json();
+      if (!verifyResponse.ok) throw new Error(verifyData.message || "OTP verification failed");
       
       // Fetch member data and available offers
       const [member, offers] = await Promise.all([
@@ -273,12 +277,11 @@ const Redemption = () => {
       setStep("benefits");
       
       // Fetch discount history
-      const phoneToUse = phoneValidation.normalized!;
-      await fetchDiscountHistory(phoneToUse);
+      await fetchDiscountHistory(cleanMobile);
       
       toast.success("OTP verified! Select benefits to redeem.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load member data");
+      toast.error(error instanceof Error ? error.message : "Failed to verify OTP or load member data");
     } finally {
       setLoading(false);
     }
@@ -643,11 +646,11 @@ const Redemption = () => {
       </div>
 
       <div className="space-y-4 text-center">
-        <Label htmlFor="otp">Enter 4-digit OTP</Label>
+        <Label htmlFor="otp">Enter 6-digit OTP</Label>
         <div className="flex justify-center">
-          <InputOTP maxLength={4} value={otp} onChange={(value) => setOtp(value)}>
+          <InputOTP maxLength={6} value={otp} onChange={(value) => setOtp(value)}>
             <InputOTPGroup>
-              {[...Array(4)].map((_, i) => (
+              {[...Array(6)].map((_, i) => (
                 <InputOTPSlot key={i} index={i} />
               ))}
             </InputOTPGroup>

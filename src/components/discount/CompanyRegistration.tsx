@@ -460,155 +460,107 @@ const CompanyRegistration = () => {
             return;
           }
 
-          let successCount = 0;
-          let failCount = 0;
-          const errorsList: string[] = [];
-          const companyCache: Record<string, string> = {};
-
-          // Load category offers
-          let offers: any[] = [];
-          try {
-            offers = await offerApi.getOffersByCategory(Number(uploadCategoryId));
-          } catch (e) {
-            console.error("Error loading category offers:", e);
-          }
-          const offerIds = offers.map(o => o.id);
-
-          for (let i = 0; i < jsonData.length; i++) {
-            const row = jsonData[i];
+          const membersList = jsonData.map((row) => {
             const title = row["Title"] || row["title"] || "";
             const first_name = row["First Name"] || row["first_name"] || row["FirstName"] || "";
             const last_name = row["Last Name"] || row["last_name"] || row["LastName"] || "";
-            const mobileStr = String(row["Mobile"] || row["mobile"] || row["phone"] || row["Phone"] || "").trim();
+            const mobile = String(row["Mobile"] || row["mobile"] || row["phone"] || row["Phone"] || "").trim();
             const email = row["Email"] || row["email"] || "";
             const designation = row["Designation"] || row["designation"] || "";
             const address = row["Address"] || row["address"] || "";
 
             // Date columns parsing
             const rawRenewDate = row["Renewal Date"] || row["renewal_date"] || row["Renew Date"] || row["renew_date"];
-            const parsedRenewDate = parseExcelDate(rawRenewDate) || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0];
+            const renew_date = parseExcelDate(rawRenewDate) || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0];
 
             const rawDob = row["Date of Birth"] || row["date_of_birth"] || row["DOB"] || row["dob"];
-            const parsedDob = parseExcelDate(rawDob);
+            const date_of_birth = parseExcelDate(rawDob) || null;
 
             // Company details columns
-            const cName = (row["Company Name"] || row["company_name"] || row["Company"] || row["company"] || "").toString().trim();
-            const cAddress = row["Company Address"] || row["company_address"] || "";
-            const cPhone = row["Company Phone"] || row["company_phone"] || "";
-            const cEmail = row["Company Email"] || row["company_email"] || "";
-            const cManager = row["Company Manager"] || row["company_manager"] || "";
+            const company_name = (row["Company Name"] || row["company_name"] || row["Company"] || row["company"] || "").toString().trim();
+            const company_address = row["Company Address"] || row["company_address"] || "";
+            const company_phone = row["Company Phone"] || row["company_phone"] || "";
+            const company_email = row["Company Email"] || row["company_email"] || "";
+            const company_manager = row["Company Manager"] || row["company_manager"] || "";
 
-            if (!first_name || !last_name || !mobileStr) {
-              failCount++;
-              errorsList.push(`Row ${i + 2}: Missing Name or Mobile number`);
-              continue;
-            }
+            return {
+              title,
+              first_name,
+              last_name,
+              mobile,
+              email,
+              designation,
+              address,
+              renew_date,
+              date_of_birth,
+              company_name,
+              company_address,
+              company_phone,
+              company_email,
+              company_manager
+            };
+          });
 
-            const mobileValidation = validateAndNormalizeSriLankanMobile(mobileStr);
-            if (!mobileValidation.isValid) {
-              failCount++;
-              errorsList.push(`Row ${i + 2} (${first_name}): ${mobileValidation.error}`);
-              continue;
-            }
+          const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
+          const response = await fetch(`${apiBase}/members/bulk-import`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              members: membersList,
+              category_id: Number(uploadCategoryId),
+              company_id: selectedCompany?.id
+            })
+          });
 
-            // Resolve company_id
-            let companyId = "";
-            let resolvedCompanyName = "";
+          if (!response.ok) {
+            throw new Error(`Failed to upload file: ${response.statusText}`);
+          }
 
-            if (cName) {
-              const cacheKey = cName.toUpperCase();
-              if (companyCache[cacheKey]) {
-                companyId = companyCache[cacheKey];
-                resolvedCompanyName = cName;
-              } else {
-                try {
-                  const existingCompanies = await companyApi.searchCompanies({
-                    name: cName,
-                    limit: 1
-                  });
+          const reader = response.body?.getReader();
+          if (!reader) {
+            throw new Error("Cannot get reader from stream");
+          }
 
-                  const existingCompany = existingCompanies?.[0];
-
-                  if (existingCompany) {
-                    companyId = existingCompany.id;
-                    companyCache[cacheKey] = companyId;
-                    resolvedCompanyName = existingCompany.name;
-                  } else {
-                    // Create new company
-                    const companyCode = `COMP${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-                    const newCompany = await companyApi.createCompany({
-                      company_code: companyCode,
-                      name: cName,
-                      address: cAddress || 'N/A',
-                      phone: cPhone || '',
-                      email: cEmail || '',
-                      manager_name: cManager || '',
-                    });
-                    companyId = newCompany.id;
-                    companyCache[cacheKey] = companyId;
-                    resolvedCompanyName = cName;
-                    
-                    await logCompanyActivity('create', cName, companyId, {
-                      company_code: companyCode,
-                      source: 'bulk_upload'
-                    });
-                  }
-                } catch (err: any) {
-                  failCount++;
-                  errorsList.push(`Row ${i + 2}: Failed to resolve/create company '${cName}' (${err.message})`);
-                  continue;
-                }
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let lastProgress: any = null;
+          
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                const progress = JSON.parse(line);
+                lastProgress = progress;
+                
+                // Show real-time notification
+                toast.info(`Import progress: Batch ${progress.batch} complete. Saved ${progress.success} members.`, {
+                  id: "bulk-upload-toast"
+                });
+              } catch (e) {
+                console.error("Error parsing progress chunk:", e);
               }
-            } else if (selectedCompany?.id) {
-              companyId = selectedCompany.id;
-              resolvedCompanyName = selectedCompany.name;
-            } else {
-              failCount++;
-              errorsList.push(`Row ${i + 2}: Missing company name and no company is selected on the page`);
-              continue;
-            }
-
-            try {
-              const memberData = {
-                title,
-                company_id: companyId,
-                first_name,
-                last_name,
-                mobile: mobileValidation.normalized!,
-                email,
-                address,
-                designation,
-                registered_date: new Date().toISOString().split('T')[0],
-                renew_date: parsedRenewDate,
-                date_of_birth: parsedDob,
-                discount_amount: 0,
-                discount_percentage: 10,
-                discount_policy: 'percentage',
-                is_active: true,
-                category_id: Number(uploadCategoryId),
-                discount_enabled: true,
-                selected_offers: offerIds,
-              };
-
-              const result = await staffApi.registerStaff(memberData);
-
-              await logMemberActivity('create', `${first_name} ${last_name}`, result.id, {
-                company: resolvedCompanyName,
-                category: categories.find(c => c.id === Number(uploadCategoryId))?.name,
-                source: 'bulk_upload'
-              });
-
-              successCount++;
-            } catch (err: any) {
-              failCount++;
-              errorsList.push(`Row ${i + 2} (${first_name}): ${err.message || 'Registration failed'}`);
             }
           }
 
-          toast.success(`Uploaded ${successCount} member(s) successfully. Failed: ${failCount}`);
-          if (errorsList.length > 0) {
-            console.error("Bulk upload details:", errorsList);
-            toast.error(`Upload error: ${errorsList[0]}`);
+          if (lastProgress) {
+            toast.success(`Uploaded ${lastProgress.success} member(s) successfully. Failed: ${lastProgress.failed}`, {
+              id: "bulk-upload-toast"
+            });
+            if (lastProgress.errors && lastProgress.errors.length > 0) {
+              console.error("Bulk upload details:", lastProgress.errors);
+              toast.error(`Upload error: ${lastProgress.errors[0]}`);
+            }
+          } else {
+            toast.success("Bulk upload completed successfully!", { id: "bulk-upload-toast" });
           }
 
           setIsReload(!isReload);
