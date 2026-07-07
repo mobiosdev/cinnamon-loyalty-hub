@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import cinnamonLogo from "@/assets/cinnamon-logo.png";
 import { supabase } from "@/integrations/supabase/client";
 import { validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
+import { ensureCardToken } from "@/utils/cardToken";
 
 interface MembershipCardProps {
   open: boolean;
@@ -23,6 +24,7 @@ interface MembershipCardProps {
     registered_date?: string;
     email?: string;
     mobile?: string;
+    card_token?: string | null;
   } | null;
 }
 
@@ -161,6 +163,10 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
     setEmailSent(false);
 
     try {
+      // Ensure token is generated and updated in DB
+      const cardToken = await ensureCardToken(member.id!, member.card_token);
+      const cardUrl = `${window.location.origin}/card/${cardToken}`;
+
       const { data, error } = await supabase.functions.invoke('send-membership-card', {
         body: {
           to_email: targetEmail,
@@ -168,6 +174,8 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
           member_code: memberCode,
           category_name: categoryName,
           expiry_date: expiryDate,
+          card_url: cardUrl,
+          sendgrid_api_key: import.meta.env.VITE_SENDGRID_API_KEY,
         },
       });
 
@@ -215,68 +223,79 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
     let smsSent = false;
     let errors: string[] = [];
 
-    // 1. Send via email if registered
-    if (member.email) {
-      try {
-        const { data, error } = await supabase.functions.invoke('send-membership-card', {
-          body: {
-            to_email: member.email,
-            member_name: memberName,
-            member_code: memberCode,
-            category_name: categoryName,
-            expiry_date: expiryDate,
-          },
-        });
+    try {
+      // Ensure token is generated and updated in DB
+      const cardToken = await ensureCardToken(member.id!, member.card_token);
+      const cardUrl = `${window.location.origin}/card/${cardToken}`;
 
-        if (error) {
-          throw new Error(error.message || 'Failed to send email');
+      // 1. Send via email if registered
+      if (member.email) {
+        try {
+          const { data, error } = await supabase.functions.invoke('send-membership-card', {
+            body: {
+              to_email: member.email,
+              member_name: memberName,
+              member_code: memberCode,
+              category_name: categoryName,
+              expiry_date: expiryDate,
+              card_url: cardUrl,
+              sendgrid_api_key: import.meta.env.VITE_SENDGRID_API_KEY,
+            },
+          });
+
+          if (error) {
+            throw new Error(error.message || 'Failed to send email');
+          }
+
+          if (data?.error) {
+            throw new Error(data.error);
+          }
+
+          emailSent = true;
+        } catch (err: any) {
+          console.error("Failed to send membership card email:", err);
+          errors.push(`Email: ${err.message || 'Unknown error'}`);
         }
-
-        if (data?.error) {
-          throw new Error(data.error);
-        }
-
-        emailSent = true;
-      } catch (err: any) {
-        console.error("Failed to send membership card email:", err);
-        errors.push(`Email: ${err.message || 'Unknown error'}`);
       }
-    }
 
-    // 2. Send via SMS if registered
-    if (member.mobile) {
-      try {
-        const phoneValidation = validateAndNormalizeSriLankanMobile(member.mobile);
-        if (!phoneValidation.isValid) {
-          throw new Error(phoneValidation.error || "Invalid mobile number");
+      // 2. Send via SMS if registered
+      if (member.mobile) {
+        try {
+          const phoneValidation = validateAndNormalizeSriLankanMobile(member.mobile);
+          if (!phoneValidation.isValid) {
+            throw new Error(phoneValidation.error || "Invalid mobile number");
+          }
+          const finalMobileNumber = phoneValidation.normalized!;
+
+          const smsMessage = `🏨 Cinnamon Grand Colombo\n${categoryName.toUpperCase()} MEMBERSHIP CARD\n\n👤 Member: ${memberName}\n🔢 Membership No: ${memberCode}\n📅 Expiry Date: ${expiryDate}\n\nView and download your digital card here: ${cardUrl}`;
+
+          const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://msg.text-ware.com/send_sms.php';
+          const smsUsername = import.meta.env.VITE_SMS_USERNAME || 'TW00001_ntb_demo_tr';
+          const smsPassword = import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
+          const smsSrc = import.meta.env.VITE_SMS_SRC || 'TWTEST';
+
+          const smsUrl = new URL(smsApiUrl);
+          smsUrl.searchParams.append('username', smsUsername);
+          smsUrl.searchParams.append('password', smsPassword);
+          smsUrl.searchParams.append('src', smsSrc);
+          smsUrl.searchParams.append('dst', finalMobileNumber);
+          smsUrl.searchParams.append('msg', smsMessage);
+          smsUrl.searchParams.append('dr', '1');
+
+          const response = await fetch(smsUrl.toString());
+          if (!response.ok) {
+            throw new Error('Failed to send SMS');
+          }
+
+          smsSent = true;
+        } catch (err: any) {
+          console.error("Failed to send membership card SMS:", err);
+          errors.push(`SMS: ${err.message || 'Unknown error'}`);
         }
-        const finalMobileNumber = phoneValidation.normalized!;
-
-        const smsMessage = `🏨 Cinnamon Grand Colombo\n${categoryName.toUpperCase()} MEMBERSHIP CARD\n\n👤 Member: ${memberName}\n🔢 Membership No: ${memberCode}\n📅 Expiry Date: ${expiryDate}\n\nView your digital QR Code: https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(memberCode)}`;
-
-        const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://msg.text-ware.com/send_sms.php';
-        const smsUsername = import.meta.env.VITE_SMS_USERNAME || 'TW00001_ntb_demo_tr';
-        const smsPassword = import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
-        const smsSrc = import.meta.env.VITE_SMS_SRC || 'TWTEST';
-
-        const smsUrl = new URL(smsApiUrl);
-        smsUrl.searchParams.append('username', smsUsername);
-        smsUrl.searchParams.append('password', smsPassword);
-        smsUrl.searchParams.append('src', smsSrc);
-        smsUrl.searchParams.append('dst', finalMobileNumber);
-        smsUrl.searchParams.append('msg', smsMessage);
-        smsUrl.searchParams.append('dr', '1');
-
-        const response = await fetch(smsUrl.toString());
-        if (!response.ok) {
-          throw new Error('Failed to send SMS');
-        }
-
-        smsSent = true;
-      } catch (err: any) {
-        console.error("Failed to send membership card SMS:", err);
-        errors.push(`SMS: ${err.message || 'Unknown error'}`);
       }
+    } catch (err: any) {
+      console.error("Failed to process card sending:", err);
+      errors.push(`Token: ${err.message || 'Unknown error'}`);
     }
 
     setSendingCard(false);

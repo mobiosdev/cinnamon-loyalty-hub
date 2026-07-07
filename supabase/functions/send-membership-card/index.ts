@@ -11,7 +11,9 @@ interface SendCardEmailRequest {
   member_code: string;
   category_name: string;
   expiry_date: string;
+  card_url?: string;
   card_image_base64?: string;
+  sendgrid_api_key?: string;
 }
 
 Deno.serve(async (req) => {
@@ -27,7 +29,9 @@ Deno.serve(async (req) => {
       member_code,
       category_name,
       expiry_date,
+      card_url,
       card_image_base64,
+      sendgrid_api_key,
     }: SendCardEmailRequest = await req.json();
 
     if (!to_email || !member_name || !member_code) {
@@ -36,6 +40,23 @@ Deno.serve(async (req) => {
 
     // Build QR code URL for the email
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(member_code)}`;
+
+    // Build the Card URL Button HTML if card_url is present (avoiding nested backticks in main template)
+    let cardUrlButton = '';
+    if (card_url) {
+      cardUrlButton = `
+              <!-- Card URL Button -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0 30px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="${card_url}" target="_blank" style="background: linear-gradient(135deg, #d4a012 0%, #f0c040 50%, #e8a808 100%); color: #1a0533; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 15px rgba(240, 192, 64, 0.4); text-transform: uppercase; letter-spacing: 1px; font-family: 'Arial', sans-serif;">
+                      View & Download Card
+                    </a>
+                  </td>
+                </tr>
+              </table>
+      `;
+    }
 
     // Build premium HTML email template
     const emailHtml = `
@@ -109,6 +130,8 @@ Deno.serve(async (req) => {
                 </tr>
               </table>
 
+              ${cardUrlButton}
+
               <!-- QR Code Section -->
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9f6f2; border-radius: 12px; margin: 0 0 24px 0;">
                 <tr>
@@ -150,68 +173,68 @@ Deno.serve(async (req) => {
 </body>
 </html>`;
 
-    // Use Resend API to send email (set RESEND_API_KEY in Supabase secrets)
-    // If no Resend key, fall back to Supabase built-in email or SMTP
-    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    // Use SendGrid Web API to send email
+    const sendgridApiKey = sendgrid_api_key || Deno.env.get('SENDGRID_API_KEY');
+    if (!sendgridApiKey) {
+      throw new Error('SENDGRID_API_KEY is not configured in request payload or environment.');
+    }
     
-    if (resendApiKey) {
-      // Send via Resend
-      const resendResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json',
+    console.log(`Sending email to ${to_email} via SendGrid...`);
+    const sendgridResponse = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${sendgridApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        personalizations: [
+          {
+            to: [
+              {
+                email: to_email,
+              },
+            ],
+          },
+        ],
+        from: {
+          email: 'grand@cinnamonhotels.com',
+          name: 'Cinnamon Grand Colombo',
         },
-        body: JSON.stringify({
-          from: Deno.env.get('EMAIL_FROM') || 'Cinnamon Grand <membership@cinnamongrand.com>',
-          to: [to_email],
-          subject: `Your ${category_name} Membership Card - Cinnamon Grand Colombo`,
-          html: emailHtml,
-        }),
-      });
+        subject: `Your ${category_name} Membership Card - Cinnamon Grand Colombo`,
+        content: [
+          {
+            type: 'text/html',
+            value: emailHtml,
+          },
+        ],
+      }),
+    });
 
-      if (!resendResponse.ok) {
-        const errorText = await resendResponse.text();
-        console.error('Resend API error:', errorText);
-        throw new Error(`Failed to send email: ${errorText}`);
+    if (!sendgridResponse.ok) {
+      const errorText = await sendgridResponse.text();
+      console.error('SendGrid API error:', errorText);
+      throw new Error(`Failed to send email via SendGrid: ${errorText}`);
+    }
+
+    let resultJson = {};
+    try {
+      if (sendgridResponse.status !== 204) {
+        resultJson = await sendgridResponse.json();
       }
-
-      const result = await resendResponse.json();
-      console.log('Email sent successfully via Resend:', result);
-
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: `Membership card sent to ${to_email}`,
-          provider: 'resend',
-          id: result.id,
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    } catch (e) {
+      console.warn('Could not parse SendGrid response JSON (expected for 202/204):', e);
     }
 
-    // Fallback: Try SMTP via a generic email sending approach
-    // Use Supabase's built-in SMTP if configured
-    const smtpHost = Deno.env.get('SMTP_HOST');
-    const smtpUser = Deno.env.get('SMTP_USER');
-    const smtpPass = Deno.env.get('SMTP_PASS');
-    const smtpPort = Deno.env.get('SMTP_PORT') || '587';
-    const emailFrom = Deno.env.get('EMAIL_FROM') || 'membership@cinnamongrand.com';
+    console.log('Email sent successfully via SendGrid');
 
-    if (smtpHost && smtpUser && smtpPass) {
-      // Use the Deno SMTP client
-      // For edge functions, we'll use a simple HTTP-based approach
-      // Since direct SMTP is complex in edge functions, we try a webhook approach
-      console.log('SMTP configuration found but Edge Functions use HTTP-based email providers.');
-      console.log('Please configure RESEND_API_KEY for email sending.');
-      
-      throw new Error('Email sending requires RESEND_API_KEY to be configured. Set it via: supabase secrets set RESEND_API_KEY=your_key');
-    }
-
-    // If no email provider configured, return an error with setup instructions
-    throw new Error(
-      'No email provider configured. Please set RESEND_API_KEY in Supabase secrets. ' +
-      'Get a free API key at https://resend.com and run: supabase secrets set RESEND_API_KEY=your_key'
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        message: `Membership card sent to ${to_email}`,
+        provider: 'sendgrid',
+        result: resultJson,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
@@ -219,7 +242,6 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : 'Unknown error occurred',
-        setup_instructions: 'To enable email sending, set RESEND_API_KEY in Supabase secrets: supabase secrets set RESEND_API_KEY=your_key'
       }),
       { 
         status: 400,

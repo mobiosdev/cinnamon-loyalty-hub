@@ -14,6 +14,7 @@ import { categoryApi } from "@/services/categoryApi";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { maskPhoneNumber, formatPhoneForDisplay, validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
+import { ensureCardToken } from "@/utils/cardToken";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
@@ -57,77 +58,82 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
     let smsSent = false;
     let errors: string[] = [];
 
-    // 1. Send via email if registered
-    if (member.email) {
-      try {
-        const memberName = `${member.title || ''} ${member.first_name} ${member.last_name}`.trim();
-        const expiryDate = member.renew_date
-          ? new Date(member.renew_date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
-          : 'N/A';
-        const categoryName = member.category_name || 'Member';
+    try {
+      // Ensure token is generated and updated in DB
+      const cardToken = await ensureCardToken(member.id, member.card_token);
+      const cardUrl = `${window.location.origin}/card/${cardToken}`;
+      const memberName = `${member.title || ''} ${member.first_name} ${member.last_name}`.trim();
+      const expiryDate = member.renew_date
+        ? new Date(member.renew_date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : 'N/A';
+      const categoryName = member.category_name || 'Member';
 
-        const { data, error } = await supabase.functions.invoke('send-membership-card', {
-          body: {
-            to_email: member.email,
-            member_name: memberName,
-            member_code: member.member_code,
-            category_name: categoryName,
-            expiry_date: expiryDate,
-          },
-        });
+      // 1. Send via email if registered
+      if (member.email) {
+        try {
+          const { data, error } = await supabase.functions.invoke('send-membership-card', {
+            body: {
+              to_email: member.email,
+              member_name: memberName,
+              member_code: member.member_code,
+              category_name: categoryName,
+              expiry_date: expiryDate,
+              card_url: cardUrl,
+              sendgrid_api_key: import.meta.env.VITE_SENDGRID_API_KEY,
+            },
+          });
 
-        if (error) {
-          throw new Error(error.message || 'Failed to send email');
+          if (error) {
+            throw new Error(error.message || 'Failed to send email');
+          }
+          if (data?.error) {
+            throw new Error(data.error);
+          }
+          emailSent = true;
+        } catch (err: any) {
+          console.error("Failed to send QR via email:", err);
+          errors.push(`Email: ${err.message || 'Unknown error'}`);
         }
-        if (data?.error) {
-          throw new Error(data.error);
-        }
-        emailSent = true;
-      } catch (err: any) {
-        console.error("Failed to send QR via email:", err);
-        errors.push(`Email: ${err.message || 'Unknown error'}`);
       }
-    }
 
-    // 2. Send via SMS if registered
-    if (member.mobile) {
-      try {
-        const phoneValidation = validateAndNormalizeSriLankanMobile(member.mobile);
-        if (!phoneValidation.isValid) {
-          throw new Error(phoneValidation.error || "Invalid mobile number");
+      // 2. Send via SMS if registered
+      if (member.mobile) {
+        try {
+          const phoneValidation = validateAndNormalizeSriLankanMobile(member.mobile);
+          if (!phoneValidation.isValid) {
+            throw new Error(phoneValidation.error || "Invalid mobile number");
+          }
+          const finalMobileNumber = phoneValidation.normalized!;
+
+          // Message text containing QR Code link and member's e-card details
+          const smsMessage = `🏨 Cinnamon Grand Colombo\n${categoryName.toUpperCase()} MEMBERSHIP CARD\n\n👤 Member: ${memberName}\n🔢 Membership No: ${member.member_code}\n📅 Expiry Date: ${expiryDate}\n\nView and download your digital card here: ${cardUrl}`;
+          
+          const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://msg.text-ware.com/send_sms.php';
+          const smsUsername = import.meta.env.VITE_SMS_USERNAME || 'TW00001_ntb_demo_tr';
+          const smsPassword = import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
+          const smsSrc = import.meta.env.VITE_SMS_SRC || 'TWTEST';
+
+          const smsUrl = new URL(smsApiUrl);
+          smsUrl.searchParams.append('username', smsUsername);
+          smsUrl.searchParams.append('password', smsPassword);
+          smsUrl.searchParams.append('src', smsSrc);
+          smsUrl.searchParams.append('dst', finalMobileNumber);
+          smsUrl.searchParams.append('msg', smsMessage);
+          smsUrl.searchParams.append('dr', '1');
+
+          const smsResponse = await fetch(smsUrl.toString());
+          if (!smsResponse.ok) {
+            throw new Error('Failed to send SMS');
+          }
+          smsSent = true;
+        } catch (err: any) {
+          console.error("Failed to send QR via SMS:", err);
+          errors.push(`SMS: ${err.message || 'Unknown error'}`);
         }
-        const finalMobileNumber = phoneValidation.normalized!;
-        const memberName = `${member.title || ''} ${member.first_name} ${member.last_name}`.trim();
-        const expiryDate = member.renew_date
-          ? new Date(member.renew_date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
-          : 'N/A';
-        const categoryName = member.category_name || 'Member';
-
-        // Message text containing QR Code link and member's e-card details
-        const smsMessage = `Dear ${memberName}, here are your Cinnamon Grand digital membership details. Membership No: ${member.member_code}, Category: ${categoryName}, Expiry: ${expiryDate}. View your digital QR Code & Card here: https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(member.member_code)}`;
-        
-        const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://msg.text-ware.com/send_sms.php';
-        const smsUsername = import.meta.env.VITE_SMS_USERNAME || 'TW00001_ntb_demo_tr';
-        const smsPassword = import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
-        const smsSrc = import.meta.env.VITE_SMS_SRC || 'TWTEST';
-
-        const smsUrl = new URL(smsApiUrl);
-        smsUrl.searchParams.append('username', smsUsername);
-        smsUrl.searchParams.append('password', smsPassword);
-        smsUrl.searchParams.append('src', smsSrc);
-        smsUrl.searchParams.append('dst', finalMobileNumber);
-        smsUrl.searchParams.append('msg', smsMessage);
-        smsUrl.searchParams.append('dr', '1');
-
-        const smsResponse = await fetch(smsUrl.toString());
-        if (!smsResponse.ok) {
-          throw new Error('Failed to send SMS');
-        }
-        smsSent = true;
-      } catch (err: any) {
-        console.error("Failed to send QR via SMS:", err);
-        errors.push(`SMS: ${err.message || 'Unknown error'}`);
       }
+    } catch (err: any) {
+      console.error("Failed to process QR/card sending:", err);
+      errors.push(`Token: ${err.message || 'Unknown error'}`);
     }
 
     setSendingQr(false);

@@ -198,6 +198,7 @@ export type Database = {
           selected_offers: Json | null
           title: string | null
           updated_at: string | null
+          card_token: string | null
         }
         Insert: {
           address?: string | null
@@ -224,6 +225,7 @@ export type Database = {
           selected_offers?: Json | null
           title?: string | null
           updated_at?: string | null
+          card_token?: string | null
         }
         Update: {
           address?: string | null
@@ -250,6 +252,7 @@ export type Database = {
           selected_offers?: Json | null
           title?: string | null
           updated_at?: string | null
+          card_token?: string | null
         }
         Relationships: [
           {

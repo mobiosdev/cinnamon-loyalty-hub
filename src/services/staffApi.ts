@@ -128,16 +128,20 @@ export const staffApi = {
 
   async registerStaff(staffData: Omit<StaffMember, 'id' | 'created_at'>): Promise<StaffMember> {
     try {
+      const sanitizedData = {
+        ...staffData,
+        company_id: staffData.company_id === '' || staffData.company_id === undefined ? null : staffData.company_id,
+        category_id: (staffData.category_id as any) === '' || staffData.category_id === undefined || staffData.category_id === null ? null : Number(staffData.category_id),
+        discount_amount: Number(staffData.discount_amount) || 0,
+        discount_percentage: Number(staffData.discount_percentage) || 10,
+        is_active: staffData.is_active ?? true,
+        discount_enabled: staffData.discount_enabled ?? true,
+        selected_offers: staffData.selected_offers || []
+      };
+
       const { data, error } = await supabase
         .from('members')
-        .insert([{
-          ...staffData,
-          discount_amount: Number(staffData.discount_amount) || 0,
-          discount_percentage: Number(staffData.discount_percentage) || 10,
-          is_active: staffData.is_active ?? true,
-          discount_enabled: staffData.discount_enabled ?? true,
-          selected_offers: staffData.selected_offers || []
-        }])
+        .insert([sanitizedData])
         .select()
         .single();
 
@@ -157,9 +161,21 @@ export const staffApi = {
 
   async updateStaff(id: string, staffData: Partial<Omit<StaffMember, 'id' | 'created_at'>>): Promise<StaffMember> {
     try {
+      const sanitizedData = { ...staffData };
+      
+      if ((sanitizedData.category_id as any) === '' || sanitizedData.category_id === undefined) {
+        sanitizedData.category_id = null;
+      } else if (sanitizedData.category_id !== null) {
+        sanitizedData.category_id = Number(sanitizedData.category_id);
+      }
+
+      if (sanitizedData.company_id === '' || sanitizedData.company_id === undefined) {
+        sanitizedData.company_id = null;
+      }
+
       const { data, error } = await supabase
         .from('members')
-        .update(staffData)
+        .update(sanitizedData)
         .eq('id', id)
         .select()
         .single();
