@@ -96,7 +96,7 @@ export const staffApi = {
     }
   },
 
-  async sendCardEmail(id: string, email: string): Promise<any> {
-    return apiManager.post<any>(`/members/${id}/send-card`, { email });
+  async sendCardEmail(id: string, email: string, cardUrl?: string): Promise<any> {
+    return apiManager.post<any>(`/members/${id}/send-card`, { email, card_url: cardUrl });
   },
 };
