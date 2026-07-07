@@ -9,7 +9,6 @@ import cinnamonLogo from "@/assets/cinnamon-logo.png";
 import { supabase } from "@/integrations/supabase/client";
 import { validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
 import { ensureCardToken } from "@/utils/cardToken";
-import { sendMembershipCardEmailDirectly } from "@/utils/sendEmail";
 
 interface MembershipCardProps {
   open: boolean;
@@ -168,15 +167,26 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
       const cardToken = await ensureCardToken(member.id!, member.card_token);
       const cardUrl = `${window.location.origin}/card/${cardToken}`;
 
-      await sendMembershipCardEmailDirectly({
-        to_email: targetEmail,
-        member_name: memberName,
-        member_code: memberCode,
-        category_name: categoryName,
-        expiry_date: expiryDate,
-        card_url: cardUrl,
-        sendgrid_api_key: import.meta.env.VITE_SENDGRID_API_KEY,
+      const { data, error } = await supabase.functions.invoke('send-membership-card', {
+        body: {
+          to_email: targetEmail,
+          member_name: memberName,
+          member_code: memberCode,
+          category_name: categoryName,
+          expiry_date: expiryDate,
+          card_url: cardUrl,
+          sendgrid_api_key: import.meta.env.VITE_SENDGRID_API_KEY,
+        },
       });
+
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Failed to send email');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
 
       setEmailSent(true);
       toast.success(`Membership card sent to ${targetEmail}`);
@@ -221,15 +231,25 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
       // 1. Send via email if registered
       if (member.email) {
         try {
-          await sendMembershipCardEmailDirectly({
-            to_email: member.email,
-            member_name: memberName,
-            member_code: memberCode,
-            category_name: categoryName,
-            expiry_date: expiryDate,
-            card_url: cardUrl,
-            sendgrid_api_key: import.meta.env.VITE_SENDGRID_API_KEY,
+          const { data, error } = await supabase.functions.invoke('send-membership-card', {
+            body: {
+              to_email: member.email,
+              member_name: memberName,
+              member_code: memberCode,
+              category_name: categoryName,
+              expiry_date: expiryDate,
+              card_url: cardUrl,
+              sendgrid_api_key: import.meta.env.VITE_SENDGRID_API_KEY,
+            },
           });
+
+          if (error) {
+            throw new Error(error.message || 'Failed to send email');
+          }
+
+          if (data?.error) {
+            throw new Error(data.error);
+          }
 
           emailSent = true;
         } catch (err: any) {

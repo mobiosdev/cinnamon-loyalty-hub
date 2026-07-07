@@ -15,7 +15,6 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { maskPhoneNumber, formatPhoneForDisplay, validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
 import { ensureCardToken } from "@/utils/cardToken";
-import { sendMembershipCardEmailDirectly } from "@/utils/sendEmail";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
@@ -72,15 +71,24 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
       // 1. Send via email if registered
       if (member.email) {
         try {
-          await sendMembershipCardEmailDirectly({
-            to_email: member.email,
-            member_name: memberName,
-            member_code: member.member_code,
-            category_name: categoryName,
-            expiry_date: expiryDate,
-            card_url: cardUrl,
-            sendgrid_api_key: import.meta.env.VITE_SENDGRID_API_KEY,
+          const { data, error } = await supabase.functions.invoke('send-membership-card', {
+            body: {
+              to_email: member.email,
+              member_name: memberName,
+              member_code: member.member_code,
+              category_name: categoryName,
+              expiry_date: expiryDate,
+              card_url: cardUrl,
+              sendgrid_api_key: import.meta.env.VITE_SENDGRID_API_KEY,
+            },
           });
+
+          if (error) {
+            throw new Error(error.message || 'Failed to send email');
+          }
+          if (data?.error) {
+            throw new Error(data.error);
+          }
           emailSent = true;
         } catch (err: any) {
           console.error("Failed to send QR via email:", err);
