@@ -201,7 +201,7 @@ const CustomerCategoryManagement = () => {
             <Users className="h-5 w-5 text-primary" />
             <CardTitle>Create Member Category</CardTitle>
           </div>
-          <CardDescription>Define member categories</CardDescription>
+          <CardDescription>Define member categories.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleCreateCategory} className="space-y-4">
@@ -257,7 +257,7 @@ const CustomerCategoryManagement = () => {
       <Card>
         <CardHeader>
           <CardTitle>Existing Member Categories</CardTitle>
-          <CardDescription>All member categories in the system</CardDescription>
+          <CardDescription>All member categories in the system.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -482,13 +482,17 @@ const CustomerCategoryManagement = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Member Category</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
               Are you sure you want to delete this member category? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm} disabled={loading}>
+            <AlertDialogAction 
+              onClick={handleDeleteConfirm} 
+              disabled={loading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               {loading ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>

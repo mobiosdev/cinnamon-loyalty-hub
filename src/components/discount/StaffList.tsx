@@ -8,7 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash, Ban, Building2, User, Check, ChevronsUpDown, Calendar, FileText, QrCode, Download, CreditCard } from "lucide-react";
 import { staffApi } from "@/services/staffApi";
-import { offerApi } from "@/services/offerApi";
+import { offerApi, parseOfferDescription } from "@/services/offerApi";
 import { companyApi } from "@/services/companyApi";
 import { categoryApi } from "@/services/categoryApi";
 import { auditApi } from "@/services/auditApi";
@@ -177,13 +177,27 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
     try {
       // Get selected offers
       const selectedOfferIds = Array.isArray(member.selected_offers) ? member.selected_offers : [];
+      let offers: any[] = [];
       if (selectedOfferIds.length > 0) {
         const allOffers = await offerApi.getOffers();
-        const offers = allOffers.filter((o: any) => selectedOfferIds.includes(o.id));
-        setMemberOffers(offers || []);
-      } else {
-        setMemberOffers([]);
+        offers = allOffers
+          .filter((o: any) => selectedOfferIds.includes(o.id))
+          .map((o: any) => {
+            const { description } = parseOfferDescription(o.description);
+            return { ...o, description };
+          });
+      } else if (member.category_id) {
+        try {
+          const categoryOffers = await offerApi.getOffersByCategory(member.category_id);
+          offers = categoryOffers.map((o: any) => {
+            const { description } = parseOfferDescription(o.description);
+            return { ...o, description };
+          });
+        } catch (err) {
+          console.error("Error fetching category offers fallback:", err);
+        }
       }
+      setMemberOffers(offers || []);
 
       // Get ALL offer redemptions (both active and cancelled) to show full history
       const phoneFormats = [
@@ -910,7 +924,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
               <DialogHeader>
                 <DialogTitle>Member Details</DialogTitle>
                 <DialogDescription>
-                  Complete information for {selectedMember?.first_name} {selectedMember?.last_name}
+                  Complete information for {selectedMember?.first_name} {selectedMember?.last_name}.
                 </DialogDescription>
               </DialogHeader>
               <div className="flex items-center gap-2 shrink-0">
@@ -1150,47 +1164,73 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                   <CardHeader className="pb-3">
                     <div className="flex items-center gap-2">
                       <Gift className="h-4 w-4 text-primary" />
-                      <CardTitle className="text-base font-semibold">Discount Redemptions</CardTitle>
+                      <CardTitle className="text-base font-semibold">Offers Redemptions</CardTitle>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Discount redemptions history */}
+                  <CardContent className="space-y-6">
+                    {/* Part A: Assigned Offers & Usage Status */}
                     <div className="space-y-3">
-                      {/* <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Discount Redemptions ({discountRedemptions.length})
-                      </h5> */}
-                      
                       {loadingOffers ? (
-                        <div className="flex items-center justify-center p-6">
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        <div className="flex items-center justify-center p-4">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                         </div>
-                      ) : discountRedemptions.length > 0 ? (
-                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                          {discountRedemptions.map((redemption: any) => (
-                            <div key={redemption.id} className="p-3 border border-blue-200 dark:border-blue-900/30 rounded-lg bg-blue-500/5 dark:bg-blue-950/10 flex items-start justify-between gap-3">
-                              <div className="space-y-0.5">
-                                <p className="font-semibold text-sm text-blue-700 dark:text-blue-400">
-                                  {redemption.discount_type === 'percentage' 
-                                    ? `${redemption.discount_value}% Discount` 
-                                    : `LKR ${redemption.discount_value?.toLocaleString()} Discount`}
-                                </p>
-                                {redemption.discount_amount && (
-                                  <p className="text-xs font-bold text-green-600 dark:text-green-400">
-                                    Saved: LKR {redemption.discount_amount?.toLocaleString()}
+                      ) : memberOffers.length > 0 ? (
+                        <div className="grid grid-cols-1 gap-2.5 max-h-60 overflow-y-auto pr-1">
+                          {memberOffers.map((offer: any) => {
+                            const redemption = redeemedOffers.find(
+                              (r: any) => r.offers?.id === offer.id && r.status === 'active'
+                            );
+                            const isUsed = !!redemption;
+                            
+                            return (
+                              <div 
+                                key={offer.id} 
+                                className={`p-3 border rounded-lg flex items-start justify-between gap-3 transition-colors ${
+                                  isUsed 
+                                    ? "border-red-200 dark:border-red-900/30 bg-red-500/5 dark:bg-red-950/10" 
+                                    : "border-green-200 dark:border-green-900/30 bg-green-500/5 dark:bg-green-950/10 hover:border-green-300"
+                                }`}
+                              >
+                                <div className="space-y-0.5">
+                                  <p className={`font-semibold text-sm ${isUsed ? "text-red-700 dark:text-red-400 line-through" : "text-green-700 dark:text-green-400"}`}>
+                                    {offer.name}
                                   </p>
-                                )}
-                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground mt-1">
-                                  <span>Redeemed: {new Date(redemption.redeemed_at).toLocaleDateString()}</span>
-                                  {redemption.bill_number && <span className="font-mono">Bill: {redemption.bill_number}</span>}
+                                  {offer.description && (
+                                    <p className="text-xs text-muted-foreground">{offer.description}</p>
+                                  )}
+                                  
+                                  {isUsed ? (
+                                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground mt-1.5">
+                                      <span>Redeemed: {new Date(redemption.redeemed_at).toLocaleDateString()}</span>
+                                      {redemption.bill_number && <span className="font-mono">Bill: {redemption.bill_number}</span>}
+                                    </div>
+                                  ) : (
+                                    <p className="text-[10px] text-muted-foreground mt-1">
+                                      {offer.valid_from || offer.valid_to ? (
+                                        <>
+                                          Valid: {offer.valid_from ? new Date(offer.valid_from).toLocaleDateString() : 'No Start Date'} - {offer.valid_to ? new Date(offer.valid_to).toLocaleDateString() : 'No Expiry'}
+                                        </>
+                                      ) : (
+                                        <>Valid: Unlimited / No Expiry</>
+                                      )}
+                                    </p>
+                                  )}
                                 </div>
+                                <Badge 
+                                  className={`text-[10px] shrink-0 ${
+                                    isUsed 
+                                      ? "bg-red-600 text-white hover:bg-red-700" 
+                                      : "bg-green-600 text-white hover:bg-green-700"
+                                  }`}
+                                >
+                                  {isUsed ? "Used" : "Active"}
+                                </Badge>
                               </div>
-                              <Badge className="bg-blue-600 text-white hover:bg-blue-700 text-[10px] shrink-0">Used</Badge>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ) : (
-                        <p className="text-xs text-muted-foreground italic p-3 border rounded-lg bg-muted/10">No discount redemptions yet</p>
+                        <p className="text-xs text-muted-foreground italic p-3 border rounded-lg bg-muted/10">No physical offers assigned</p>
                       )}
                     </div>
                   </CardContent>
@@ -1493,47 +1533,73 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                     <CardHeader className="pb-3">
                       <div className="flex items-center gap-2">
                         <Gift className="h-4 w-4 text-primary" />
-                        <CardTitle className="text-base font-semibold">Discount Redemptions</CardTitle>
+                        <CardTitle className="text-base font-semibold">Offers Redemptions</CardTitle>
                       </div>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      {/* Discount redemptions history */}
+                    <CardContent className="space-y-6">
+                      {/* Part A: Assigned Offers & Usage Status */}
                       <div className="space-y-3">
-                        {/* <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Discount Redemptions ({discountRedemptions.length})
-                        </h5> */}
-                        
                         {loadingOffers ? (
-                          <div className="flex items-center justify-center p-6">
-                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                          <div className="flex items-center justify-center p-4">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                           </div>
-                        ) : discountRedemptions.length > 0 ? (
-                          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                            {discountRedemptions.map((redemption: any) => (
-                              <div key={redemption.id} className="p-3 border border-blue-200 dark:border-blue-900/30 rounded-lg bg-blue-500/5 dark:bg-blue-950/10 flex items-start justify-between gap-3">
-                                <div className="space-y-0.5">
-                                  <p className="font-semibold text-sm text-blue-700 dark:text-blue-400">
-                                    {redemption.discount_type === 'percentage' 
-                                      ? `${redemption.discount_value}% Discount` 
-                                      : `LKR ${redemption.discount_value?.toLocaleString()} Discount`}
-                                  </p>
-                                  {redemption.discount_amount && (
-                                    <p className="text-xs font-bold text-green-600 dark:text-green-400">
-                                      Saved: LKR {redemption.discount_amount?.toLocaleString()}
+                        ) : memberOffers.length > 0 ? (
+                          <div className="grid grid-cols-1 gap-2.5 max-h-60 overflow-y-auto pr-1">
+                            {memberOffers.map((offer: any) => {
+                              const redemption = redeemedOffers.find(
+                                (r: any) => r.offers?.id === offer.id && r.status === 'active'
+                              );
+                              const isUsed = !!redemption;
+                              
+                              return (
+                                <div 
+                                  key={offer.id} 
+                                  className={`p-3 border rounded-lg flex items-start justify-between gap-3 transition-colors ${
+                                    isUsed 
+                                      ? "border-red-200 dark:border-red-900/30 bg-red-500/5 dark:bg-red-950/10" 
+                                      : "border-green-200 dark:border-green-900/30 bg-green-500/5 dark:bg-green-950/10 hover:border-green-300"
+                                  }`}
+                                >
+                                  <div className="space-y-0.5">
+                                    <p className={`font-semibold text-sm ${isUsed ? "text-red-700 dark:text-red-400 line-through" : "text-green-700 dark:text-green-400"}`}>
+                                      {offer.name}
                                     </p>
-                                  )}
-                                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground mt-1">
-                                    <span>Redeemed: {new Date(redemption.redeemed_at).toLocaleDateString()}</span>
-                                    {redemption.bill_number && <span className="font-mono">Bill: {redemption.bill_number}</span>}
+                                    {offer.description && (
+                                      <p className="text-xs text-muted-foreground">{offer.description}</p>
+                                    )}
+                                    
+                                    {isUsed ? (
+                                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground mt-1.5">
+                                        <span>Redeemed: {new Date(redemption.redeemed_at).toLocaleDateString()}</span>
+                                        {redemption.bill_number && <span className="font-mono">Bill: {redemption.bill_number}</span>}
+                                      </div>
+                                    ) : (
+                                      <p className="text-[10px] text-muted-foreground mt-1">
+                                        {offer.valid_from || offer.valid_to ? (
+                                          <>
+                                            Valid: {offer.valid_from ? new Date(offer.valid_from).toLocaleDateString() : 'No Start Date'} - {offer.valid_to ? new Date(offer.valid_to).toLocaleDateString() : 'No Expiry'}
+                                          </>
+                                        ) : (
+                                          <>Valid: Unlimited / No Expiry</>
+                                        )}
+                                      </p>
+                                    )}
                                   </div>
+                                  <Badge 
+                                    className={`text-[10px] shrink-0 ${
+                                      isUsed 
+                                        ? "bg-red-600 text-white hover:bg-red-700" 
+                                        : "bg-green-600 text-white hover:bg-green-700"
+                                    }`}
+                                  >
+                                    {isUsed ? "Used" : "Active"}
+                                  </Badge>
                                 </div>
-                                <Badge className="bg-blue-600 text-white hover:bg-blue-700 text-[10px] shrink-0">Used</Badge>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         ) : (
-                          <p className="text-xs text-muted-foreground italic p-3 border rounded-lg bg-muted/10">No discount redemptions yet</p>
+                          <p className="text-xs text-muted-foreground italic p-3 border rounded-lg bg-muted/10">No physical offers assigned</p>
                         )}
                       </div>
                     </CardContent>
@@ -1550,7 +1616,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Member</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
               Are you sure you want to delete <span className="font-semibold">{selectedMember?.first_name} {selectedMember?.last_name}</span>? 
               This will mark the member as deleted. This action is irreversible.
             </AlertDialogDescription>
@@ -1627,7 +1693,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deactivate Multiple Members</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
               Are you sure you want to deactivate <span className="font-semibold">{selectedMemberIds.size} member{selectedMemberIds.size !== 1 ? 's' : ''}</span>? 
               These members will be marked as inactive but their data will be preserved. You can reactivate them later by editing their profiles.
             </AlertDialogDescription>

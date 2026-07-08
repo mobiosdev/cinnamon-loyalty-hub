@@ -37,6 +37,16 @@ interface AvailableOffer {
   is_redeemed: boolean;
   min_bill_value?: number;
   max_discount_amount?: number;
+  valid_from?: string;
+  valid_to?: string;
+  is_recurrent?: boolean;
+  usage_limit?: number | null;
+  redemptions_count?: number;
+  redemptions?: Array<{
+    id: string;
+    redeemed_at: string;
+    bill_number?: string;
+  }>;
 }
 
 const Redemption = () => {
@@ -273,7 +283,7 @@ const Redemption = () => {
       }
 
       setMemberData(member as any);
-      setAvailableOffers(offers);
+      setAvailableOffers(offers.offers || []);
       setStep("benefits");
       
       // Fetch discount history
@@ -343,7 +353,26 @@ const Redemption = () => {
       
       setRedeemedItems(prev => new Set(prev).add(offer.id));
       setAvailableOffers(prev => 
-        prev.map(o => o.id === offer.id ? { ...o, is_redeemed: true } : o)
+        prev.map(o => {
+          if (o.id === offer.id) {
+            const newRedemptionsCount = (o.redemptions_count || 0) + 1;
+            const newRedemptions = [
+              {
+                id: Math.random().toString(),
+                redeemed_at: new Date().toISOString(),
+                bill_number: billNumber || undefined
+              },
+              ...(o.redemptions || [])
+            ];
+            return { 
+              ...o, 
+              is_redeemed: true,
+              redemptions_count: newRedemptionsCount,
+              redemptions: newRedemptions
+            };
+          }
+          return o;
+        })
       );
       toast.success(`${offer.name} redeemed successfully!`);
     } catch (error) {
@@ -709,7 +738,7 @@ const Redemption = () => {
           {/* Discount Section */}
           {hasDiscount && (
             <Card className={discountRedeemed ? "border-success bg-success/5" : ""}>
-              <CardContent className="p-4">
+              {/* <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex gap-3 flex-1">
                     <div className="rounded-full bg-primary/10 p-2 h-fit">
@@ -749,7 +778,7 @@ const Redemption = () => {
                     )}
                   </div>
                 </div>
-              </CardContent>
+              </CardContent> */}
             </Card>
           )}
 
@@ -758,8 +787,43 @@ const Redemption = () => {
             <>
               {availableOffers.map((offer) => {
                 const isRedeemed = offer.is_redeemed || redeemedItems.has(offer.id);
+                const redemptionsCount = offer.redemptions_count || 0;
+                const usageLimit = offer.usage_limit;
+                const isRecurrent = offer.is_recurrent;
+
+                let recurrenceText = "";
+                if (isRecurrent) {
+                  if (usageLimit !== null && usageLimit !== undefined) {
+                    const left = Math.max(0, usageLimit - redemptionsCount);
+                    recurrenceText = `Recurrent (${redemptionsCount} used, ${left} available)`;
+                  } else {
+                    recurrenceText = `Recurrent (Unlimited - ${redemptionsCount} used)`;
+                  }
+                } else {
+                  const left = isRedeemed ? 0 : 1;
+                  recurrenceText = `One-time (${redemptionsCount} used, ${left} available)`;
+                }
+
+                let validityText = "";
+                if (offer.valid_from && offer.valid_to) {
+                  validityText = `Validity: ${new Date(offer.valid_from).toLocaleDateString()} - ${new Date(offer.valid_to).toLocaleDateString()}`;
+                } else if (offer.valid_to) {
+                  validityText = `Expires: ${new Date(offer.valid_to).toLocaleDateString()}`;
+                } else if (offer.valid_from) {
+                  validityText = `Valid From: ${new Date(offer.valid_from).toLocaleDateString()}`;
+                } else {
+                  validityText = "Validity: Unlimited / No Expiry";
+                }
+
                 return (
-                  <Card key={offer.id} className={isRedeemed ? "border-success bg-success/5 opacity-75" : ""}>
+                  <Card 
+                    key={offer.id} 
+                    className={`transition-colors border ${
+                      isRedeemed 
+                        ? "border-red-200 dark:border-red-900/30 bg-red-500/5 dark:bg-red-950/10 opacity-90" 
+                        : "border-green-200 dark:border-green-900/30 bg-green-500/5 dark:bg-green-950/10 hover:border-green-300"
+                    }`}
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex gap-3 flex-1">
@@ -767,46 +831,71 @@ const Redemption = () => {
                             <Gift className="h-5 w-5 text-secondary" />
                           </div>
                           <div className="flex-1">
-                            <h4 className="font-medium flex items-center gap-2">
-                              {offer.name}
-                              {isRedeemed && (
-                                <Badge variant="outline" className="text-success border-success">
-                                  Redeemed
-                                </Badge>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className={`font-semibold text-sm ${isRedeemed ? "text-red-700 dark:text-red-400 line-through" : "text-green-700 dark:text-green-400"}`}>
+                                {offer.name}
+                              </h4>
+                              <Badge 
+                                className={`text-[10px] py-0 px-1.5 font-semibold ${
+                                  isRedeemed 
+                                    ? "bg-red-600 text-white hover:bg-red-700" 
+                                    : "bg-green-600 text-white hover:bg-green-700"
+                                }`}
+                              >
+                                {isRedeemed ? "Used" : "Active"}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">{offer.description}</p>
+                            
+                            <div className="flex flex-col gap-1 mt-2 text-[11px] text-muted-foreground">
+                              <p className="font-medium text-foreground/80">
+                                {recurrenceText}
+                              </p>
+                              <p>
+                                {validityText}
+                              </p>
+                              
+                              {(offer.min_bill_value || offer.max_discount_amount) && (
+                                <p className="space-x-2">
+                                  {offer.min_bill_value && (
+                                    <span>Min Bill: LKR {offer.min_bill_value.toLocaleString()}</span>
+                                  )}
+                                  {offer.min_bill_value && offer.max_discount_amount && <span>•</span>}
+                                  {offer.max_discount_amount && (
+                                    <span>Max Discount: LKR {offer.max_discount_amount.toLocaleString()}</span>
+                                  )}
+                                </p>
                               )}
-                            </h4>
-                            <p className="text-sm text-muted-foreground mt-1">{offer.description}</p>
-                            {(offer.min_bill_value || offer.max_discount_amount) && (
-                              <p className="text-sm text-muted-foreground mt-2">
-                                {offer.min_bill_value && (
-                                  <span>Min Bill: LKR {offer.min_bill_value.toLocaleString()}</span>
-                                )}
-                                {offer.min_bill_value && offer.max_discount_amount && (
-                                  <span className="mx-2">•</span>
-                                )}
-                                {offer.max_discount_amount && (
-                                  <span>Max Discount: LKR {offer.max_discount_amount.toLocaleString()}</span>
-                                )}
-                              </p>
-                            )}
-                            {isRedeemed && (
-                              <p className="text-xs text-muted-foreground mt-2 italic">
-                                This offer can only be redeemed once
-                              </p>
+                            </div>
+
+                            {/* Redemption history details inside card */}
+                            {offer.redemptions && offer.redemptions.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-dashed border-border/60">
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Redemption History</p>
+                                <div className="space-y-1">
+                                  {offer.redemptions.map((redemption: any) => (
+                                    <div key={redemption.id} className="flex justify-between items-center text-[10px] text-muted-foreground bg-muted/30 p-1.5 rounded">
+                                      <span>Redeemed: {new Date(redemption.redeemed_at).toLocaleDateString()}</span>
+                                      {redemption.bill_number && <span className="font-mono">Bill: #{redemption.bill_number}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
                             )}
                           </div>
                         </div>
                         <div>
                           {isRedeemed ? (
-                            <div className="flex items-center gap-2 text-success">
+                            <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
                               <CheckCircle className="h-5 w-5" />
-                              <span className="text-sm font-medium">Redeemed</span>
+                              <span className="text-sm font-semibold">Redeemed</span>
                             </div>
                           ) : (
                             <Button
                               onClick={() => handleRedeemOffer(offer)}
                               disabled={loading}
                               size="sm"
+                              className="bg-green-600 hover:bg-green-700 text-white"
                             >
                               Redeem
                             </Button>
@@ -835,7 +924,7 @@ const Redemption = () => {
         </div>
 
         {/* Discount History Section */}
-        {discountHistory.length > 0 && (
+        {/* {discountHistory.length > 0 && (
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-3">Recent Discount Redemptions</h3>
             <div className="border rounded-lg overflow-hidden">
@@ -885,7 +974,7 @@ const Redemption = () => {
               </Table>
             </div>
           </div>
-        )}
+        )} */}
 
         <div className="bg-accent/10 border border-accent/20 rounded-lg p-4 flex gap-3">
 
@@ -912,7 +1001,7 @@ const Redemption = () => {
             <CardTitle className="font-serif">Redemption</CardTitle>
           </div>
           <CardDescription>
-            Verify members and redeem benefits
+            Verify members and redeem benefits.
           </CardDescription>
         </CardHeader>
 

@@ -88,13 +88,13 @@ const DiscountManagement = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => setActiveTab("offers")} className="cursor-pointer">
-                  <Gift className="mr-2 h-4 w-4" />
-                  Offers
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setActiveTab("categories")} className="cursor-pointer">
                   <Users className="mr-2 h-4 w-4" />
                   Member Categories
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveTab("offers")} className="cursor-pointer">
+                  <Gift className="mr-2 h-4 w-4" />
+                  Offers
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setActiveTab("notifications")} className="cursor-pointer">
                   <MessageSquare className="mr-2 h-4 w-4" />

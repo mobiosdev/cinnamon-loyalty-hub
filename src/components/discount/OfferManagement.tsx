@@ -1459,7 +1459,7 @@ const OfferManagement = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deactivate Offer</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
               Are you sure you want to deactivate <span className="font-semibold">{offerToDelete?.name}</span>? 
               The offer will be marked as inactive but the data will be preserved. You can reactivate it later.
             </AlertDialogDescription>
@@ -1489,7 +1489,7 @@ const OfferManagement = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deactivate Multiple Offers</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
               Are you sure you want to deactivate <span className="font-semibold">{selectedOfferIds.size} offer{selectedOfferIds.size !== 1 ? 's' : ''}</span>? 
               These offers will be marked as inactive but the data will be preserved. You can reactivate them later.
             </AlertDialogDescription>
@@ -1519,7 +1519,7 @@ const OfferManagement = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Past Offer</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
               Are you sure you want to delete <span className="font-semibold">{pastOfferToDelete?.name}</span>? 
               This offer is already inactive. This action will mark it for permanent removal (soft delete).
             </AlertDialogDescription>
@@ -1549,7 +1549,7 @@ const OfferManagement = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Multiple Past Offers</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
               Are you sure you want to delete <span className="font-semibold">{selectedPastOfferIds.size} offer{selectedPastOfferIds.size !== 1 ? 's' : ''}</span>? 
               These offers are already inactive. This action will mark them for permanent removal (soft delete).
             </AlertDialogDescription>
