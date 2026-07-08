@@ -44,6 +44,8 @@ interface StaffSearchParams {
   page?: number;
   limit?: number;
   search?: string;
+  mobile?: string;
+  member_code?: string;
   company_id?: string;
   category_id?: string;
   is_active?: boolean;
@@ -55,6 +57,8 @@ export const staffApi = {
     if (params.page) queryParams.append('page', params.page.toString());
     if (params.limit) queryParams.append('limit', params.limit.toString());
     if (params.search) queryParams.append('search', params.search);
+    if (params.mobile) queryParams.append('mobile', params.mobile);
+    if (params.member_code) queryParams.append('member_code', params.member_code);
     if (params.company_id) queryParams.append('company_id', params.company_id);
     if (params.category_id) queryParams.append('category_id', params.category_id);
     if (params.is_active !== undefined) queryParams.append('is_active', params.is_active.toString());

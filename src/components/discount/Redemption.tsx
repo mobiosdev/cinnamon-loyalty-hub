@@ -401,6 +401,7 @@ const Redemption = () => {
   const handleSelectMember = (member: any) => {
     setMobileNumber(member.mobile || "");
     setMemberCode(member.member_code || "");
+    setSearchNameQuery(`${member.first_name || ""} ${member.last_name || ""}`.trim());
     toast.success(`Selected member: ${member.first_name} ${member.last_name}`);
   };
 
@@ -449,15 +450,21 @@ const Redemption = () => {
   };
 
   const handleNameSearch = async () => {
-    if (!searchNameQuery.trim()) {
-      toast.error("Please enter a name to search");
+    const nameStr = searchNameQuery.trim();
+    const phoneStr = mobileNumber.trim();
+    const codeStr = memberCode.trim();
+
+    if (!nameStr && !phoneStr && !codeStr) {
+      toast.error("Please enter a Mobile Number, Member Code, or Name to search");
       return;
     }
     
     setSearchingNames(true);
     try {
       const result = await staffApi.getStaff({
-        search: searchNameQuery.trim(),
+        search: nameStr || undefined,
+        mobile: phoneStr || undefined,
+        member_code: codeStr || undefined,
         is_active: true,
         limit: 10
       });
@@ -473,7 +480,7 @@ const Redemption = () => {
         toast.success(`Found ${transformedData.length} matching member(s)`);
       }
     } catch (error) {
-      console.error("Error searching member by name:", error);
+      console.error("Error searching member:", error);
       toast.error("Failed to search members");
     } finally {
       setSearchingNames(false);
@@ -488,6 +495,12 @@ const Redemption = () => {
           id="billNumber"
           value={billNumber}
           onChange={(e) => setBillNumber(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleSendOTP();
+            }
+          }}
           placeholder="Enter bill number"
           className="text-lg"
         />
@@ -501,6 +514,12 @@ const Redemption = () => {
               id="mobile"
               value={mobileNumber}
               onChange={(e) => setMobileNumber(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleNameSearch();
+                }
+              }}
               placeholder="+94 XXX XXX XXX"
               className="text-lg"
             />
@@ -514,6 +533,12 @@ const Redemption = () => {
               id="memberCode"
               value={memberCode}
               onChange={(e) => setMemberCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleNameSearch();
+                }
+              }}
               placeholder="e.g. MEM12345"
               className="text-lg font-mono uppercase"
             />
@@ -538,6 +563,12 @@ const Redemption = () => {
             id="searchNameQuery"
             value={searchNameQuery}
             onChange={(e) => setSearchNameQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleNameSearch();
+              }
+            }}
             placeholder="Enter first name or last name..."
             className="w-full"
           />
