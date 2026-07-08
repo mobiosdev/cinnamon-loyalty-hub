@@ -839,7 +839,7 @@ const CompanyRegistration = () => {
             <CardTitle className="font-serif">Member Details</CardTitle>
           </div>
           <CardDescription>
-            Enter member details and company information for member registration
+            Enter member details and company information for member registration.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1066,7 +1066,7 @@ const CompanyRegistration = () => {
                          }}
                        >
                          <SelectTrigger>
-                           <SelectValue placeholder="Select category (default: Member)" />
+                           <SelectValue placeholder="Select category " />
                          </SelectTrigger>
                          <SelectContent>
                            {categories.map((cat) => (
@@ -1116,10 +1116,10 @@ const CompanyRegistration = () => {
                   <div className="mt-4 p-3 bg-muted/30 rounded-lg border border-border space-y-3">
                     <div className="flex items-center gap-2 pb-2 border-b border-border/50">
                       <div className="h-2 w-2 rounded-full bg-primary"></div>
-                      <h4 className="font-semibold text-sm">Benefits for {categories.find(c => c.id === memberFormData.category_id)?.name || 'Selected Category'}</h4>
+                      <h4 className="font-semibold text-sm">Offers for {categories.find(c => c.id === memberFormData.category_id)?.name || 'Selected Category'}</h4>
                     </div>
                     
-                    {/* Discount Policy Benefit */}
+                    {/* Discount Policy Benefit - Commented out per request to hide and bypass manual configuration/validation
                     <div className="space-y-3 p-2.5 bg-background rounded border border-border/50">
                       <div className="flex items-start gap-3">
                         <Checkbox 
@@ -1188,35 +1188,31 @@ const CompanyRegistration = () => {
                         </div>
                       )}
                     </div>
-
+                    */}
+                    
                     {/* Category Offers */}
                     {categoryOffers.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground">Physical Offers:</p>
+                        <p className="text-xs font-medium text-muted-foreground">Physical Offers (Automatically assigned):</p>
                         <div className="space-y-1.5">
                           {categoryOffers.map((offer) => (
-                            <div key={offer.id} className="flex items-start gap-2.5 p-2.5 bg-background rounded border border-border/50 hover:border-primary/30 transition-colors">
-                              <Checkbox 
-                                id={`offer-${offer.id}`}
-                                checked={selectedOfferIds.includes(offer.id)}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setSelectedOfferIds([...selectedOfferIds, offer.id]);
-                                  } else {
-                                    setSelectedOfferIds(selectedOfferIds.filter(id => id !== offer.id));
-                                  }
-                                }}
-                                className="mt-0.5"
-                              />
+                            <div key={offer.id} className="flex items-start gap-2.5 p-2.5 bg-background rounded border border-border/50 transition-colors">
+                              <span className="text-primary font-bold mt-0.5">•</span>
                               <div className="flex-1 min-w-0">
-                                <Label htmlFor={`offer-${offer.id}`} className="text-sm font-medium cursor-pointer">
+                                <span className="text-sm font-medium">
                                   {offer.name}
-                                </Label>
+                                </span>
                                 {offer.description && (
                                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{offer.description}</p>
                                 )}
                                 <p className="text-[10px] text-muted-foreground mt-1">
-                                  Valid: {new Date(offer.valid_from).toLocaleDateString()} - {new Date(offer.valid_to).toLocaleDateString()}
+                                  {offer.valid_from || offer.valid_to ? (
+                                    <>
+                                      Valid: {offer.valid_from ? new Date(offer.valid_from).toLocaleDateString() : 'No Start Date'} - {offer.valid_to ? new Date(offer.valid_to).toLocaleDateString() : 'No Expiry'}
+                                    </>
+                                  ) : (
+                                    <>Valid: Unlimited / No Expiry</>
+                                  )}
                                 </p>
                                 {(offer.min_bill_value || offer.max_discount_amount) && (
                                   <div className="mt-1.5 p-1.5 bg-accent/50 rounded text-[10px] space-y-0.5">
@@ -1282,7 +1278,7 @@ const CompanyRegistration = () => {
               <CardTitle className="font-serif">Registered Members</CardTitle>
             </div>
             <CardDescription>
-              View and manage all registered members
+              View and manage all registered members .
             </CardDescription>
           </div>
           <Button

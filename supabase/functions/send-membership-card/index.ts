@@ -228,8 +228,8 @@ Deno.serve(async (req) => {
     console.log('Email sent successfully via SendGrid');
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         message: `Membership card sent to ${to_email}`,
         provider: 'sendgrid',
         result: resultJson,
@@ -240,12 +240,12 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error in send-membership-card function:', error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error instanceof Error ? error.message : 'Unknown error occurred',
       }),
-      { 
+      {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }

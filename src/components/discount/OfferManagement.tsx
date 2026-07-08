@@ -601,7 +601,7 @@ const OfferManagement = () => {
             <Gift className="h-5 w-5 text-primary" />
             <CardTitle>Create Offer</CardTitle>
           </div>
-          <CardDescription>Create offers for member categories</CardDescription>
+          <CardDescription>Create offers for member categories.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -652,7 +652,7 @@ const OfferManagement = () => {
             <div>
               <Label htmlFor="category">Member Categories *</Label>
               <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
-                <p className="text-sm text-muted-foreground">Select one or more categories and configure their recurrence settings</p>
+                <p className="text-sm text-muted-foreground">Select one or more categories and configure their recurrence settings.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {categories.map((cat) => {
                     const isSelected = selectedCategoryIds.includes(cat.id);
@@ -788,7 +788,7 @@ const OfferManagement = () => {
             <div>
               <Label>Discount Policy (Optional)</Label>
               <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
-                <p className="text-sm text-muted-foreground">Configure discount restrictions for this offer</p>
+                <p className="text-sm text-muted-foreground">Configure discount restrictions for this offer.</p>
                 
                 <div className="space-y-3">
                   <div className="flex items-start space-x-3">
@@ -858,7 +858,7 @@ const OfferManagement = () => {
                     Apply to All Member Categories
                   </Label>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Automatically assign this offer to all members in the selected categories
+                    Automatically assign this offer to all members in the selected categories.
                   </p>
                 </div>
               </div>
@@ -1246,7 +1246,7 @@ const OfferManagement = () => {
               <div>
                 <Label htmlFor="edit-category">Member Categories *</Label>
                 <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
-                  <p className="text-sm text-muted-foreground">Select one or more categories and configure their recurrence settings</p>
+                  <p className="text-sm text-muted-foreground">Select one or more categories and configure their recurrence settings.</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {categories.map((cat) => {
                       const isSelected = editSelectedCategoryIds.includes(cat.id);
@@ -1382,7 +1382,7 @@ const OfferManagement = () => {
               <div>
                 <Label>Discount Policy (Optional)</Label>
                 <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
-                  <p className="text-sm text-muted-foreground">Configure discount restrictions for this offer</p>
+                  <p className="text-sm text-muted-foreground">Configure discount restrictions for this offer.</p>
                   
                   <div className="space-y-3">
                     <div className="flex items-start space-x-3">
@@ -1455,7 +1455,7 @@ const OfferManagement = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deactivate Offer</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
               Are you sure you want to deactivate <span className="font-semibold">{offerToDelete?.name}</span>? 
               The offer will be marked as inactive but the data will be preserved. You can reactivate it later.
             </AlertDialogDescription>
@@ -1485,7 +1485,7 @@ const OfferManagement = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deactivate Multiple Offers</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
               Are you sure you want to deactivate <span className="font-semibold">{selectedOfferIds.size} offer{selectedOfferIds.size !== 1 ? 's' : ''}</span>? 
               These offers will be marked as inactive but the data will be preserved. You can reactivate them later.
             </AlertDialogDescription>
@@ -1515,7 +1515,7 @@ const OfferManagement = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Past Offer</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
               Are you sure you want to delete <span className="font-semibold">{pastOfferToDelete?.name}</span>? 
               This offer is already inactive. This action will mark it for permanent removal (soft delete).
             </AlertDialogDescription>
@@ -1545,7 +1545,7 @@ const OfferManagement = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Multiple Past Offers</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
               Are you sure you want to delete <span className="font-semibold">{selectedPastOfferIds.size} offer{selectedPastOfferIds.size !== 1 ? 's' : ''}</span>? 
               These offers are already inactive. This action will mark them for permanent removal (soft delete).
             </AlertDialogDescription>

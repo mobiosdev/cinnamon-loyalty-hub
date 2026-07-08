@@ -526,7 +526,7 @@ const TransactionTracking = () => {
           <CardTitle className="font-serif">Transaction History</CardTitle>
         </div>
         <CardDescription>
-          Track all discount redemptions and transaction details
+          Track all discount redemptions and transaction details.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

@@ -886,7 +886,7 @@ const Redemption = () => {
             <CardTitle className="font-serif">Redemption</CardTitle>
           </div>
           <CardDescription>
-            Verify members and redeem benefits
+            Verify members and redeem benefits.
           </CardDescription>
         </CardHeader>
 

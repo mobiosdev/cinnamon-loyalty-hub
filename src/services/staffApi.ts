@@ -213,17 +213,19 @@ export const staffApi = {
         .in('mobile', searchFormats)
         .eq('is_active', true)
         .or('is_deleted.eq.false,is_deleted.is.null')
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
       if (error) {
         throw new Error(error.message || 'Failed to fetch member');
       }
 
-      if (!data) return null;
+      if (!data || data.length === 0) return null;
+
+      const memberData = data[0];
 
       return {
-        ...data,
-        selected_offers: Array.isArray(data.selected_offers) ? data.selected_offers as string[] : []
+        ...memberData,
+        selected_offers: Array.isArray(memberData.selected_offers) ? memberData.selected_offers as string[] : []
       };
     } catch (error) {
       console.error('Error fetching member by phone:', error);

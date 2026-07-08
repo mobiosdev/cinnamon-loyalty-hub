@@ -228,15 +228,16 @@ export const offerApi = {
       ];
 
       // First, get the member by phone number
-      const { data: member, error: memberError } = await supabase
+      const { data: members, error: memberError } = await supabase
         .from('members')
         .select('selected_offers, discount_enabled, mobile, category_id')
         .in('mobile', searchFormats)
         .eq('is_active', true)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
       if (memberError) throw memberError;
-      if (!member) return [];
+      if (!members || members.length === 0) return [];
+      const member = members[0];
 
       const selectedOffers = Array.isArray(member.selected_offers) ? member.selected_offers as string[] : [];
       
