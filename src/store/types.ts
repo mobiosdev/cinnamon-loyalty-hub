@@ -10,13 +10,26 @@ export interface Outlet {
   company_name: string;
 }
 
+export interface UserPermissions {
+  registration: boolean;
+  redemption: boolean;
+  transactions: boolean;
+  reports: boolean;
+  settings_categories: boolean;
+  settings_offers: boolean;
+  settings_notifications: boolean;
+  settings_audit: boolean;
+}
+
 export interface User {
   id: string;
   username: string;
   email: string;
   full_name: string;
   role: string;
+  mobile?: string;
   is_active: boolean;
+  permissions: UserPermissions;
   outlet: Outlet | null;
 }
 
@@ -25,4 +38,9 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  // Two-step login state
+  pendingUsername: string | null;
+  maskedMobile: string | null;
+  otpStep: boolean;
 }
+
