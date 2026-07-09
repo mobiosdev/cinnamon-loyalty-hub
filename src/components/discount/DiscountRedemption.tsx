@@ -8,6 +8,7 @@ import { CreditCard, Send, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { logActivity } from "@/utils/auditLogger";
+import { transactionApi } from "@/services/transactionApi";
 
 type RedemptionStep = "input" | "verify" | "success";
 
@@ -45,20 +46,12 @@ const DiscountRedemption = () => {
     setLoading(true);
 
     try {
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
-      const response = await fetch(`${apiBase}/transaction/send-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mobile: mobileNumber,
-          notes: `Your OTP for bill #${billNumber}`,
-          user_id: 1,
-          bill_number: billNumber,
-        }),
+      const data = await transactionApi.sendOtp({
+        mobile: mobileNumber,
+        notes: `Your OTP for bill #${billNumber}`,
+        user_id: 1,
+        bill_number: billNumber,
       });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Failed to send OTP");
 
       setStaffId(data.data.staff_id);
       setExpiryTime(data.data.expiry_time);
@@ -85,33 +78,20 @@ const DiscountRedemption = () => {
     setLoading(true);
 
     try {
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
-      const verifyResponse = await fetch(`${apiBase}/transaction/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mobile: contactInfo.replace(/[^\d+]/g, ""),
-          otp,
-          staff_id: staffId,
-        }),
+      const cleanMobile = contactInfo.replace(/[^\d+]/g, "");
+
+      await transactionApi.verifyOtp({
+        mobile: cleanMobile,
+        otp,
+        staff_id: String(staffId),
       });
 
-      const verifyData = await verifyResponse.json();
-      if (!verifyResponse.ok) throw new Error(verifyData.message || "OTP verification failed");
-
-      const pendingResponse = await fetch(`${apiBase}/transaction/pending`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mobile: contactInfo.replace(/[^\d+]/g, ""),
-          notes: `Discount redemption for bill #${billNumber}`,
-          user_id: 1,
-          bill_number: billNumber,
-        }),
+      await transactionApi.processPendingDiscount({
+        mobile: cleanMobile,
+        notes: `Discount redemption for bill #${billNumber}`,
+        user_id: 1,
+        bill_number: billNumber,
       });
-
-      const pendingData = await pendingResponse.json();
-      if (!pendingResponse.ok) throw new Error(pendingData.message || "Failed to process discount");
 
       // Log discount redemption
       await logActivity({

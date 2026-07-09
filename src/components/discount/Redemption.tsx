@@ -11,11 +11,14 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { offerApi } from "@/services/offerApi";
 import { staffApi } from "@/services/staffApi";
 import { redemptionApi } from "@/services/redemptionApi";
+import { transactionApi } from "@/services/transactionApi";
 import { validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
 import { format } from "date-fns";
 import axios from "axios";
 import { cn } from "@/lib/utils";
 import { QrScannerDialog } from "./QrScannerDialog";
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type RedemptionStep = "input" | "verify" | "benefits";
 
@@ -66,6 +69,7 @@ const Redemption = () => {
   const [memberData, setMemberData] = useState<MemberData | null>(null);
   const [availableOffers, setAvailableOffers] = useState<AvailableOffer[]>([]);
   const [redeemedItems, setRedeemedItems] = useState<Set<string>>(new Set());
+  const [queuedOffers, setQueuedOffers] = useState<Set<string>>(new Set());
   const [discountHistory, setDiscountHistory] = useState<any[]>([]);
 
   // Name search and remark states
@@ -73,6 +77,65 @@ const Redemption = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchingNames, setSearchingNames] = useState(false);
   const [remark, setRemark] = useState("");
+  const [billExistsError, setBillExistsError] = useState("");
+
+  // Reversal states
+  const [activeTab, setActiveTab] = useState<"redeem" | "reverse">("redeem");
+  const [reversalBillNumber, setReversalBillNumber] = useState("");
+  const [reversalStep, setReversalStep] = useState<"input" | "verify">("input");
+  const [reversalOtp, setReversalOtp] = useState("");
+  const [reversalStaffId, setReversalStaffId] = useState<number | null>(null);
+  const [reversalMaskedMobile, setReversalMaskedMobile] = useState("");
+  const [reversalExpiryTime, setReversalExpiryTime] = useState<string | null>(null);
+  const [reversalSecondsLeft, setReversalSecondsLeft] = useState<number>(0);
+
+  // Countdown timer for reversal OTP
+  useEffect(() => {
+    if (!reversalExpiryTime || reversalStep !== "verify") {
+      setReversalSecondsLeft(0);
+      return;
+    }
+
+    const calculateSecondsLeft = () => {
+      const diff = new Date(reversalExpiryTime).getTime() - Date.now();
+      return Math.max(0, Math.floor(diff / 1000));
+    };
+
+    setReversalSecondsLeft(calculateSecondsLeft());
+
+    const timer = setInterval(() => {
+      const left = calculateSecondsLeft();
+      setReversalSecondsLeft(left);
+      if (left <= 0) {
+        clearInterval(timer);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [reversalExpiryTime, reversalStep]);
+
+  // Check if bill number exists
+  useEffect(() => {
+    if (!billNumber || billNumber.trim() === "") {
+      setBillExistsError("");
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const exists = await transactionApi.checkBillExists(billNumber.trim());
+        if (exists) {
+          setBillExistsError("This Bill Number has already been processed / redeemed");
+        } else {
+          setBillExistsError("");
+        }
+      } catch (err) {
+        console.error("Error checking bill number:", err);
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [billNumber]);
 
   // Countdown timer for OTP
   useEffect(() => {
@@ -206,20 +269,12 @@ const Redemption = () => {
         finalMobileNumber = phoneValidation.normalized!;
       }
 
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
-      const response = await fetch(`${apiBase}/transaction/send-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mobile: finalMobileNumber,
-          notes: `OTP for redeeming benefits on bill #${billNumber}`,
-          user_id: 1,
-          bill_number: billNumber,
-        }),
+      const data = await transactionApi.sendOtp({
+        mobile: finalMobileNumber,
+        notes: `OTP for redeeming benefits on bill #${billNumber}`,
+        user_id: 1,
+        bill_number: billNumber,
       });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Failed to send OTP");
 
       setStaffId(data.data.staff_id);
       setExpiryTime(data.data.expiry_time);
@@ -250,19 +305,11 @@ const Redemption = () => {
       const phoneValidation = validateAndNormalizeSriLankanMobile(mobileNumber);
       const cleanMobile = phoneValidation.normalized!;
 
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
-      const verifyResponse = await fetch(`${apiBase}/transaction/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mobile: cleanMobile,
-          otp,
-          staff_id: staffId,
-        }),
+      await transactionApi.verifyOtp({
+        mobile: cleanMobile,
+        otp,
+        staff_id: staffId,
       });
-
-      const verifyData = await verifyResponse.json();
-      if (!verifyResponse.ok) throw new Error(verifyData.message || "OTP verification failed");
       
       // Fetch member data and available offers
       const [member, offers] = await Promise.all([
@@ -332,9 +379,28 @@ const Redemption = () => {
     }
   };
 
-  const handleRedeemOffer = async (offer: AvailableOffer) => {
+  const handleRedeemOffer = (offer: AvailableOffer) => {
     if (offer.is_redeemed) {
       toast.error("This offer has already been redeemed");
+      return;
+    }
+
+    if (queuedOffers.has(offer.id)) {
+      setQueuedOffers(prev => {
+        const next = new Set(prev);
+        next.delete(offer.id);
+        return next;
+      });
+      toast.info(`Removed "${offer.name}" from batch redemption list`);
+    } else {
+      setQueuedOffers(prev => new Set(prev).add(offer.id));
+      toast.success(`Added "${offer.name}" to batch redemption list`);
+    }
+  };
+
+  const handleProcessRedemption = async () => {
+    if (queuedOffers.size === 0) {
+      toast.error("No offers selected for redemption");
       return;
     }
 
@@ -344,17 +410,25 @@ const Redemption = () => {
       const phoneValidation = validateAndNormalizeSriLankanMobile(mobileNumber);
       const phoneToSave = phoneValidation.isValid ? phoneValidation.normalized! : mobileNumber;
 
-      await offerApi.redeemOffer({
-        offer_id: offer.id,
+      const offerIdsArray = Array.from(queuedOffers);
+
+      await offerApi.redeemOfferBatch({
+        offer_ids: offerIdsArray,
         customer_phone: phoneToSave,
         bill_number: billNumber,
         redeemed_by: 1, // TODO: Get from auth
       });
-      
-      setRedeemedItems(prev => new Set(prev).add(offer.id));
+
+      // Update state for all redeemed items
+      setRedeemedItems(prev => {
+        const next = new Set(prev);
+        offerIdsArray.forEach(id => next.add(id));
+        return next;
+      });
+
       setAvailableOffers(prev => 
         prev.map(o => {
-          if (o.id === offer.id) {
+          if (queuedOffers.has(o.id)) {
             const newRedemptionsCount = (o.redemptions_count || 0) + 1;
             const newRedemptions = [
               {
@@ -374,9 +448,12 @@ const Redemption = () => {
           return o;
         })
       );
-      toast.success(`${offer.name} redeemed successfully!`);
-    } catch (error) {
-      toast.error("Failed to redeem offer");
+
+      setQueuedOffers(new Set());
+      toast.success("Redemption processed successfully!");
+    } catch (error: any) {
+      console.error("Redemption failed:", error);
+      toast.error(error.message || "Failed to process redemption");
     } finally {
       setLoading(false);
     }
@@ -392,10 +469,82 @@ const Redemption = () => {
     setMemberData(null);
     setAvailableOffers([]);
     setRedeemedItems(new Set());
+    setQueuedOffers(new Set());
     setExpiryTime(null);
     setSearchNameQuery("");
     setSearchResults([]);
     setRemark("");
+  };
+
+  const handleRequestReversal = async () => {
+    if (!reversalBillNumber || reversalBillNumber.trim() === "") {
+      toast.error("Please enter a bill number to reverse");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await offerApi.requestReversal(reversalBillNumber.trim());
+      setReversalStaffId(res.data.staff_id);
+      setReversalMaskedMobile(res.data.masked_mobile);
+      setReversalExpiryTime(res.data.expiry_time);
+      setReversalStep("verify");
+      toast.success(res.message || "OTP sent successfully!");
+    } catch (err: any) {
+      console.error("Reversal request failed:", err);
+      toast.error(err.message || "Failed to initiate reversal");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshAvailableOffers = async (mobile: string) => {
+    try {
+      const cleanMobile = mobile.trim();
+      const offers = await offerApi.getAvailableOffers(cleanMobile);
+      setAvailableOffers(offers.offers || []);
+    } catch (error) {
+      console.error("Error refreshing available offers:", error);
+    }
+  };
+
+  const handleConfirmReversal = async () => {
+    if (!reversalOtp || reversalOtp.length !== 6) {
+      toast.error("Please enter a valid 6-digit OTP");
+      return;
+    }
+    if (!reversalStaffId) {
+      toast.error("Invalid verification session");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await offerApi.confirmReversal({
+        bill_number: reversalBillNumber.trim(),
+        otp: reversalOtp,
+        staff_id: reversalStaffId
+      });
+      toast.success(res.message || "Redemption reversed successfully!");
+      
+      // If we currently have a loaded member, refresh their offers list
+      if (mobileNumber) {
+        await refreshAvailableOffers(mobileNumber);
+      }
+
+      // Reset Reversal state
+      setReversalBillNumber("");
+      setReversalOtp("");
+      setReversalStaffId(null);
+      setReversalMaskedMobile("");
+      setReversalExpiryTime(null);
+      setReversalStep("input");
+    } catch (err: any) {
+      console.error("Reversal confirmation failed:", err);
+      toast.error(err.message || "Failed to confirm reversal");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSelectMember = (member: any) => {
@@ -498,12 +647,20 @@ const Redemption = () => {
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
-              handleSendOTP();
+              if (!billExistsError) {
+                handleSendOTP();
+              }
             }
           }}
           placeholder="Enter bill number"
-          className="text-lg"
+          className={cn("text-lg", billExistsError && "border-destructive focus-visible:ring-destructive")}
         />
+        {billExistsError && (
+          <p className="text-sm font-semibold text-destructive mt-1.5 flex items-center gap-1">
+            <AlertCircle className="h-4 w-4" />
+            {billExistsError}
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -658,7 +815,7 @@ const Redemption = () => {
       </div>
 
       <div className="space-y-3 pt-2">
-        <Button onClick={handleSendOTP} disabled={loading} size="lg" className="w-full">
+        <Button onClick={handleSendOTP} disabled={loading || !!billExistsError} size="lg" className="w-full">
           <Send className="mr-2 h-4 w-4" />
           {loading ? "Sending..." : "Send OTP"}
         </Button>
@@ -817,10 +974,20 @@ const Redemption = () => {
           {hasOffers ? (
             <>
               {availableOffers.map((offer) => {
-                const isRedeemed = offer.is_redeemed || redeemedItems.has(offer.id);
                 const redemptionsCount = offer.redemptions_count || 0;
                 const usageLimit = offer.usage_limit;
                 const isRecurrent = offer.is_recurrent;
+
+                let isRedeemed = false;
+                if (isRecurrent) {
+                  if (usageLimit !== null && usageLimit !== undefined) {
+                    isRedeemed = redemptionsCount >= usageLimit || redeemedItems.has(offer.id);
+                  } else {
+                    isRedeemed = redeemedItems.has(offer.id);
+                  }
+                } else {
+                  isRedeemed = offer.is_redeemed || redemptionsCount >= 1 || redeemedItems.has(offer.id);
+                }
 
                 let recurrenceText = "";
                 if (isRecurrent) {
@@ -921,6 +1088,15 @@ const Redemption = () => {
                               <CheckCircle className="h-5 w-5" />
                               <span className="text-sm font-semibold">Redeemed</span>
                             </div>
+                          ) : queuedOffers.has(offer.id) ? (
+                            <Button
+                              onClick={() => handleRedeemOffer(offer)}
+                              disabled={loading}
+                              size="sm"
+                              variant="destructive"
+                            >
+                              Cancel
+                            </Button>
                           ) : (
                             <Button
                               onClick={() => handleRedeemOffer(offer)}
@@ -950,8 +1126,25 @@ const Redemption = () => {
 
         <div className="flex gap-3 pt-4">
           <Button onClick={handleReset} variant="outline" size="lg" className="flex-1">
-            Process Another Bill
+            Cancel / Reset
           </Button>
+          {queuedOffers.size > 0 && (
+            <Button
+              onClick={handleProcessRedemption}
+              disabled={loading}
+              size="lg"
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                `Complete Redemption (${queuedOffers.size})`
+              )}
+            </Button>
+          )}
         </div>
 
         {/* Discount History Section */}
@@ -1023,23 +1216,143 @@ const Redemption = () => {
     );
   };
 
+  const renderReversalInputStep = () => (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <Label htmlFor="reversalBillNumber">Bill Number to Reverse</Label>
+        <Input
+          id="reversalBillNumber"
+          value={reversalBillNumber}
+          onChange={(e) => setReversalBillNumber(e.target.value)}
+          placeholder="Enter bill number (e.g. BILL-999)"
+          className="text-lg font-mono"
+        />
+        <p className="text-xs text-muted-foreground">
+          Enter the bill number of the transaction you wish to reverse. This will send an OTP code to the associated customer to verify and complete the reversal.
+        </p>
+      </div>
+
+      <Button 
+        onClick={handleRequestReversal} 
+        disabled={loading || !reversalBillNumber.trim()} 
+        size="lg" 
+        className="w-full bg-destructive hover:bg-destructive/90 text-white font-semibold"
+      >
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Sending...
+          </>
+        ) : (
+          <>
+            <Send className="mr-2 h-4 w-4" />
+            Send Reversal OTP
+          </>
+        )}
+      </Button>
+    </div>
+  );
+
+  const renderReversalVerifyStep = () => (
+    <div className="space-y-6">
+      <div className="bg-muted rounded-lg p-4 space-y-2">
+        <p className="text-sm font-medium">Reversing Bill: {reversalBillNumber}</p>
+        <p className="text-sm text-muted-foreground">OTP sent to customer mobile: {reversalMaskedMobile}</p>
+        {reversalExpiryTime && (
+          <div className="text-xs text-muted-foreground">
+            {reversalSecondsLeft > 0 ? (
+              <p>OTP expires in: <span className="font-mono font-bold text-foreground">{formatTimeLeft(reversalSecondsLeft)}</span></p>
+            ) : (
+              <p className="text-destructive font-semibold flex items-center gap-1">
+                <AlertCircle className="h-3.5 w-3.5" /> OTP has expired
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-4 text-center">
+        <Label htmlFor="reversalOtp">Enter 6-digit OTP Code</Label>
+        <div className="flex justify-center">
+          <InputOTP maxLength={6} value={reversalOtp} onChange={(value) => setReversalOtp(value)}>
+            <InputOTPGroup>
+              {[...Array(6)].map((_, i) => (
+                <InputOTPSlot key={i} index={i} />
+              ))}
+            </InputOTPGroup>
+          </InputOTP>
+        </div>
+        
+        <div className="space-y-2 pt-2">
+          <Button 
+            onClick={handleConfirmReversal} 
+            disabled={loading || reversalSecondsLeft <= 0} 
+            size="lg" 
+            className="w-full bg-destructive hover:bg-destructive/90 text-white font-semibold"
+          >
+            {loading ? "Reversing..." : "Confirm & Reverse Redemption"}
+          </Button>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <Button 
+              onClick={handleRequestReversal} 
+              disabled={loading} 
+              variant="outline" 
+              className={cn(
+                "w-full",
+                reversalSecondsLeft <= 0 && "border-primary text-primary animate-pulse font-semibold"
+              )}
+            >
+              Resend OTP
+            </Button>
+            <Button 
+              onClick={() => {
+                setReversalOtp("");
+                setReversalStep("input");
+              }} 
+              disabled={loading} 
+              variant="ghost" 
+              className="w-full"
+            >
+              Back
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="max-w-2xl mx-auto">
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-primary" />
-            <CardTitle className="font-serif">Redemption</CardTitle>
+            <CardTitle className="font-serif">Redemption & Reversal</CardTitle>
           </div>
           <CardDescription>
-            Verify members and redeem benefits.
+            Verify members to redeem benefits, or reverse a previous bill redemption.
           </CardDescription>
         </CardHeader>
 
         <CardContent>
-          {step === "input" && renderInputStep()}
-          {step === "verify" && renderVerifyStep()}
-          {step === "benefits" && renderBenefitsStep()}
+          <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="redeem">Redeem Benefits</TabsTrigger>
+              <TabsTrigger value="reverse">Reverse Redemption</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="redeem" className="space-y-4">
+              {step === "input" && renderInputStep()}
+              {step === "verify" && renderVerifyStep()}
+              {step === "benefits" && renderBenefitsStep()}
+            </TabsContent>
+
+            <TabsContent value="reverse" className="space-y-4">
+              {reversalStep === "input" && renderReversalInputStep()}
+              {reversalStep === "verify" && renderReversalVerifyStep()}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 

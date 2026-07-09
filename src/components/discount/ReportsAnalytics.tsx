@@ -485,16 +485,7 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
 
   const fixMemberOffers = async () => {
     try {
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
-      const response = await fetch(`${apiBase}/offers/fix-member-offers`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) throw new Error('Failed to fix offers');
-      const data = await response.json();
+      const data = await offerApi.fixMemberOffers();
       
       if (data?.success) {
         toast.success(`Fixed ${data.fixed_count} members with missing offers`);

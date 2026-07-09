@@ -57,7 +57,7 @@ const OfferManagement = () => {
     min_bill_value: "",
     hasMaxDiscount: false,
     max_discount_amount: "",
-    applyToExistingMembers: false,
+    applyToExistingMembers: true,
     is_recurrent: false,
     hasUsageLimit: false,
     usage_limit: "",
@@ -209,16 +209,9 @@ const OfferManagement = () => {
       // If apply to existing members is checked, assign the offer
       if (formData.applyToExistingMembers) {
         try {
-          const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
-          await fetch(`${apiBase}/offers/assign-to-members`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              offer_id: createdOffer.id,
-              category_ids: selectedCategoryIds,
-            }),
+          await offerApi.assignToMembers({
+            offer_id: createdOffer.id!,
+            category_ids: selectedCategoryIds,
           });
         } catch (assignError) {
           console.error(`Error assigning offer to members:`, assignError);
@@ -236,7 +229,7 @@ const OfferManagement = () => {
         min_bill_value: "",
         hasMaxDiscount: false,
         max_discount_amount: "",
-        applyToExistingMembers: false,
+        applyToExistingMembers: true,
         is_recurrent: false,
         hasUsageLimit: false,
         usage_limit: "",
@@ -789,7 +782,7 @@ const OfferManagement = () => {
               </div>
             </div>
 
-            <div>
+            {/* <div>
               <Label>Discount Policy (Optional)</Label>
               <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
                 <p className="text-sm text-muted-foreground">Configure discount restrictions for this offer</p>
@@ -844,29 +837,11 @@ const OfferManagement = () => {
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             
 
-            <div className="border rounded-md p-4 bg-muted/50">
-              <div className="flex items-start space-x-3">
-                <input
-                  type="checkbox"
-                  id="applyToExistingMembers"
-                  checked={formData.applyToExistingMembers}
-                  onChange={(e) => setFormData({ ...formData, applyToExistingMembers: e.target.checked })}
-                  className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
-                />
-                <div className="flex-1">
-                  <Label htmlFor="applyToExistingMembers" className="cursor-pointer font-medium">
-                    Apply to All Member Categories
-                  </Label>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Automatically assign this offer to all members in the selected categories
-                  </p>
-                </div>
-              </div>
-            </div>
+
 
             <div className="flex justify-end">
               <Button type="submit" disabled={loading} size="sm">

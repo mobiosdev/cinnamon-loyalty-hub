@@ -103,4 +103,20 @@ export const staffApi = {
   async sendCardEmail(id: string, email: string, cardUrl?: string): Promise<any> {
     return apiManager.post<any>(`/members/${id}/send-card`, { email, card_url: cardUrl });
   },
+
+  async bulkImport(membersList: any[], uploadCategoryId: number, companyId?: string): Promise<Response> {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
+    return fetch(`${apiBase}/members/bulk-import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        members: membersList,
+        category_id: uploadCategoryId,
+        company_id: companyId
+      })
+    });
+  },
 };

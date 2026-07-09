@@ -8,7 +8,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Building2, User, Check, ChevronsUpDown, Upload, Loader2, Calendar, FileText } from "lucide-react";
+import { Plus, Building2, User, Check, ChevronsUpDown, Upload, Loader2, Calendar, FileText, Download, AlertTriangle } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -110,6 +110,12 @@ const CompanyRegistration = () => {
   const [uploadCategoryId, setUploadCategoryId] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadResult, setUploadResult] = useState<{
+    success: number;
+    failed: number;
+    errors: { rowName: string; error: string; index: number }[];
+  } | null>(null);
+  const [originalUploadRows, setOriginalUploadRows] = useState<any[]>([]);
 
   // Fetch all companies and categories for the dropdowns
   useEffect(() => {
@@ -460,6 +466,8 @@ const CompanyRegistration = () => {
             return;
           }
 
+          setOriginalUploadRows(jsonData);
+
           const membersList = jsonData.map((row) => {
             const title = row["Title"] || row["title"] || "";
             const first_name = row["First Name"] || row["first_name"] || row["FirstName"] || "";
@@ -501,18 +509,13 @@ const CompanyRegistration = () => {
             };
           });
 
-          const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
-          const response = await fetch(`${apiBase}/members/bulk-import`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              members: membersList,
-              category_id: Number(uploadCategoryId),
-              company_id: selectedCompany?.id
-            })
-          });
+          setUploadResult(null);
+
+          const response = await staffApi.bulkImport(
+            membersList,
+            Number(uploadCategoryId),
+            selectedCompany?.id
+          );
 
           if (!response.ok) {
             throw new Error(`Failed to upload file: ${response.statusText}`);
@@ -525,7 +528,9 @@ const CompanyRegistration = () => {
 
           const decoder = new TextDecoder();
           let buffer = '';
-          let lastProgress: any = null;
+          let allErrors: { rowName: string; error: string; index: number }[] = [];
+          let successCount = 0;
+          let failedCount = 0;
           
           while (true) {
             const { done, value } = await reader.read();
@@ -539,7 +544,11 @@ const CompanyRegistration = () => {
               if (!line.trim()) continue;
               try {
                 const progress = JSON.parse(line);
-                lastProgress = progress;
+                successCount = progress.success;
+                failedCount = progress.failed;
+                if (progress.errors && progress.errors.length > 0) {
+                  allErrors = [...allErrors, ...progress.errors];
+                }
                 
                 // Show real-time notification
                 toast.info(`Import progress: Batch ${progress.batch} complete. Saved ${progress.success} members.`, {
@@ -551,21 +560,26 @@ const CompanyRegistration = () => {
             }
           }
 
-          if (lastProgress) {
-            toast.success(`Uploaded ${lastProgress.success} member(s) successfully. Failed: ${lastProgress.failed}`, {
+          setUploadResult({
+            success: successCount,
+            failed: failedCount,
+            errors: allErrors
+          });
+
+          if (failedCount === 0) {
+            toast.success(`Uploaded ${successCount} member(s) successfully.`, {
               id: "bulk-upload-toast"
             });
-            if (lastProgress.errors && lastProgress.errors.length > 0) {
-              console.error("Bulk upload details:", lastProgress.errors);
-              toast.error(`Upload error: ${lastProgress.errors[0]}`);
-            }
+            setIsReload(!isReload);
+            setBulkUploadOpen(false);
+            setUploadFile(null);
+            setUploadResult(null);
           } else {
-            toast.success("Bulk upload completed successfully!", { id: "bulk-upload-toast" });
+            toast.warning(`Upload completed with ${failedCount} failure(s).`, {
+              id: "bulk-upload-toast"
+            });
+            setIsReload(!isReload);
           }
-
-          setIsReload(!isReload);
-          setBulkUploadOpen(false);
-          setUploadFile(null);
         } catch (err: any) {
           console.error(err);
           toast.error("Failed to parse the file structure");
@@ -580,6 +594,75 @@ const CompanyRegistration = () => {
       toast.error("Failed to read the file");
       setIsUploading(false);
     }
+  };
+
+  const handleDownloadErrors = () => {
+    if (!uploadResult || uploadResult.errors.length === 0) return;
+    
+    const formattedErrors = uploadResult.errors.map(err => {
+      if (typeof err === 'string') return err;
+      const rowNum = err.index !== -1 ? `Row ${err.index + 2} (${err.rowName})` : `General`;
+      return `${rowNum}: ${err.error}`;
+    });
+
+    const fileContent = [
+      `CINNAMON LOYALTY - BULK MEMBER IMPORT ERROR LOG`,
+      `Date: ${new Date().toLocaleString()}`,
+      `Total Attempted: ${uploadResult.success + uploadResult.failed}`,
+      `Successful: ${uploadResult.success}`,
+      `Failed: ${uploadResult.failed}`,
+      `--------------------------------------------------`,
+      `DETAILED ERRORS:`,
+      `--------------------------------------------------`,
+      ...formattedErrors
+    ].join('\r\n');
+    
+    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `bulk_upload_errors_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    toast.success("Error log downloaded!");
+  };
+
+  const handleDownloadErrorsExcel = () => {
+    if (!uploadResult || uploadResult.errors.length === 0 || originalUploadRows.length === 0) {
+      toast.error("No error data available to export");
+      return;
+    }
+    
+    // Filter only the failed rows and add the "Error Reason" column
+    const failedRowsData = uploadResult.errors
+      .filter((err: any) => typeof err === 'object' && err.index !== -1)
+      .map((err: any) => {
+        const originalRow = originalUploadRows[err.index];
+        if (!originalRow) return null;
+        
+        // Create a copy of the original row and add the Error Reason column
+        return {
+          ...originalRow,
+          "Error Reason": err.error
+        };
+      })
+      .filter(Boolean);
+      
+    if (failedRowsData.length === 0) {
+      toast.error("No failed rows to export");
+      return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(failedRowsData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Failed Rows");
+    
+    XLSX.writeFile(workbook, `failed_members_${new Date().toISOString().split('T')[0]}.xlsx`);
+    toast.success("Failed rows spreadsheet downloaded!");
   };
 
   const handleMemberSubmit = async (e: React.FormEvent) => {
@@ -1258,18 +1341,95 @@ const CompanyRegistration = () => {
         setBulkUploadOpen(open);
         if (!open) {
           setUploadFile(null);
+          setUploadResult(null);
         }
       }}>
-        <DialogContent className="sm:max-w-md flex flex-col p-6 gap-4">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold flex items-center gap-2">
-              <Upload className="h-5 w-5 text-primary" />
-              Bulk Upload Member Details
-            </DialogTitle>
-            <DialogDescription className="text-sm">
-              Upload an Excel file containing member details.
-            </DialogDescription>
-          </DialogHeader>
+        {uploadResult ? (
+          <DialogContent className="sm:max-w-md flex flex-col p-6 gap-4">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Upload Summary
+              </DialogTitle>
+              <DialogDescription className="text-sm">
+                Review the bulk upload results below.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">{uploadResult.success}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Successfully Saved</p>
+                </div>
+                <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-center">
+                  <p className="text-2xl font-bold text-red-600 dark:text-red-400">{uploadResult.failed}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Failed / Duplicates</p>
+                </div>
+              </div>
+
+              {uploadResult.failed > 0 && (
+                <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                        Uniqueness & Validation Failures
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        Some rows were skipped because the mobile number or email is already registered, contains duplicates within the file, or has validation errors.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      type="button"
+                      onClick={handleDownloadErrorsExcel}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white dark:bg-green-700 dark:hover:bg-green-800 text-xs py-1.5 h-8 gap-1.5"
+                    >
+                      <Download className="h-4 w-4" />
+                      Download Failed Rows (Excel)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleDownloadErrors}
+                      className="w-full border-amber-500/30 text-amber-800 dark:text-amber-400 hover:bg-amber-500/10 text-xs py-1.5 h-8 gap-1.5"
+                    >
+                      <FileText className="h-4 w-4" />
+                      Download Error Log (.txt)
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => {
+                    setBulkUploadOpen(false);
+                    setUploadFile(null);
+                    setUploadResult(null);
+                  }}
+                >
+                  Close & Refresh
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        ) : (
+          <DialogContent className="sm:max-w-md flex flex-col p-6 gap-4">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                <Upload className="h-5 w-5 text-primary" />
+                Bulk Upload Member Details
+              </DialogTitle>
+              <DialogDescription className="text-sm">
+                Upload an Excel file containing member details.
+              </DialogDescription>
+            </DialogHeader>
 
             <div className="space-y-4">
               {/* {selectedCompany?.id ? (
@@ -1362,7 +1522,8 @@ const CompanyRegistration = () => {
                 </Button>
               </DialogFooter>
             </div>
-        </DialogContent>
+          </DialogContent>
+        )}
       </Dialog>
     </div>
   );

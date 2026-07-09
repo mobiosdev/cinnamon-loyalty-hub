@@ -106,6 +106,15 @@ export const offerApi = {
     return apiManager.post<OfferRedemption>('/offers/redeem', redemption);
   },
 
+  async redeemOfferBatch(payload: {
+    offer_ids: string[];
+    customer_phone: string;
+    bill_number: string;
+    redeemed_by?: number;
+  }): Promise<OfferRedemption[]> {
+    return apiManager.post<OfferRedemption[]>('/offers/redeem-batch', payload);
+  },
+
   async getRedemptions(): Promise<OfferRedemption[]> {
     return apiManager.get<OfferRedemption[]>('/offers/redemptions');
   },
@@ -133,5 +142,21 @@ export const offerApi = {
 
   async deleteOffer(id: string): Promise<void> {
     return apiManager.delete<void>(`/offers/${id}`);
+  },
+
+  async assignToMembers(payload: { offer_id: string; category_ids: number[] }): Promise<void> {
+    return apiManager.post<void>('/offers/assign-to-members', payload);
+  },
+
+  async fixMemberOffers(): Promise<any> {
+    return apiManager.post<any>('/offers/fix-member-offers');
+  },
+
+  async requestReversal(billNumber: string): Promise<any> {
+    return apiManager.post<any>('/offers/reverse/request', { bill_number: billNumber });
+  },
+
+  async confirmReversal(payload: { bill_number: string; otp: string; staff_id: number }): Promise<any> {
+    return apiManager.post<any>('/offers/reverse/confirm', payload);
   },
 };
