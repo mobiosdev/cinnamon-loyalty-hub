@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState, AppDispatch } from "@/store";
 import { logout } from "@/store/slices/authSlice";
+import { logActivity } from "@/utils/auditLogger";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,15 @@ const DiscountManagement = () => {
   };
 
   const handleLogout = () => {
+    if (user?.username) {
+      logActivity({
+        activityType: 'user_authentication',
+        entityType: 'user',
+        action: 'logout',
+        performedBy: user.username,
+        details: { event: 'logout' }
+      });
+    }
     dispatch(logout());
     window.location.href = "/login";
   };

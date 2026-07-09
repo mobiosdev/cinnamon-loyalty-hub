@@ -25,8 +25,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { UserPlus, Pencil, UserX, RefreshCw, Eye, EyeOff, Users, Shield, ShieldCheck, Trash2 } from "lucide-react";
+import { UserPlus, Pencil, UserX, RefreshCw, Eye, EyeOff, Users, Shield, ShieldCheck, Trash2, Clock, Activity, Building2, FileText, Gift, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { userApi, SystemUser, SystemRole, CreateUserPayload, UpdateUserPayload, CreateRolePayload, UpdateRolePayload, UserPermissions } from "@/services/userApi";
+import { auditApi, AuditLog } from "@/services/auditApi";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { format } from "date-fns";
+import { logActivity } from "@/utils/auditLogger";
 
 const PERMISSION_LABELS: { key: keyof UserPermissions; label: string }[] = [
   { key: "registration", label: "Registration" },
@@ -37,6 +42,7 @@ const PERMISSION_LABELS: { key: keyof UserPermissions; label: string }[] = [
   { key: "settings_offers", label: "Settings - Offers" },
   { key: "settings_notifications", label: "Settings - Send Notifications" },
   { key: "settings_audit", label: "Settings - Audit Trail" },
+  { key: "redemption_reversal", label: "Redemption Reversal" },
 ];
 
 const emptyPermissions = (): UserPermissions => ({
@@ -48,6 +54,7 @@ const emptyPermissions = (): UserPermissions => ({
   settings_offers: false,
   settings_notifications: false,
   settings_audit: false,
+  redemption_reversal: false,
 });
 
 interface UserFormState {
@@ -65,7 +72,11 @@ interface RoleFormState {
   permissions: UserPermissions;
 }
 
-const UserManagement = () => {
+interface UserManagementProps {
+  onViewLogs?: (username: string) => void;
+}
+
+const UserManagement = ({ onViewLogs }: UserManagementProps) => {
   const currentUser = useSelector((state: RootState) => state.auth.user);
   
   // Data State
@@ -73,6 +84,20 @@ const UserManagement = () => {
   const [roles, setRoles] = useState<SystemRole[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("users");
+
+  // User Logs Dialog State
+  const [logsDialogOpen, setLogsDialogOpen] = useState(false);
+  const [selectedUserForLogs, setSelectedUserForLogs] = useState<SystemUser | null>(null);
+  const [userLogs, setUserLogs] = useState<AuditLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+
+  // Role logs states & expandable rows
+  const [selectedRoleForLogs, setSelectedRoleForLogs] = useState<SystemRole | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+
+  const toggleRow = (id: string) => {
+    setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // User Dialogs / Forms
   const [userDialogOpen, setUserDialogOpen] = useState(false);
@@ -120,6 +145,36 @@ const UserManagement = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const openUserLogs = async (user: SystemUser) => {
+    setSelectedUserForLogs(user);
+    setSelectedRoleForLogs(null);
+    setExpandedRows({});
+    setLogsLoading(true);
+    try {
+      const logs = await auditApi.getAuditLogs({ limit: 100, search: user.username });
+      setUserLogs(logs);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load activity logs");
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const openRoleLogs = async (role: SystemRole) => {
+    setSelectedRoleForLogs(role);
+    setSelectedUserForLogs(null);
+    setExpandedRows({});
+    setLogsLoading(true);
+    try {
+      const logs = await auditApi.getAuditLogs({ limit: 100, search: role.name });
+      setUserLogs(logs);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load activity logs");
+    } finally {
+      setLogsLoading(false);
+    }
+  };
 
   // ==========================================
   // USER HANDLERS
@@ -170,6 +225,22 @@ const UserManagement = () => {
         };
         if (userForm.password.trim()) payload.password = userForm.password;
         await userApi.updateUser(editingUser.id, payload);
+        
+        logActivity({
+          activityType: 'user_management',
+          entityType: 'user',
+          entityId: editingUser.id,
+          entityName: editingUser.username,
+          action: 'update',
+          details: {
+            updated_username: editingUser.username,
+            full_name: userForm.full_name,
+            email: userForm.email || undefined,
+            mobile: userForm.mobile || undefined,
+            role_name: roles.find(r => r.id === userForm.role_id)?.name
+          }
+        });
+
         toast.success(`User "${editingUser.username}" updated successfully`);
       } else {
         const payload: CreateUserPayload = {
@@ -181,6 +252,21 @@ const UserManagement = () => {
           role_id: userForm.role_id || undefined,
         };
         await userApi.createUser(payload, currentUser!.id);
+
+        logActivity({
+          activityType: 'user_management',
+          entityType: 'user',
+          entityName: userForm.username,
+          action: 'create',
+          details: {
+            created_username: userForm.username,
+            full_name: userForm.full_name,
+            email: userForm.email || undefined,
+            mobile: userForm.mobile,
+            role_name: roles.find(r => r.id === userForm.role_id)?.name
+          }
+        });
+
         toast.success(`User "${userForm.username}" created successfully`);
       }
       setUserDialogOpen(false);
@@ -196,6 +282,19 @@ const UserManagement = () => {
     if (!deactivateUserTarget) return;
     try {
       await userApi.deactivateUser(deactivateUserTarget.id);
+      
+      logActivity({
+        activityType: 'user_management',
+        entityType: 'user',
+        entityId: deactivateUserTarget.id,
+        entityName: deactivateUserTarget.username,
+        action: 'update',
+        details: {
+          event: 'deactivate_user',
+          deactivated_username: deactivateUserTarget.username
+        }
+      });
+
       toast.success(`User "${deactivateUserTarget.username}" deactivated`);
       setDeactivateUserTarget(null);
       fetchData();
@@ -207,6 +306,19 @@ const UserManagement = () => {
   const handleReactivateUser = async (user: SystemUser) => {
     try {
       await userApi.updateUser(user.id, { is_active: true });
+
+      logActivity({
+        activityType: 'user_management',
+        entityType: 'user',
+        entityId: user.id,
+        entityName: user.username,
+        action: 'update',
+        details: {
+          event: 'reactivate_user',
+          reactivated_username: user.username
+        }
+      });
+
       toast.success(`User "${user.username}" reactivated`);
       fetchData();
     } catch (err: any) {
@@ -237,6 +349,8 @@ const UserManagement = () => {
     setRoleDialogOpen(true);
   };
 
+
+
   const handleRolePermissionToggle = (key: keyof UserPermissions) => {
     setRoleForm(prev => ({
       ...prev,
@@ -257,6 +371,20 @@ const UserManagement = () => {
           permissions: roleForm.permissions,
         };
         await userApi.updateRole(editingRole.id, payload);
+
+        logActivity({
+          activityType: 'role_management',
+          entityType: 'role',
+          entityId: editingRole.id,
+          entityName: roleForm.name,
+          action: 'update',
+          details: {
+            role_name: roleForm.name,
+            description: roleForm.description,
+            permissions: roleForm.permissions
+          }
+        });
+
         toast.success(`Role "${editingRole.name}" updated successfully`);
       } else {
         const payload: CreateRolePayload = {
@@ -265,6 +393,19 @@ const UserManagement = () => {
           permissions: roleForm.permissions,
         };
         await userApi.createRole(payload);
+
+        logActivity({
+          activityType: 'role_management',
+          entityType: 'role',
+          entityName: roleForm.name,
+          action: 'create',
+          details: {
+            role_name: roleForm.name,
+            description: roleForm.description,
+            permissions: roleForm.permissions
+          }
+        });
+
         toast.success(`Role "${roleForm.name}" created successfully`);
       }
       setRoleDialogOpen(false);
@@ -280,6 +421,18 @@ const UserManagement = () => {
     if (!deleteRoleTarget) return;
     try {
       await userApi.deleteRole(deleteRoleTarget.id);
+
+      logActivity({
+        activityType: 'role_management',
+        entityType: 'role',
+        entityId: deleteRoleTarget.id,
+        entityName: deleteRoleTarget.name,
+        action: 'delete',
+        details: {
+          deleted_role_name: deleteRoleTarget.name
+        }
+      });
+
       toast.success(`Role "${deleteRoleTarget.name}" deleted successfully`);
       setDeleteRoleTarget(null);
       fetchData();
@@ -287,6 +440,202 @@ const UserManagement = () => {
       toast.error(err.message || "Failed to delete role");
     }
   };
+
+  const viewingSubjectName = selectedUserForLogs 
+    ? selectedUserForLogs.full_name 
+    : (selectedRoleForLogs ? `Role: ${selectedRoleForLogs.name}` : '');
+
+  const viewingSubjectSub = selectedUserForLogs 
+    ? `Viewing audit trail performed by @${selectedUserForLogs.username}` 
+    : (selectedRoleForLogs ? `Viewing audit trail performed by users with role ${selectedRoleForLogs.name}` : '');
+
+  if (selectedUserForLogs || selectedRoleForLogs) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-200">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSelectedUserForLogs(null);
+              setSelectedRoleForLogs(null);
+              setUserLogs([]);
+            }}
+            className="gap-2"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back
+          </Button>
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary animate-pulse" />
+              Activity Logs: {viewingSubjectName}
+            </h2>
+            <p className="text-sm text-muted-foreground">{viewingSubjectSub}</p>
+          </div>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>User Action History</CardTitle>
+            <CardDescription>
+              Expand any row to view full payload data, changes, and affected member records.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {logsLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                <RefreshCw className="h-8 w-8 animate-spin mb-2 text-primary" />
+                <span>Loading activity logs...</span>
+              </div>
+            ) : userLogs.length === 0 ? (
+              <div className="text-center py-20 text-muted-foreground">
+                <Activity className="h-12 w-12 mx-auto text-muted-foreground/30 mb-2" />
+                <p>No activity logs found.</p>
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[180px]">Type</TableHead>
+                      <TableHead>Entity Name</TableHead>
+                      <TableHead className="w-[120px]">Action</TableHead>
+                      <TableHead>Section</TableHead>
+                      <TableHead className="w-[180px]">Date & Time</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {userLogs.map((log) => {
+                      const isExpanded = !!expandedRows[log.id];
+                      return (
+                        <>
+                          <TableRow 
+                            key={log.id} 
+                            className="cursor-pointer hover:bg-muted/30 transition-colors"
+                            onClick={() => toggleRow(log.id)}
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                                {log.entity_type === 'member' && <Users className="h-4 w-4 text-primary" />}
+                                {log.entity_type === 'user' && <Users className="h-4 w-4 text-primary" />}
+                                {log.entity_type === 'company' && <Building2 className="h-4 w-4 text-primary" />}
+                                {log.entity_type === 'offer' && <Gift className="h-4 w-4 text-primary" />}
+                                {log.entity_type === 'category' && <FileText className="h-4 w-4 text-primary" />}
+                                {log.entity_type === 'role' && <Shield className="h-4 w-4 text-primary" />}
+                                {log.entity_type !== 'member' && log.entity_type !== 'user' && log.entity_type !== 'company' && log.entity_type !== 'offer' && log.entity_type !== 'category' && log.entity_type !== 'role' && <Activity className="h-4 w-4 text-primary" />}
+                                <span className="capitalize font-medium">{log.entity_type}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {log.entity_name || 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={
+                                  log.action === 'create' || log.action === 'redeem' || log.action === 'login' ? 'default' :
+                                  log.action === 'delete' || log.action === 'logout' ? 'destructive' : 'secondary'
+                                } 
+                                className="capitalize text-[10px] h-4.5 px-1.5 font-semibold"
+                              >
+                                {log.action}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {log.activity_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            </TableCell>
+                            <TableCell className="text-sm tabular-nums text-muted-foreground">
+                              {format(new Date(log.performed_at), 'MMM dd, yyyy · HH:mm:ss')}
+                            </TableCell>
+                          </TableRow>
+                          {isExpanded && (
+                            <TableRow className="bg-muted/10 hover:bg-muted/10">
+                              <TableCell colSpan={5} className="p-4 border-t border-b">
+                                <div className="pl-6 pr-6 py-4 bg-muted/40 border border-border/50 rounded-lg space-y-3">
+                                  {/* Affected Member Info */}
+                                  {log.details?.affected_member && (
+                                    <div className="p-3 bg-primary/5 border border-primary/10 rounded-lg">
+                                      <p className="text-[10px] font-bold text-primary uppercase mb-1 tracking-wider">Affected Member</p>
+                                      <div className="flex flex-wrap gap-x-6 gap-y-1.5 text-xs">
+                                        {log.details.affected_member.member_code && (
+                                          <div>
+                                            <span className="text-muted-foreground">Code:</span>{" "}
+                                            <span className="font-semibold text-foreground">{log.details.affected_member.member_code}</span>
+                                          </div>
+                                        )}
+                                        {log.details.affected_member.name && (
+                                          <div>
+                                            <span className="text-muted-foreground">Name:</span>{" "}
+                                            <span className="font-semibold text-foreground">{log.details.affected_member.name}</span>
+                                          </div>
+                                        )}
+                                        {log.details.affected_member.phone && (
+                                          <div>
+                                            <span className="text-muted-foreground">Phone:</span>{" "}
+                                            <span className="font-semibold text-foreground">{log.details.affected_member.phone}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Section Info */}
+                                  {log.details?.section && (
+                                    <div className="p-3 bg-secondary/5 border border-secondary/10 rounded-lg">
+                                      <p className="text-[10px] font-bold text-secondary-foreground uppercase mb-1 tracking-wider font-mono">Section</p>
+                                      <p className="text-xs font-semibold">{log.details.section}</p>
+                                    </div>
+                                  )}
+
+                                  {/* Changes */}
+                                  {log.details?.changes && Array.isArray(log.details.changes) && log.details.changes.length > 0 && (
+                                    <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-lg">
+                                      <p className="text-[10px] font-bold text-amber-600 uppercase mb-1 tracking-wider">Changes Made</p>
+                                      <div className="space-y-1.5">
+                                        {log.details.changes.map((change: any, idx: number) => (
+                                          <div key={idx} className="text-xs">
+                                            <span className="font-semibold capitalize text-foreground/80">{change.field.replace(/_/g, ' ')}:</span>
+                                            <div className="flex items-center gap-2 mt-0.5 ml-2">
+                                              <span className="text-muted-foreground line-through">
+                                                {change.before === null || change.before === undefined || change.before === '' ? '(empty)' : String(change.before)}
+                                              </span>
+                                              <span className="text-muted-foreground">→</span>
+                                              <span className="font-medium text-green-600 dark:text-green-400">
+                                                {change.after === null || change.after === undefined || change.after === '' ? '(empty)' : String(change.after)}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Other Details fallback */}
+                                  {log.details && !log.details.changes && !log.details.affected_member && Object.keys(log.details).length > 0 && (
+                                    <div className="p-3 bg-muted/40 rounded-lg">
+                                      <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1 tracking-wider">Log Details</p>
+                                      <pre className="text-[10px] font-mono whitespace-pre-wrap text-foreground/90 overflow-x-auto max-h-32 bg-muted/65 p-2 rounded">
+                                        {JSON.stringify(log.details, null, 2)}
+                                      </pre>
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -401,6 +750,15 @@ const UserManagement = () => {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => openUserLogs(user)}
+                            className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/5"
+                            title="View user activity logs"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => openEditUser(user)}
                             className="h-8 w-8 p-0"
                             disabled={user.role === "superadmin" && user.id !== currentUser?.id}
@@ -492,6 +850,15 @@ const UserManagement = () => {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openRoleLogs(role)}
+                            className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/5"
+                            title="View role activity logs"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -729,6 +1096,8 @@ const UserManagement = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+
     </div>
   );
 };

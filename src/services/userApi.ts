@@ -9,6 +9,7 @@ export interface UserPermissions {
   settings_offers: boolean;
   settings_notifications: boolean;
   settings_audit: boolean;
+  redemption_reversal: boolean;
 }
 
 export interface SystemRole {

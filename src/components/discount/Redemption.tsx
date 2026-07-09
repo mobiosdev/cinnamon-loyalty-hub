@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,7 @@ import { format } from "date-fns";
 import axios from "axios";
 import { cn } from "@/lib/utils";
 import { QrScannerDialog } from "./QrScannerDialog";
+import { logActivity } from "@/utils/auditLogger";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -53,6 +56,10 @@ interface AvailableOffer {
 }
 
 const Redemption = () => {
+  const currentUser = useSelector((state: RootState) => state.auth.user);
+  const isSuperAdmin = currentUser?.role === "superadmin";
+  const canReverse = isSuperAdmin || currentUser?.permissions?.redemption_reversal === true;
+
   const [step, setStep] = useState<RedemptionStep>("input");
   const [billNumber, setBillNumber] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
@@ -370,6 +377,25 @@ const Redemption = () => {
       // Fetch updated history
       await fetchDiscountHistory(phoneToSave);
 
+      logActivity({
+        activityType: 'benefit_redemption',
+        entityType: 'redemption',
+        entityName: `Discount on Bill #${billNumber}`,
+        action: 'redeem',
+        memberInfo: {
+          member_code: memberData.member_code,
+          phone: phoneToSave,
+          name: `${memberData.first_name} ${memberData.last_name}`,
+        },
+        section: 'Redemption - Redeem Discount',
+        details: {
+          bill_number: billNumber,
+          discount_type: memberData.discount_amount > 0 ? 'fixed' : 'percentage',
+          discount_value: memberData.discount_amount > 0 ? memberData.discount_amount : memberData.discount_percentage,
+          remarks: remark || undefined,
+        }
+      });
+
       setRedeemedItems(prev => new Set(prev).add('discount'));
       toast.success("Discount applied successfully!");
     } catch (error) {
@@ -417,6 +443,25 @@ const Redemption = () => {
         customer_phone: phoneToSave,
         bill_number: billNumber,
         redeemed_by: 1, // TODO: Get from auth
+      });
+
+      logActivity({
+        activityType: 'benefit_redemption',
+        entityType: 'redemption',
+        entityName: `Offers on Bill #${billNumber}`,
+        action: 'redeem',
+        memberInfo: {
+          member_code: memberData?.member_code,
+          phone: phoneToSave,
+          name: memberData ? `${memberData.first_name} ${memberData.last_name}` : undefined,
+        },
+        section: 'Redemption - Redeem Offers',
+        details: {
+          bill_number: billNumber,
+          offer_ids: offerIdsArray,
+          offer_names: availableOffers.filter(o => queuedOffers.has(o.id)).map(o => o.name),
+          remarks: remark || undefined,
+        }
       });
 
       // Update state for all redeemed items
@@ -509,12 +554,12 @@ const Redemption = () => {
   };
 
   const handleConfirmReversal = async () => {
-    if (!reversalOtp || reversalOtp.length !== 6) {
-      toast.error("Please enter a valid 6-digit OTP");
+    if (!reversalBillNumber || reversalBillNumber.trim() === "") {
+      toast.error("Please enter a bill number to reverse");
       return;
     }
-    if (!reversalStaffId) {
-      toast.error("Invalid verification session");
+
+    if (!confirm(`Are you sure you want to reverse all redemptions for bill number ${reversalBillNumber.trim()}?`)) {
       return;
     }
 
@@ -522,9 +567,23 @@ const Redemption = () => {
     try {
       const res = await offerApi.confirmReversal({
         bill_number: reversalBillNumber.trim(),
-        otp: reversalOtp,
-        staff_id: reversalStaffId
+        otp: "000000",
+        staff_id: 1
       });
+
+      logActivity({
+        activityType: 'benefit_reversal',
+        entityType: 'redemption',
+        entityName: `Reversal on Bill #${reversalBillNumber.trim()}`,
+        action: 'update',
+        section: 'Redemption - Reversal',
+        details: {
+          event: 'confirm_reversal',
+          bill_number: reversalBillNumber.trim(),
+          reversal_message: res.message
+        }
+      });
+
       toast.success(res.message || "Redemption reversed successfully!");
       
       // If we currently have a loaded member, refresh their offers list
@@ -1228,12 +1287,12 @@ const Redemption = () => {
           className="text-lg font-mono"
         />
         <p className="text-xs text-muted-foreground">
-          Enter the bill number of the transaction you wish to reverse. This will send an OTP code to the associated customer to verify and complete the reversal.
+          Enter the bill number of the transaction you wish to reverse.
         </p>
       </div>
 
       <Button 
-        onClick={handleRequestReversal} 
+        onClick={handleConfirmReversal} 
         disabled={loading || !reversalBillNumber.trim()} 
         size="lg" 
         className="w-full bg-destructive hover:bg-destructive/90 text-white font-semibold"
@@ -1241,12 +1300,12 @@ const Redemption = () => {
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Sending...
+            Reversing...
           </>
         ) : (
           <>
             <Send className="mr-2 h-4 w-4" />
-            Send Reversal OTP
+            Reverse Redemption
           </>
         )}
       </Button>
@@ -1328,18 +1387,22 @@ const Redemption = () => {
         <CardHeader>
           <div className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-primary" />
-            <CardTitle className="font-serif">Redemption & Reversal</CardTitle>
+            <CardTitle className="font-serif">
+              {canReverse ? "Redemption & Reversal" : "Redemption"}
+            </CardTitle>
           </div>
           <CardDescription>
-            Verify members to redeem benefits, or reverse a previous bill redemption.
+            {canReverse 
+              ? "Verify members to redeem benefits, or reverse a previous bill redemption." 
+              : "Verify members to redeem benefits."}
           </CardDescription>
         </CardHeader>
 
         <CardContent>
           <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsList className={cn("grid w-full mb-6", canReverse ? "grid-cols-2" : "grid-cols-1")}>
               <TabsTrigger value="redeem">Redeem Benefits</TabsTrigger>
-              <TabsTrigger value="reverse">Reverse Redemption</TabsTrigger>
+              {canReverse && <TabsTrigger value="reverse">Reverse Redemption</TabsTrigger>}
             </TabsList>
 
             <TabsContent value="redeem" className="space-y-4">
@@ -1348,10 +1411,11 @@ const Redemption = () => {
               {step === "benefits" && renderBenefitsStep()}
             </TabsContent>
 
-            <TabsContent value="reverse" className="space-y-4">
-              {reversalStep === "input" && renderReversalInputStep()}
-              {reversalStep === "verify" && renderReversalVerifyStep()}
-            </TabsContent>
+            {canReverse && (
+              <TabsContent value="reverse" className="space-y-4">
+                {renderReversalInputStep()}
+              </TabsContent>
+            )}
           </Tabs>
         </CardContent>
       </Card>

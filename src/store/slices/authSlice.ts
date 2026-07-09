@@ -21,6 +21,8 @@ interface Step1DirectResponse {
 
 type Step1Response = Step1OtpResponse | Step1DirectResponse;
 
+import { logActivity } from '@/utils/auditLogger';
+
 // Step 1: validate email+password → either fully logs in OR triggers OTP (superadmin)
 export const loginStep1 = createAsyncThunk(
   'auth/loginStep1',
@@ -33,10 +35,42 @@ export const loginStep1 = createAsyncThunk(
       });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || 'Invalid email or password');
+        const errMsg = err.message || 'Invalid email or password';
+        // Log failed login attempt
+        logActivity({
+          activityType: 'user_authentication',
+          entityType: 'user',
+          action: 'login',
+          performedBy: credentials.email,
+          details: { event: 'login_failure', reason: errMsg }
+        });
+        throw new Error(errMsg);
       }
-      return (await response.json()) as Step1Response;
-    } catch (error) {
+      const data = await response.json();
+      if (data.otpRequired === false && data.user) {
+        // Direct login success - store token & user first so logActivity has authorization!
+        localStorage.setItem('token', data.access_token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        logActivity({
+          activityType: 'user_authentication',
+          entityType: 'user',
+          action: 'login',
+          performedBy: data.user.username,
+          details: { event: 'login_success', mode: 'direct' }
+        });
+      }
+      return data as Step1Response;
+    } catch (error: any) {
+      if (!(error instanceof Error)) {
+        logActivity({
+          activityType: 'user_authentication',
+          entityType: 'user',
+          action: 'login',
+          performedBy: credentials.email,
+          details: { event: 'login_failure', reason: error.message || 'Login failed' }
+        });
+      }
       return rejectWithValue(error instanceof Error ? error.message : 'Login failed');
     }
   },
@@ -54,7 +88,15 @@ export const loginStep2 = createAsyncThunk(
       });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || 'Invalid OTP');
+        const errMsg = err.message || 'Invalid OTP';
+        logActivity({
+          activityType: 'user_authentication',
+          entityType: 'user',
+          action: 'login',
+          performedBy: credentials.username,
+          details: { event: 'login_failure', reason: errMsg }
+        });
+        throw new Error(errMsg);
       }
       const data = await response.json();
       const userData = data.user;
@@ -64,6 +106,7 @@ export const loginStep2 = createAsyncThunk(
         email: userData.email,
         full_name: userData.full_name,
         role: userData.role,
+        role_name: userData.role_name,
         mobile: userData.mobile,
         is_active: userData.is_active,
         permissions: userData.permissions || {
@@ -75,6 +118,7 @@ export const loginStep2 = createAsyncThunk(
           settings_offers: false,
           settings_notifications: false,
           settings_audit: false,
+          redemption_reversal: false,
         },
         outlet: null,
       };
@@ -83,8 +127,26 @@ export const loginStep2 = createAsyncThunk(
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('user', JSON.stringify(user));
 
+      // Log OTP login success
+      logActivity({
+        activityType: 'user_authentication',
+        entityType: 'user',
+        action: 'login',
+        performedBy: user.username,
+        details: { event: 'login_success', mode: 'otp' }
+      });
+
       return user;
-    } catch (error) {
+    } catch (error: any) {
+      if (!(error instanceof Error)) {
+        logActivity({
+          activityType: 'user_authentication',
+          entityType: 'user',
+          action: 'login',
+          performedBy: credentials.username,
+          details: { event: 'login_failure', reason: error.message || 'OTP verification failed' }
+        });
+      }
       return rejectWithValue(error instanceof Error ? error.message : 'OTP verification failed');
     }
   },

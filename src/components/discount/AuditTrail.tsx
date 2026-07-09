@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Eye, Activity, Shield, Users, FileText, Gift, Building2, ChevronLeft, ChevronRight, Clock, User as UserIcon, Info } from "lucide-react";
+import { Loader2, Search, Eye, Activity, Shield, Users, FileText, Gift, Building2, ChevronLeft, ChevronRight, Clock, User as UserIcon, Info, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { auditApi } from "@/services/auditApi";
 import { format, formatDistanceToNow } from "date-fns";
@@ -38,9 +38,11 @@ interface PhoneView {
 
 interface AuditTrailProps {
   parentActiveTab?: string;
+  prefilledSearchTerm?: string;
+  clearPrefilledSearchTerm?: () => void;
 }
 
-export function AuditTrail({ parentActiveTab }: AuditTrailProps) {
+export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefilledSearchTerm }: AuditTrailProps) {
   const [activeTab, setActiveTab] = useState("user-activity");
   const [viewMode, setViewMode] = useState<"timeline" | "table">("timeline");
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -52,6 +54,11 @@ export function AuditTrail({ parentActiveTab }: AuditTrailProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 15;
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+
+  const toggleRow = (id: string) => {
+    setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   useEffect(() => {
     if (activeTab === "phone-views") {
@@ -60,6 +67,21 @@ export function AuditTrail({ parentActiveTab }: AuditTrailProps) {
       fetchAuditLogs();
     }
   }, [activeTab, currentPage, filterAction, filterEntityType, searchTerm]);
+
+  useEffect(() => {
+    setExpandedRows({});
+  }, [activeTab, currentPage, filterAction, filterEntityType, searchTerm]);
+
+  useEffect(() => {
+    if (prefilledSearchTerm) {
+      setSearchTerm(prefilledSearchTerm);
+      setViewMode('table');
+      setCurrentPage(1);
+      if (clearPrefilledSearchTerm) {
+        clearPrefilledSearchTerm();
+      }
+    }
+  }, [prefilledSearchTerm]);
 
   useEffect(() => {
     if (parentActiveTab === "audit") {
@@ -476,35 +498,142 @@ export function AuditTrail({ parentActiveTab }: AuditTrailProps) {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {auditLogs.map((log) => (
-                          <TableRow key={log.id}>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {getActivityIcon(log.entity_type)}
-                                <span className="capitalize font-medium">{log.entity_type}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              {log.entity_name || 'N/A'}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={getActionColor(log.action)} className="capitalize">
-                                {log.action}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {log.activity_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                            </TableCell>
-                            <TableCell className="font-medium">{log.performed_by || 'System'}</TableCell>
-                            <TableCell className="text-sm tabular-nums">
-                              {format(new Date(log.performed_at), 'MMM dd, yyyy')}
-                              <br />
-                              <span className="text-xs text-muted-foreground">
-                                {format(new Date(log.performed_at), 'HH:mm:ss')}
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {auditLogs.map((log) => {
+                          const isExpanded = !!expandedRows[log.id];
+                          return (
+                            <>
+                              <TableRow 
+                                key={log.id} 
+                                className="cursor-pointer hover:bg-muted/30 transition-colors"
+                                onClick={() => toggleRow(log.id)}
+                              >
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                                    {getActivityIcon(log.entity_type)}
+                                    <span className="capitalize font-medium">{log.entity_type}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  {log.entity_name || 'N/A'}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={getActionColor(log.action)} className="capitalize">
+                                    {log.action}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {log.activity_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                </TableCell>
+                                <TableCell className="font-medium">{log.performed_by || 'System'}</TableCell>
+                                <TableCell className="text-sm tabular-nums">
+                                  {format(new Date(log.performed_at), 'MMM dd, yyyy')}
+                                  <br />
+                                  <span className="text-xs text-muted-foreground">
+                                    {format(new Date(log.performed_at), 'HH:mm:ss')}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                              {isExpanded && (
+                                <TableRow className="bg-muted/10 hover:bg-muted/10">
+                                  <TableCell colSpan={6} className="p-4 border-t border-b">
+                                    <div className="pl-6 pr-6 py-4 bg-muted/40 border border-border/50 rounded-lg space-y-3">
+                                      <div className="flex items-center gap-4 text-xs">
+                                        {log.entity_name && (
+                                          <div className="flex items-center gap-1.5">
+                                            <Info className="h-3 w-3 text-muted-foreground" />
+                                            <span className="text-muted-foreground">Entity:</span>
+                                            <span className="font-semibold text-foreground">{log.entity_name}</span>
+                                          </div>
+                                        )}
+                                        <div className="flex items-center gap-1.5">
+                                          <UserIcon className="h-3 w-3 text-muted-foreground" />
+                                          <span className="text-muted-foreground">Performed by:</span>
+                                          <span className="font-semibold text-foreground">{log.performed_by || 'System'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          <Clock className="h-3 w-3 text-muted-foreground" />
+                                          <span className="text-muted-foreground">Time:</span>
+                                          <span className="font-semibold text-foreground">{format(new Date(log.performed_at), 'HH:mm:ss')}</span>
+                                        </div>
+                                      </div>
+
+                                      {/* Affected Member Info */}
+                                      {log.details?.affected_member && (
+                                        <div className="p-3 bg-primary/5 border border-primary/10 rounded-lg">
+                                          <p className="text-[10px] font-bold text-primary uppercase mb-1 tracking-wider">Affected Member</p>
+                                          <div className="flex flex-wrap gap-x-6 gap-y-1.5 text-xs">
+                                            {log.details.affected_member.member_code && (
+                                              <div>
+                                                <span className="text-muted-foreground">Code:</span>{" "}
+                                                <span className="font-semibold text-foreground">{log.details.affected_member.member_code}</span>
+                                              </div>
+                                            )}
+                                            {log.details.affected_member.name && (
+                                              <div>
+                                                <span className="text-muted-foreground">Name:</span>{" "}
+                                                <span className="font-semibold text-foreground">{log.details.affected_member.name}</span>
+                                              </div>
+                                            )}
+                                            {log.details.affected_member.phone && (
+                                              <div>
+                                                <span className="text-muted-foreground">Phone:</span>{" "}
+                                                <span className="font-semibold text-foreground">{log.details.affected_member.phone}</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Section Info */}
+                                      {log.details?.section && (
+                                        <div className="p-3 bg-secondary/5 border border-secondary/10 rounded-lg">
+                                          <p className="text-[10px] font-bold text-secondary-foreground uppercase mb-1 tracking-wider font-mono">Section</p>
+                                          <p className="text-xs font-semibold">{log.details.section}</p>
+                                        </div>
+                                      )}
+
+                                      {/* Changes */}
+                                      {log.details?.changes && Array.isArray(log.details.changes) && log.details.changes.length > 0 && (
+                                        <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-lg">
+                                          <p className="text-[10px] font-bold text-amber-600 uppercase mb-1 tracking-wider">Changes Made</p>
+                                          <div className="space-y-1.5">
+                                            {log.details.changes.map((change: any, idx: number) => (
+                                              <div key={idx} className="text-xs">
+                                                <span className="font-semibold capitalize text-foreground/80">{change.field.replace(/_/g, ' ')}:</span>
+                                                <div className="flex items-center gap-2 mt-0.5 ml-2">
+                                                  <span className="text-muted-foreground line-through">
+                                                    {change.before === null || change.before === undefined || change.before === '' ? '(empty)' : String(change.before)}
+                                                  </span>
+                                                  <span className="text-muted-foreground">→</span>
+                                                  <span className="font-medium text-green-600 dark:text-green-400">
+                                                    {change.after === null || change.after === undefined || change.after === '' ? '(empty)' : String(change.after)}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Other Details fallback */}
+                                      {log.details && Object.keys(log.details).filter(key => 
+                                        key !== 'affected_member' && key !== 'section' && key !== 'changes'
+                                      ).length > 0 && (
+                                        <div className="p-3 bg-muted/40 rounded-lg">
+                                          <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1 tracking-wider">Log Details</p>
+                                          <pre className="text-[10px] font-mono whitespace-pre-wrap text-foreground/90 overflow-x-auto max-h-32 bg-muted/65 p-2 rounded">
+                                            {JSON.stringify(log.details, null, 2)}
+                                          </pre>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   )}

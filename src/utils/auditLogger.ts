@@ -2,10 +2,10 @@ import { auditApi } from '@/services/auditApi';
 
 interface AuditLogParams {
   activityType: string;
-  entityType: 'member' | 'company' | 'offer' | 'category' | 'redemption';
+  entityType: 'member' | 'company' | 'offer' | 'category' | 'redemption' | 'user';
   entityId?: string;
   entityName?: string;
-  action: 'create' | 'update' | 'delete' | 'view' | 'redeem';
+  action: 'create' | 'update' | 'delete' | 'view' | 'redeem' | 'login' | 'logout';
   details?: any;
   performedBy?: string;
   memberInfo?: {
@@ -28,12 +28,34 @@ export const logActivity = async ({
   entityName,
   action,
   details,
-  performedBy = 'Admin User',
+  performedBy,
   memberInfo,
   section,
   changes
 }: AuditLogParams) => {
   try {
+    let finalPerformedBy = performedBy;
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const userObj = JSON.parse(userStr);
+        const roleSuffix = userObj.role === 'superadmin' ? 'Super Admin' : (userObj.role_name || userObj.role || '');
+        const suffixStr = roleSuffix ? ` (${roleSuffix})` : '';
+
+        if (!finalPerformedBy) {
+          finalPerformedBy = userObj.username ? `${userObj.username}${suffixStr}` : 'Admin User';
+        } else if (userObj.username && finalPerformedBy === userObj.username) {
+          finalPerformedBy = `${userObj.username}${suffixStr}`;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    if (!finalPerformedBy) {
+      finalPerformedBy = 'Admin User';
+    }
+
     const enrichedDetails = {
       ...details,
       ...(memberInfo && {
@@ -54,7 +76,7 @@ export const logActivity = async ({
       entity_name: entityName || null,
       action,
       details: enrichedDetails,
-      performed_by: performedBy,
+      performed_by: finalPerformedBy,
       ip_address: null,
       user_agent: navigator.userAgent
     });
