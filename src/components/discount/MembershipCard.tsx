@@ -230,10 +230,10 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
 
           const smsMessage = `🏨 Cinnamon Grand Colombo\n${categoryName.toUpperCase()} MEMBERSHIP CARD\n\n👤 Member: ${memberName}\n🔢 Membership No: ${memberCode}\n📅 Expiry Date: ${expiryDate}\n\nView and download your digital card here: ${cardUrl}`;
 
-          const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://msg.text-ware.com/send_sms.php';
-          const smsUsername = import.meta.env.VITE_SMS_USERNAME || 'TW00001_ntb_demo_tr';
-          const smsPassword = import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
-          const smsSrc = import.meta.env.VITE_SMS_SRC || 'TWTEST';
+          const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://message.text-ware.com/send_sms.php';
+          const smsUsername = import.meta.env.VITE_SMS_USERNAME_TRANSACTIONAL || 'TW01287_cinnamon_tr';
+          const smsPassword = import.meta.env.VITE_SMS_PASSWORD_TRANSACTIONAL || import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
+          const smsSrc = import.meta.env.VITE_SMS_SRC_TRANSACTIONAL || import.meta.env.VITE_SMS_SRC || 'Cinnamon';
 
           const smsUrl = new URL(smsApiUrl);
           smsUrl.searchParams.append('username', smsUsername);
