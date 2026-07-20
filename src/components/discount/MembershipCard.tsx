@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Download, CreditCard, Share2, Mail, Loader2, CheckCircle2, Send } from "lucide-react";
+import { Download, CreditCard, Share2, Mail, Loader2, CheckCircle2, Send, Shield } from "lucide-react";
 import { toast } from "sonner";
 import cinnamonLogo from "@/assets/cinnamon-logo.png";
 import { staffApi } from "@/services/staffApi";
@@ -25,6 +25,7 @@ interface MembershipCardProps {
     email?: string;
     mobile?: string;
     card_token?: string;
+    is_active?: boolean;
   } | null;
 }
 
@@ -41,6 +42,8 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
   const [sendingCard, setSendingCard] = useState(false);
 
   if (!member) return null;
+
+  const isDeactivated = member.is_active === false;
 
   const memberName = `${member.title || ''} ${member.first_name} ${member.last_name}`.trim();
   const memberCode = member.member_code || 'N/A';
@@ -525,18 +528,30 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
                 {/* QR Code */}
                 <div
                   style={{
-                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    backgroundColor: isDeactivated ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.95)',
                     borderRadius: '8px',
                     padding: '4px',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '68px',
+                    height: '68px',
+                    border: isDeactivated ? '1.5px solid #ef4444' : 'none',
                   }}
                 >
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(memberCode)}`}
-                    alt="QR Code"
-                    style={{ width: '60px', height: '60px' }}
-                    crossOrigin="anonymous"
-                  />
+                  {isDeactivated ? (
+                    <span className="text-[10px] font-bold text-red-500 text-center uppercase tracking-tight leading-none px-1">
+                      Card<br/>Disabled
+                    </span>
+                  ) : (
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(memberCode)}`}
+                      alt="QR Code"
+                      style={{ width: '60px', height: '60px' }}
+                      crossOrigin="anonymous"
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -544,9 +559,17 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
         </div>
 
         {/* Action Buttons */}
+        {isDeactivated && (
+          <div className="w-full max-w-[420px] p-3 mb-2 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs font-semibold flex items-center gap-2">
+            <Shield className="h-4 w-4 shrink-0" />
+            This member account is deactivated. Card actions are disabled.
+          </div>
+        )}
+
         <div className="w-full max-w-[420px] grid grid-cols-2 gap-2">
           <Button
             onClick={handleDownloadCard}
+            disabled={isDeactivated}
             className="gap-2"
             variant="default"
           >
@@ -555,6 +578,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
           </Button>
           <Button
             onClick={handleShare}
+            disabled={isDeactivated}
             className="gap-2"
             variant="outline"
           >
@@ -563,6 +587,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
           </Button>
           <Button
             onClick={handleOpenEmailInput}
+            disabled={isDeactivated}
             className="gap-2 bg-amber-600 hover:bg-amber-700 text-white"
             variant="default"
           >
@@ -571,7 +596,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
           </Button>
           <Button
             onClick={handleSendCard}
-            disabled={sendingCard}
+            disabled={sendingCard || isDeactivated}
             className="gap-2 bg-primary hover:bg-primary/90 text-white"
             variant="default"
           >
