@@ -16,6 +16,7 @@ import CustomerCategoryManagement from "./discount/CustomerCategoryManagement";
 import { AuditTrail } from "./discount/AuditTrail";
 import SendNotifications from "./discount/SendNotifications";
 import UserManagement from "./discount/UserManagement";
+import ProfileDialog from "./discount/ProfileDialog";
 import cinnamonLogo from "@/assets/cinnamon-logo.png";
 
 const DiscountManagement = () => {
@@ -38,6 +39,7 @@ const DiscountManagement = () => {
   };
 
   const [activeTab, setActiveTab] = useState(getDefaultTab);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const canAccess = (tab: string): boolean => {
     if (isSuperAdmin) return true;
@@ -118,6 +120,11 @@ const DiscountManagement = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <div className="px-3 py-2 text-xs text-muted-foreground">@{user?.username}</div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setIsProfileOpen(true)} className="cursor-pointer">
+                  <UserCog className="mr-2 h-4 w-4" />
+                  My Profile
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
@@ -260,6 +267,8 @@ const DiscountManagement = () => {
           </TabsContent>
         </Tabs>
       </main>
+
+      <ProfileDialog open={isProfileOpen} onOpenChange={setIsProfileOpen} />
     </div>
   );
 };

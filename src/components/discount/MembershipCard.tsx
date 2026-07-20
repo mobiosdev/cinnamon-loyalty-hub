@@ -23,8 +23,14 @@ interface MembershipCardProps {
     renew_date?: string;
     registered_date?: string;
     email?: string;
+    mobile?: string;
+    card_token?: string;
   } | null;
 }
+
+const ensureCardToken = async (id: string, existingToken?: string): Promise<string> => {
+  return existingToken || id;
+};
 
 export function MembershipCard({ open, onOpenChange, member }: MembershipCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);

@@ -190,6 +190,16 @@ const authSlice = createSlice({
       state.pendingUsername = null;
       state.maskedMobile = null;
     },
+    updateProfileSuccess: (state, action: PayloadAction<Partial<User>>) => {
+      if (state.user) {
+        state.user = {
+          ...state.user,
+          ...action.payload,
+          permissions: action.payload.permissions || state.user.permissions
+        };
+        localStorage.setItem('user', JSON.stringify(state.user));
+      }
+    },
   },
   extraReducers: (builder) => {
     // Step 1
@@ -243,6 +253,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, clearError, resetOtpStep } = authSlice.actions;
+export const { logout, clearError, resetOtpStep, updateProfileSuccess } = authSlice.actions;
 export default authSlice.reducer;
 

@@ -65,6 +65,13 @@ export interface UpdateUserPayload {
   role_id?: string;
 }
 
+export interface UpdateProfilePayload {
+  full_name?: string;
+  email?: string;
+  mobile?: string;
+  password?: string;
+}
+
 export const userApi = {
   // ==========================================
   // ROLES API
@@ -102,5 +109,13 @@ export const userApi = {
 
   async deactivateUser(id: string): Promise<void> {
     return apiManager.delete<void>(`/system-users/${id}`);
+  },
+
+  async getProfile(): Promise<SystemUser> {
+    return apiManager.get<SystemUser>('/system-users/profile');
+  },
+
+  async updateProfile(payload: UpdateProfilePayload): Promise<SystemUser> {
+    return apiManager.put<SystemUser>('/system-users/profile', payload);
   },
 };
