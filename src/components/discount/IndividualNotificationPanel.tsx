@@ -353,7 +353,7 @@ const IndividualNotificationPanel = () => {
       if (activeTab === "sms") {
         const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://message.text-ware.com/send_sms.php';
         const smsUsername = import.meta.env.VITE_SMS_USERNAME_PROMOTIONAL || 'TW01287_cinnamon_pr';
-        const smsPassword = import.meta.env.VITE_SMS_PASSWORD_PROMOTIONAL || import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
+        const smsPassword = import.meta.env.VITE_SMS_PASSWORD_PROMOTIONAL || import.meta.env.VITE_SMS_PASSWORD || 'as7WuKxkp@pPW';
         const smsSrc = import.meta.env.VITE_SMS_SRC_PROMOTIONAL || import.meta.env.VITE_SMS_SRC || 'Cinnamon';
 
         // Loop through each recipient and send the SMS request
