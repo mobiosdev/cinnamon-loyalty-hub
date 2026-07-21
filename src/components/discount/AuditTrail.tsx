@@ -385,8 +385,8 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
                   </CardTitle>
                   <CardDescription>
                     {activeTab === 'phone-views' 
-                      ? 'Phone number access logs for security and compliance' 
-                      : 'Complete timeline of all system activities with detailed user journey tracking'
+                      ? 'Phone number access logs for security and compliance.' 
+                      : 'Complete timeline of all system activities with detailed user journey tracking.'
                     }
                   </CardDescription>
                 </div>

@@ -1311,7 +1311,7 @@ const CompanyRegistration = () => {
               <CardTitle className="font-serif">Registered Members</CardTitle>
             </div>
             <CardDescription>
-              View and manage all registered members
+              View and manage all registered members.
             </CardDescription>
           </div>
           <Button

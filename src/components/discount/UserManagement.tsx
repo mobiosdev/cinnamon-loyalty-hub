@@ -647,7 +647,7 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
           </div>
           <div>
             <h2 className="text-xl font-semibold">User &amp; Access Control</h2>
-            <p className="text-sm text-muted-foreground">Manage user roles, role permissions, and user accounts</p>
+            <p className="text-sm text-muted-foreground">Manage user roles, role permissions, and user accounts.</p>
           </div>
         </div>
         <div className="flex items-center gap-2">

@@ -16,10 +16,17 @@ interface Step1OtpResponse {
 
 interface Step1DirectResponse {
   otpRequired: false;
+  access_token: string;
+  refresh_token: string;
   user: User;
 }
 
 type Step1Response = Step1OtpResponse | Step1DirectResponse;
+
+interface Step2Credentials {
+  username: string;
+  otp: string;
+}
 
 import { logActivity } from '@/utils/auditLogger';
 
@@ -50,6 +57,9 @@ export const loginStep1 = createAsyncThunk(
       if (data.otpRequired === false && data.user) {
         // Direct login success - store token & user first so logActivity has authorization!
         localStorage.setItem('token', data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem('refresh_token', data.refresh_token);
+        }
         localStorage.setItem('user', JSON.stringify(data.user));
 
         logActivity({
@@ -125,6 +135,9 @@ export const loginStep2 = createAsyncThunk(
 
       // Store in localStorage for persistence
       localStorage.setItem('token', data.access_token);
+      if (data.refresh_token) {
+        localStorage.setItem('refresh_token', data.refresh_token);
+      }
       localStorage.setItem('user', JSON.stringify(user));
 
       // Log OTP login success
@@ -180,6 +193,7 @@ const authSlice = createSlice({
       state.maskedMobile = null;
       state.otpStep = false;
       localStorage.removeItem('token');
+      localStorage.removeItem('refresh_token');
       localStorage.removeItem('user');
     },
     clearError: (state) => {
@@ -218,12 +232,16 @@ const authSlice = createSlice({
           state.pendingUsername = payload.username;
         } else {
           // Regular user — directly authenticated
-          state.user = payload.user;
+          const directPayload = payload as Step1DirectResponse;
+          state.user = directPayload.user;
           state.isAuthenticated = true;
           state.otpStep = false;
           // Store token in localStorage
-          localStorage.setItem('token', payload.access_token);
-          localStorage.setItem('user', JSON.stringify(payload.user));
+          localStorage.setItem('token', directPayload.access_token);
+          if (directPayload.refresh_token) {
+            localStorage.setItem('refresh_token', directPayload.refresh_token);
+          }
+          localStorage.setItem('user', JSON.stringify(directPayload.user));
         }
       })
       .addCase(loginStep1.rejected, (state, action) => {

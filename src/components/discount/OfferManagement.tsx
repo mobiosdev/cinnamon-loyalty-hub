@@ -598,7 +598,7 @@ const OfferManagement = () => {
             <Gift className="h-5 w-5 text-primary" />
             <CardTitle>Create Offer</CardTitle>
           </div>
-          <CardDescription>Create offers for member categories</CardDescription>
+          <CardDescription>Create offers for member categories.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -860,7 +860,7 @@ const OfferManagement = () => {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Active Offers</CardTitle>
-                <CardDescription>Manage All Existing Offers</CardDescription>
+                <CardDescription>Manage All Existing Offers.</CardDescription>
               </div>
               {selectedOfferIds.size > 0 && (
                 <Button
@@ -1016,7 +1016,7 @@ const OfferManagement = () => {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Past Offers</CardTitle>
-                <CardDescription>View expired and disabled offers</CardDescription>
+                <CardDescription>View expired and disabled offers.</CardDescription>
               </div>
               {selectedPastOfferIds.size > 0 && (
                 <Button
