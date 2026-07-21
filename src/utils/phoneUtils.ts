@@ -1,8 +1,4 @@
-/**
- * Utility functions for handling Sri Lankan phone numbers
- * All numbers are stored in database in format: 94XXXXXXXXX (no + sign)
- * Accepts input formats: +94, 94, 07, 7
- */
+import { parsePhoneNumberFromString, CountryCode } from 'libphonenumber-js';
 
 export interface PhoneValidationResult {
   isValid: boolean;
@@ -11,104 +7,100 @@ export interface PhoneValidationResult {
 }
 
 /**
- * Validates and normalizes a Sri Lankan mobile number
- * @param input - Phone number in any format (+94, 94, 07, 7)
- * @returns Validation result with normalized number in 94XXXXXXXXX format
+ * Validates and normalizes any phone number using libphonenumber-js
+ * Handles formats like +94, 94, 07, 7, etc.
+ * Stored format: XXXXXXXXX (no leading +)
  */
 export function validateAndNormalizeSriLankanMobile(input: string): PhoneValidationResult {
   if (!input || typeof input !== 'string') {
     return { isValid: false, error: 'Phone number is required' };
   }
 
-  // Remove all spaces, dashes, and other non-digit characters except +
-  let cleaned = input.trim().replace(/[\s\-()]/g, '');
-  
-  // Remove + if present
-  cleaned = cleaned.replace(/^\+/, '');
-  
-  // Check if it's all digits now
-  if (!/^\d+$/.test(cleaned)) {
-    return { isValid: false, error: 'Phone number must contain only digits' };
-  }
+  const cleaned = input.trim();
 
-  let normalized = '';
-
-  // Handle different formats
-  if (cleaned.startsWith('94')) {
-    // Format: 94XXXXXXXXX
-    normalized = cleaned;
-    if (normalized.length !== 11) {
-      return { isValid: false, error: 'Invalid phone number length for 94 format (should be 11 digits)' };
+  // If it starts with '+', parse it directly
+  if (cleaned.startsWith('+')) {
+    const phoneNumber = parsePhoneNumberFromString(cleaned);
+    if (phoneNumber && phoneNumber.isValid()) {
+      return { isValid: true, normalized: phoneNumber.number.replace(/^\+/, '') };
     }
-  } else if (cleaned.startsWith('0')) {
-    // Format: 07XXXXXXXX (10 digits)
-    if (cleaned.length !== 10) {
-      return { isValid: false, error: 'Invalid phone number length (should be 10 digits with 0)' };
+    return { isValid: false, error: 'Invalid international phone number' };
+  }
+
+  // If it starts with '0', we try to parse it with LK country code (default)
+  if (cleaned.startsWith('0')) {
+    const phoneNumber = parsePhoneNumberFromString(cleaned, 'LK');
+    if (phoneNumber && phoneNumber.isValid()) {
+      return { isValid: true, normalized: phoneNumber.number.replace(/^\+/, '') };
     }
-    // Remove leading 0 and add 94
-    normalized = '94' + cleaned.substring(1);
-  } else if (cleaned.startsWith('7')) {
-    // Format: 7XXXXXXXX (9 digits)
-    if (cleaned.length !== 9) {
-      return { isValid: false, error: 'Invalid phone number length (should be 9 digits without 0)' };
-    }
-    // Add 94
-    normalized = '94' + cleaned;
-  } else {
-    return { isValid: false, error: 'Phone number must start with 94, 0, or 7' };
+    return { isValid: false, error: 'Invalid local phone number' };
   }
 
-  // Validate the mobile prefix (after 94, should start with 7)
-  const mobilePrefix = normalized.substring(2, 3);
-  if (mobilePrefix !== '7') {
-    return { isValid: false, error: 'Not a valid Sri Lankan mobile number (must start with 7 after country code)' };
+  // Prepend '+' and try parsing
+  const withPlus = '+' + cleaned;
+  const parsedWithPlus = parsePhoneNumberFromString(withPlus);
+  if (parsedWithPlus && parsedWithPlus.isValid()) {
+    return { isValid: true, normalized: parsedWithPlus.number.replace(/^\+/, '') };
   }
 
-  // Validate the operator prefix (4th digit after 94)
-  const operatorPrefix = normalized.substring(3, 4);
-  const validOperatorPrefixes = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-  if (!validOperatorPrefixes.includes(operatorPrefix)) {
-    return { isValid: false, error: 'Invalid mobile operator prefix' };
+  // Fallback as LK number
+  const parsedLK = parsePhoneNumberFromString(cleaned, 'LK');
+  if (parsedLK && parsedLK.isValid()) {
+    return { isValid: true, normalized: parsedLK.number.replace(/^\+/, '') };
   }
 
-  return { isValid: true, normalized };
+  return { isValid: false, error: 'Invalid phone number' };
+}
+
+// Reuse the same logic for validateAndNormalizeSriLankanPhone to accept all kinds of numbers
+export function validateAndNormalizeSriLankanPhone(input: string): PhoneValidationResult {
+  return validateAndNormalizeSriLankanMobile(input);
 }
 
 /**
- * Format a phone number for display
- * @param phone - Phone number in 94XXXXXXXXX format
- * @returns Formatted phone number like +94 77 123 4567
+ * Format a phone number for display using libphonenumber-js
+ * @param phone - Phone number in any format (e.g. 94777000057)
+ * @returns Formatted phone number (e.g. +94 77 700 0057)
  */
 export function formatPhoneForDisplay(phone: string): string {
   if (!phone) return '';
   
-  // Remove any non-digits
   const cleaned = phone.replace(/\D/g, '');
+  const phoneNumber = parsePhoneNumberFromString('+' + cleaned);
+  if (phoneNumber && phoneNumber.isValid()) {
+    return phoneNumber.formatInternational();
+  }
   
+  // Fallback
   if (cleaned.startsWith('94') && cleaned.length === 11) {
-    // Format as +94 77 123 4567
     return `+94 ${cleaned.substring(2, 4)} ${cleaned.substring(4, 7)} ${cleaned.substring(7)}`;
   }
   
-  return phone; // Return as-is if format is unexpected
+  return phone;
 }
 
 /**
- * Mask a phone number for privacy (show only last 3 digits)
- * @param phone - Phone number in any format
- * @returns Masked phone number like +94 77****567
+ * Mask a phone number for privacy
  */
 export function maskPhoneNumber(phone: string): string {
   if (!phone) return '';
   
   const cleaned = phone.replace(/\D/g, '');
+  const phoneNumber = parsePhoneNumberFromString('+' + cleaned);
+  if (phoneNumber && phoneNumber.isValid()) {
+    const countryCallingCode = phoneNumber.countryCallingCode;
+    const national = phoneNumber.nationalNumber;
+    if (national.length > 5) {
+      const maskedNational = national.substring(0, 2) + '*'.repeat(national.length - 5) + national.slice(-3);
+      return `+${countryCallingCode} ${maskedNational}`;
+    }
+  }
   
+  // Fallback
   if (cleaned.startsWith('94') && cleaned.length === 11) {
-    // Show as +94 77****567
     return `+94 ${cleaned.substring(2, 4)}****${cleaned.substring(8)}`;
   }
   
-  // Fallback for unexpected formats
   if (cleaned.length >= 3) {
     const lastThree = cleaned.slice(-3);
     const maskedPart = '*'.repeat(Math.max(0, cleaned.length - 3));
@@ -119,10 +111,7 @@ export function maskPhoneNumber(phone: string): string {
 }
 
 /**
- * Check if two phone numbers are the same (handles different formats)
- * @param phone1 - First phone number
- * @param phone2 - Second phone number
- * @returns True if both numbers are the same
+ * Check if two phone numbers are the same
  */
 export function arePhoneNumbersEqual(phone1: string, phone2: string): boolean {
   const result1 = validateAndNormalizeSriLankanMobile(phone1);
@@ -131,4 +120,37 @@ export function arePhoneNumbersEqual(phone1: string, phone2: string): boolean {
   if (!result1.isValid || !result2.isValid) return false;
   
   return result1.normalized === result2.normalized;
+}
+
+/**
+ * Splits a unified phone number into country prefix, local number, and country code
+ */
+export function splitPhoneNumber(phone: string): { prefix: string; number: string; countryCode: CountryCode } {
+  if (!phone || typeof phone !== 'string') {
+    return { prefix: '94', number: '', countryCode: 'LK' };
+  }
+
+  let cleaned = phone.replace(/[\s\-()]/g, '');
+  if (!cleaned.startsWith('+')) {
+    cleaned = '+' + cleaned;
+  }
+
+  const parsed = parsePhoneNumberFromString(cleaned);
+  if (parsed && parsed.isValid()) {
+    return {
+      prefix: parsed.countryCallingCode,
+      number: parsed.nationalNumber as string,
+      countryCode: (parsed.country || 'LK') as CountryCode
+    };
+  }
+
+  // Fallback for incomplete numbers:
+  const withoutPlus = cleaned.replace(/^\+/, '');
+  
+  if (withoutPlus.startsWith('94')) return { prefix: '94', number: withoutPlus.substring(2), countryCode: 'LK' };
+  if (withoutPlus.startsWith('91')) return { prefix: '91', number: withoutPlus.substring(2), countryCode: 'IN' };
+  if (withoutPlus.startsWith('44')) return { prefix: '44', number: withoutPlus.substring(2), countryCode: 'GB' };
+  if (withoutPlus.startsWith('1')) return { prefix: '1', number: withoutPlus.substring(1), countryCode: 'US' };
+
+  return { prefix: '94', number: withoutPlus, countryCode: 'LK' };
 }

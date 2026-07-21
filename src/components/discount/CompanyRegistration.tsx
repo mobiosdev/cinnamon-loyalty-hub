@@ -20,7 +20,8 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { StaffList } from "./StaffList";
 import { Checkbox } from "@/components/ui/checkbox";
 import { logCompanyActivity, logMemberActivity } from "@/utils/auditLogger";
-import { validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
+import { validateAndNormalizeSriLankanMobile, validateAndNormalizeSriLankanPhone, splitPhoneNumber } from "@/utils/phoneUtils";
+import { COUNTRIES } from "@/utils/countries";
 
 interface Company {
   id: string;
@@ -261,7 +262,7 @@ const CompanyRegistration = () => {
 
     // Validate phone number if provided
     if (companyFormData.phone) {
-      const phoneValidation = validateAndNormalizeSriLankanMobile(companyFormData.phone);
+      const phoneValidation = validateAndNormalizeSriLankanPhone(companyFormData.phone);
       if (!phoneValidation.isValid) {
         toast.error(phoneValidation.error || "Invalid phone number");
         return;
@@ -692,7 +693,7 @@ const CompanyRegistration = () => {
 
     // Validate and normalize company phone if provided
     if (companyPhone) {
-      const companyPhoneValidation = validateAndNormalizeSriLankanMobile(companyPhone);
+      const companyPhoneValidation = validateAndNormalizeSriLankanPhone(companyPhone);
       if (!companyPhoneValidation.isValid) {
         toast.error("Invalid company phone number: " + companyPhoneValidation.error);
         return;
@@ -703,44 +704,49 @@ const CompanyRegistration = () => {
     setLoading(true);
 
     try {
-      // Step 1: Save or update company first
-      let companyId = selectedCompany?.id;
+      // Step 1: Save or update company first if name is provided
+      let companyId = selectedCompany?.id || null;
       
-      if (!companyId) {
-        // Create new company
-        const companyCode = `COMP${Date.now()}`;
-        const newCompany = await companyApi.createCompany({
-          company_code: companyCode,
-          name: companyName,
-          address: companyAddress,
-          phone: companyPhone || '',
-          email: companyEmail || '',
-          manager_name: companyFormData.manager_name || '',
-        });
-        companyId = newCompany.id;
-        setSelectedCompany(newCompany);
-        
-        // Log company creation
-        await logCompanyActivity('create', companyName, companyId, {
-          company_code: companyCode,
-          manager: companyFormData.manager_name
-        });
+      if (companyName.trim()) {
+        if (!companyId) {
+          // Create new company
+          const companyCode = `COMP${Date.now()}`;
+          const newCompany = await companyApi.createCompany({
+            company_code: companyCode,
+            name: companyName,
+            address: companyAddress,
+            phone: companyPhone || '',
+            email: companyEmail || '',
+            manager_name: companyFormData.manager_name || '',
+          });
+          companyId = newCompany.id;
+          setSelectedCompany(newCompany);
+          
+          // Log company creation
+          await logCompanyActivity('create', companyName, companyId, {
+            company_code: companyCode,
+            manager: companyFormData.manager_name
+          });
+        } else {
+          // Update existing company if details changed
+          await companyApi.updateCompany(companyId, {
+            company_code: selectedCompany.company_code,
+            name: companyName,
+            address: companyAddress,
+            phone: companyPhone || undefined,
+            email: companyEmail || undefined,
+            manager_name: companyFormData.manager_name || undefined,
+          });
+          
+          // Log company update
+          await logCompanyActivity('update', companyName, companyId, {
+            company_code: selectedCompany.company_code,
+            manager: companyFormData.manager_name
+          });
+        }
       } else {
-        // Update existing company if details changed
-        await companyApi.updateCompany(companyId, {
-          company_code: selectedCompany.company_code,
-          name: companyName,
-          address: companyAddress,
-          phone: companyPhone || undefined,
-          email: companyEmail || undefined,
-          manager_name: companyFormData.manager_name || undefined,
-        });
-        
-        // Log company update
-        await logCompanyActivity('update', companyName, companyId, {
-          company_code: selectedCompany.company_code,
-          manager: companyFormData.manager_name
-        });
+        // If company name is empty, disassociate company
+        companyId = null;
       }
 
       // Step 2: Save or update member with company ID
@@ -946,14 +952,55 @@ const CompanyRegistration = () => {
                        />
                      </div>
                      
-                     <div className="space-y-2">
-                       <Label>Mobile *</Label>
-                       <Input 
-                         value={memberFormData.mobile || ''} 
-                         onChange={(e) => setMemberFormData({...memberFormData, mobile: e.target.value})}
-                         placeholder="+94 77 123 4567"
-                       />
-                     </div>
+                      <div className="space-y-2">
+                        <Label>Mobile *</Label>
+                        <div className="flex gap-2">
+                          <div className="w-[110px] shrink-0">
+                            <Select 
+                              value={splitPhoneNumber(memberFormData.mobile || '').countryCode} 
+                              onValueChange={(newCode) => {
+                                const country = COUNTRIES.find(c => c.code === newCode);
+                                const currentLocal = splitPhoneNumber(memberFormData.mobile || '').number;
+                                if (country) {
+                                  setMemberFormData({
+                                    ...memberFormData,
+                                    mobile: currentLocal ? country.dialCode + currentLocal : ''
+                                  });
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[300px]">
+                                {COUNTRIES.map((c) => (
+                                  <SelectItem key={c.code} value={c.code}>
+                                    <span className="mr-2">{c.flag}</span>
+                                    <span>+{c.dialCode}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Input 
+                            value={splitPhoneNumber(memberFormData.mobile || '').number} 
+                            onChange={(e) => {
+                              const currentCountry = splitPhoneNumber(memberFormData.mobile || '').countryCode;
+                              const country = COUNTRIES.find(c => c.code === currentCountry) || COUNTRIES.find(c => c.code === 'LK')!;
+                              let val = e.target.value.replace(/\D/g, '');
+                              if (val.startsWith('0')) {
+                                val = val.substring(1);
+                              }
+                              setMemberFormData({
+                                ...memberFormData, 
+                                mobile: val ? country.dialCode + val : ''
+                              });
+                            }}
+                            placeholder="77 123 4567"
+                            className="flex-1"
+                          />
+                        </div>
+                      </div>
                      
                      
                      
@@ -1046,14 +1093,49 @@ const CompanyRegistration = () => {
                      </div>
 
                      <div className="space-y-2">
-                       <Label htmlFor="companyPhone">Company Phone Number</Label>
-                       <Input
-                         id="companyPhone"
-                         value={companyPhone}
-                         onChange={(e) => setCompanyPhone(e.target.value)}
-                         placeholder="Enter company phone number"
-                       />
-                     </div>
+                        <Label htmlFor="companyPhone">Company Phone Number</Label>
+                        <div className="flex gap-2">
+                          <div className="w-[110px] shrink-0">
+                            <Select
+                              value={splitPhoneNumber(companyPhone || '').countryCode}
+                              onValueChange={(newCode) => {
+                                const country = COUNTRIES.find(c => c.code === newCode);
+                                const currentLocal = splitPhoneNumber(companyPhone || '').number;
+                                if (country) {
+                                  setCompanyPhone(currentLocal ? country.dialCode + currentLocal : '');
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[300px]">
+                                {COUNTRIES.map((c) => (
+                                  <SelectItem key={c.code} value={c.code}>
+                                    <span className="mr-2">{c.flag}</span>
+                                    <span>+{c.dialCode}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Input
+                            id="companyPhone"
+                            value={splitPhoneNumber(companyPhone || '').number}
+                            onChange={(e) => {
+                              const currentCountry = splitPhoneNumber(companyPhone || '').countryCode;
+                              const country = COUNTRIES.find(c => c.code === currentCountry) || COUNTRIES.find(c => c.code === 'LK')!;
+                              let val = e.target.value.replace(/\D/g, '');
+                              if (val.startsWith('0')) {
+                                val = val.substring(1);
+                              }
+                              setCompanyPhone(val ? country.dialCode + val : '');
+                            }}
+                            placeholder="11 234 5678"
+                            className="flex-1"
+                          />
+                        </div>
+                      </div>
 
                      <div className="space-y-2 lg:col-span-2">
                        <Label htmlFor="companyAddress">Company Address</Label>

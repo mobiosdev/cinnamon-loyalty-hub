@@ -14,7 +14,8 @@ import { categoryApi } from "@/services/categoryApi";
 import { auditApi } from "@/services/auditApi";
 import { redemptionApi } from "@/services/redemptionApi";
 import { toast } from "sonner";
-import { maskPhoneNumber, formatPhoneForDisplay, validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
+import { maskPhoneNumber, formatPhoneForDisplay, validateAndNormalizeSriLankanMobile, validateAndNormalizeSriLankanPhone, splitPhoneNumber } from "@/utils/phoneUtils";
+import { COUNTRIES } from "@/utils/countries";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
@@ -394,7 +395,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
     // Validate and normalize company phone if provided
     let normalizedCompanyPhone = companyPhone;
     if (companyPhone) {
-      const companyPhoneValidation = validateAndNormalizeSriLankanMobile(companyPhone);
+      const companyPhoneValidation = validateAndNormalizeSriLankanPhone(companyPhone);
       if (!companyPhoneValidation.isValid) {
         toast.error("Invalid company phone number: " + companyPhoneValidation.error);
         return;
@@ -1317,13 +1318,51 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                       
                       <div className="space-y-2">
                         <Label htmlFor="mobile">Mobile *</Label>
-                        <Input
-                          id="mobile"
-                          value={editFormData.mobile || ''}
-                          onChange={(e) => setEditFormData({ ...editFormData, mobile: e.target.value })}
-                          placeholder="+94 77 123 4567"
-                          required
-                        />
+                        <div className="flex gap-2">
+                          <div className="w-[110px] shrink-0">
+                            <Select 
+                              value={splitPhoneNumber(editFormData.mobile || '').countryCode} 
+                              onValueChange={(newCode) => {
+                                const country = COUNTRIES.find(c => c.code === newCode);
+                                const currentLocal = splitPhoneNumber(editFormData.mobile || '').number;
+                                if (country) {
+                                  setEditFormData({
+                                    ...editFormData,
+                                    mobile: currentLocal ? country.dialCode + currentLocal : ''
+                                  });
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[300px]">
+                                {COUNTRIES.map((c) => (
+                                  <SelectItem key={c.code} value={c.code}>
+                                    <span className="mr-2">{c.flag}</span>
+                                    <span>+{c.dialCode}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Input
+                            id="mobile"
+                            value={splitPhoneNumber(editFormData.mobile || '').number}
+                            onChange={(e) => {
+                              const currentCountry = splitPhoneNumber(editFormData.mobile || '').countryCode;
+                              const country = COUNTRIES.find(c => c.code === currentCountry) || COUNTRIES.find(c => c.code === 'LK')!;
+                              let val = e.target.value.replace(/\D/g, '');
+                              if (val.startsWith('0')) {
+                                val = val.substring(1);
+                              }
+                              setEditFormData({ ...editFormData, mobile: val ? country.dialCode + val : '' });
+                            }}
+                            placeholder="77 123 4567"
+                            required
+                            className="flex-1"
+                          />
+                        </div>
                       </div>
 
                       <div className="space-y-2 lg:col-span-2">
@@ -1433,12 +1472,47 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
 
                       <div className="space-y-2">
                         <Label htmlFor="companyPhone">Company Phone Number</Label>
-                        <Input
-                          id="companyPhone"
-                          value={companyPhone}
-                          onChange={(e) => setCompanyPhone(e.target.value)}
-                          placeholder="Enter company phone number"
-                        />
+                        <div className="flex gap-2">
+                          <div className="w-[110px] shrink-0">
+                            <Select
+                              value={splitPhoneNumber(companyPhone || '').countryCode}
+                              onValueChange={(newCode) => {
+                                const country = COUNTRIES.find(c => c.code === newCode);
+                                const currentLocal = splitPhoneNumber(companyPhone || '').number;
+                                if (country) {
+                                  setCompanyPhone(currentLocal ? country.dialCode + currentLocal : '');
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[300px]">
+                                {COUNTRIES.map((c) => (
+                                  <SelectItem key={c.code} value={c.code}>
+                                    <span className="mr-2">{c.flag}</span>
+                                    <span>+{c.dialCode}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Input
+                            id="companyPhone"
+                            value={splitPhoneNumber(companyPhone || '').number}
+                            onChange={(e) => {
+                              const currentCountry = splitPhoneNumber(companyPhone || '').countryCode;
+                              const country = COUNTRIES.find(c => c.code === currentCountry) || COUNTRIES.find(c => c.code === 'LK')!;
+                              let val = e.target.value.replace(/\D/g, '');
+                              if (val.startsWith('0')) {
+                                val = val.substring(1);
+                              }
+                              setCompanyPhone(val ? country.dialCode + val : '');
+                            }}
+                            placeholder="11 234 5678"
+                            className="flex-1"
+                          />
+                        </div>
                       </div>
 
                       <div className="space-y-2 lg:col-span-2">
