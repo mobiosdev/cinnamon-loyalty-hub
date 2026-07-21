@@ -312,8 +312,36 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
 
       console.log(`Sending Offer Reminders (${activeTab.toUpperCase()}) to:`, payload);
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (activeTab === "sms") {
+        const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://message.text-ware.com/send_sms.php';
+        const smsUsername = import.meta.env.VITE_SMS_USERNAME_PROMOTIONAL || 'TW01287_cinnamon_pr';
+        const smsPassword = import.meta.env.VITE_SMS_PASSWORD_PROMOTIONAL || import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
+        const smsSrc = import.meta.env.VITE_SMS_SRC_PROMOTIONAL || import.meta.env.VITE_SMS_SRC || 'Cinnamon';
+
+        // Loop through each recipient and send the SMS request
+        await Promise.all(
+          eligibleRecipients.map(async (m) => {
+            const phoneValidation = validateAndNormalizeSriLankanMobile(m.mobile);
+            if (phoneValidation.isValid) {
+              const smsUrl = new URL(smsApiUrl);
+              smsUrl.searchParams.append('username', smsUsername);
+              smsUrl.searchParams.append('password', smsPassword);
+              smsUrl.searchParams.append('src', smsSrc);
+              smsUrl.searchParams.append('dst', phoneValidation.normalized!);
+              smsUrl.searchParams.append('msg', message);
+              smsUrl.searchParams.append('dr', '1');
+
+              const response = await fetch(smsUrl.toString());
+              if (!response.ok) {
+                console.error(`Failed to send SMS to ${m.mobile}`);
+              }
+            }
+          })
+        );
+      } else {
+        // Simulate WhatsApp call
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
 
       // Log notification to log list
       logSentNotification({
