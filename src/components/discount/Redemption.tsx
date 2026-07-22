@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { CreditCard, Gift, Send, CheckCircle, AlertCircle, Percent, QrCode, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
@@ -95,6 +96,7 @@ const Redemption = () => {
   const [reversalMaskedMobile, setReversalMaskedMobile] = useState("");
   const [reversalExpiryTime, setReversalExpiryTime] = useState<string | null>(null);
   const [reversalSecondsLeft, setReversalSecondsLeft] = useState<number>(0);
+  const [showReverseConfirm, setShowReverseConfirm] = useState(false);
 
   // Countdown timer for reversal OTP
   useEffect(() => {
@@ -559,10 +561,10 @@ const Redemption = () => {
       return;
     }
 
-    if (!confirm(`Are you sure you want to reverse all redemptions for bill number ${reversalBillNumber.trim()}?`)) {
-      return;
-    }
+    setShowReverseConfirm(true);
+  };
 
+  const executeReversal = async () => {
     setLoading(true);
     try {
       const res = await offerApi.confirmReversal({
@@ -598,6 +600,7 @@ const Redemption = () => {
       setReversalMaskedMobile("");
       setReversalExpiryTime(null);
       setReversalStep("input");
+      setShowReverseConfirm(false);
     } catch (err: any) {
       console.error("Reversal confirmation failed:", err);
       toast.error(err.message || "Failed to confirm reversal");
@@ -1425,6 +1428,35 @@ const Redemption = () => {
         onClose={() => setIsScannerOpen(false)}
         onScanSuccess={handleQrScanSuccess}
       />
+
+      <AlertDialog open={showReverseConfirm} onOpenChange={setShowReverseConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reverse Redemption</AlertDialogTitle>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
+              Are you sure you want to reverse all redemptions for bill number{" "}
+              <span className="font-semibold">{reversalBillNumber.trim()}</span>? This action will cancel the redemption records for this bill.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={executeReversal}
+              disabled={loading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  Reversing...
+                </>
+              ) : (
+                "Reverse Redemption"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

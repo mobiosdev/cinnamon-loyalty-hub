@@ -44,6 +44,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
   const [qrMember, setQrMember] = useState<any>(null);
   const [cardDialogOpen, setCardDialogOpen] = useState(false);
   const [cardMember, setCardMember] = useState<any>(null);
+  const isQrMemberInactive = qrMember?.is_active === false;
 
   const handleDownloadQR = async (memberCode: string) => {
     try {
@@ -63,6 +64,18 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
       console.error("Failed to download QR code", error);
       toast.error("Failed to download QR code. Please try again.");
     }
+  };
+
+  const openQrDialog = (member: any) => {
+    if (!member?.is_active) return;
+    setQrMember(member);
+    setQrDialogOpen(true);
+  };
+
+  const openCardDialog = (member: any) => {
+    if (!member?.is_active) return;
+    setCardMember(member);
+    setCardDialogOpen(true);
   };
   const [memberOffers, setMemberOffers] = useState<any[]>([]);
   const [redeemedOffers, setRedeemedOffers] = useState<any[]>([]);
@@ -240,6 +253,18 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
       setLoadingOffers(false);
     }
   };
+
+  useEffect(() => {
+    if (qrMember && qrMember.is_active === false) {
+      setQrDialogOpen(false);
+    }
+  }, [qrMember]);
+
+  useEffect(() => {
+    if (cardMember && cardMember.is_active === false) {
+      setCardDialogOpen(false);
+    }
+  }, [cardMember]);
 
   const getCategoryBadgeVariant = (categoryName: string): "default" | "secondary" | "destructive" | "outline" => {
     const categoryColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -858,11 +883,10 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {
-                              setQrMember(member);
-                              setQrDialogOpen(true);
-                            }}
-                            className="text-primary hover:text-primary-foreground hover:bg-primary"
+                            onClick={() => openQrDialog(member)}
+                            disabled={!member.is_active}
+                            className="text-primary hover:text-primary-foreground hover:bg-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={member.is_active ? "View QR code" : "QR code disabled for inactive member"}
                           >
                             <QrCode className="h-4 w-4 mr-1" />
                             QR
@@ -870,11 +894,10 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {
-                              setCardMember(member);
-                              setCardDialogOpen(true);
-                            }}
-                            className="text-amber-600 hover:text-white hover:bg-amber-600"
+                            onClick={() => openCardDialog(member)}
+                            disabled={!member.is_active}
+                            className="text-amber-600 hover:text-white hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={member.is_active ? "View membership card" : "Card disabled for inactive member"}
                           >
                             <CreditCard className="h-4 w-4 mr-1" />
                             Card
@@ -1825,6 +1848,11 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
 
           {qrMember && (
             <div className="flex flex-col items-center gap-4 w-full">
+              {isQrMemberInactive && (
+                <div className="w-full rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+                  This member is inactive. QR viewing and download are disabled.
+                </div>
+              )}
               <div className="bg-white p-4 rounded-xl border-2 border-border shadow-sm">
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrMember.member_code)}`}
@@ -1841,6 +1869,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
               <Button
                 onClick={() => handleDownloadQR(qrMember.member_code)}
                 className="w-full mt-2 gap-2"
+                disabled={isQrMemberInactive}
               >
                 <Download className="h-4 w-4" />
                 Download QR Code

@@ -81,6 +81,16 @@ const OfferManagement = () => {
     loadCategories();
   }, []);
 
+  const isOfferExpired = (offer: any) => {
+    if (!offer?.valid_to) return false;
+    const validTo = new Date(offer.valid_to);
+    validTo.setHours(23, 59, 59, 999);
+    return validTo.getTime() < Date.now();
+  };
+
+  const isOfferActiveNow = (offer: any) => offer.is_active && !isOfferExpired(offer);
+  const isOfferPastNow = (offer: any) => !isOfferActiveNow(offer);
+
   const handleCategoryToggle = (catId: number, checked: boolean) => {
     if (checked) {
       setSelectedCategoryIds([...selectedCategoryIds, catId]);
@@ -247,6 +257,10 @@ const OfferManagement = () => {
   const toggleOfferStatus = async (id: string, currentStatus: boolean) => {
     try {
       const offer = offers.find(o => o.id === id);
+      if (offer && isOfferExpired(offer)) {
+        toast.error("This offer has expired. Extend the validity dates before enabling it.");
+        return;
+      }
       await offerApi.updateOffer(id, { is_active: !currentStatus });
       
       // Log offer status change
@@ -265,6 +279,11 @@ const OfferManagement = () => {
   };
 
   const handleEditClick = async (offer: any) => {
+    if (isOfferExpired(offer)) {
+      toast.error("This offer has expired. Extend the validity dates before editing it.");
+      return;
+    }
+
     setEditingOffer(offer);
     
     // Parse description and recurrence settings
@@ -394,8 +413,8 @@ const OfferManagement = () => {
     }
   };
 
-  const activeOffers = offers.filter(offer => offer.is_active);
-  const pastOffers = offers.filter(offer => !offer.is_active);
+  const activeOffers = offers.filter(offer => isOfferActiveNow(offer));
+  const pastOffers = offers.filter(offer => isOfferPastNow(offer));
 
   const handleToggleSelectOffer = (offerId: string) => {
     setSelectedOfferIds(prev => {
@@ -968,17 +987,19 @@ const OfferManagement = () => {
                         : "No expiry"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={offer.is_active ? "default" : "secondary"}>
-                        {offer.is_active ? "Active" : "Disabled"}
-                      </Badge>
+                    <Badge variant={isOfferExpired(offer) ? "destructive" : offer.is_active ? "default" : "secondary"}>
+                      {isOfferExpired(offer) ? "Expired" : offer.is_active ? "Active" : "Disabled"}
+                    </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleEditClick(offer)}
-                        >
+                        onClick={() => handleEditClick(offer)}
+                        disabled={isOfferExpired(offer)}
+                        title={isOfferExpired(offer) ? "Expired offers must be extended before editing" : "Edit offer"}
+                      >
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
@@ -991,8 +1012,9 @@ const OfferManagement = () => {
                         </Button>
                         <Switch
                           checked={offer.is_active}
-                          onCheckedChange={() => toggleOfferStatus(offer.id, offer.is_active)}
-                        />
+                        onCheckedChange={() => toggleOfferStatus(offer.id, offer.is_active)}
+                        disabled={isOfferExpired(offer)}
+                      />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1124,8 +1146,8 @@ const OfferManagement = () => {
                       : "No expiry"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={offer.is_active ? "default" : "secondary"}>
-                      {offer.is_active ? "Active" : "Disabled"}
+                    <Badge variant={isOfferExpired(offer) ? "destructive" : offer.is_active ? "default" : "secondary"}>
+                      {isOfferExpired(offer) ? "Expired" : offer.is_active ? "Active" : "Disabled"}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -1133,8 +1155,10 @@ const OfferManagement = () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleEditClick(offer)}
-                      >
+                          onClick={() => handleEditClick(offer)}
+                          disabled={isOfferExpired(offer)}
+                          title={isOfferExpired(offer) ? "Expired offers must be extended before editing" : "Edit offer"}
+                        >
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
@@ -1148,6 +1172,7 @@ const OfferManagement = () => {
                       <Switch
                         checked={offer.is_active}
                         onCheckedChange={() => toggleOfferStatus(offer.id, offer.is_active)}
+                        disabled={isOfferExpired(offer)}
                       />
                     </div>
                   </TableCell>
