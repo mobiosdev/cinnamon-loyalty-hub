@@ -23,6 +23,11 @@ import { logCompanyActivity, logMemberActivity } from "@/utils/auditLogger";
 import { validateAndNormalizeSriLankanMobile, validateAndNormalizeSriLankanPhone, splitPhoneNumber } from "@/utils/phoneUtils";
 import { COUNTRIES } from "@/utils/countries";
 
+const optionalValue = (value?: string) => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
 interface Company {
   id: string;
   company_code: string;
@@ -303,9 +308,9 @@ const CompanyRegistration = () => {
           company_code: companyCode,
           name: companyFormData.name || "",
           address: companyFormData.address || "",
-          phone: companyFormData.phone || "",
-          email: companyFormData.email || "",
-          manager_name: companyFormData.manager_name || "",
+          phone: optionalValue(companyFormData.phone),
+          email: optionalValue(companyFormData.email),
+          manager_name: optionalValue(companyFormData.manager_name),
         });
         setSelectedCompany(newCompany);
         toast.success("Company information saved successfully!");
@@ -714,10 +719,10 @@ const CompanyRegistration = () => {
           const newCompany = await companyApi.createCompany({
             company_code: companyCode,
             name: companyName,
-            address: companyAddress,
-            phone: companyPhone || '',
-            email: companyEmail || '',
-            manager_name: companyFormData.manager_name || '',
+            address: optionalValue(companyAddress),
+            phone: optionalValue(companyPhone),
+            email: optionalValue(companyEmail),
+            manager_name: optionalValue(companyFormData.manager_name),
           });
           companyId = newCompany.id;
           setSelectedCompany(newCompany);

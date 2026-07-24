@@ -500,21 +500,21 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
 
             {!loading && (
               <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
-                <div className="flex flex-col gap-0.5">
+                <div className="flex flex-col items-center text-center gap-0.5">
                   <span className="text-muted-foreground">Total targeted</span>
                   <span className="font-semibold text-base text-foreground">{totalRawRecipients}</span>
                 </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-muted-foreground flex items-center gap-1">
+                <div className="flex flex-col items-center text-center gap-0.5">
+                  <span className="text-muted-foreground flex items-center justify-center gap-1">
                     Redeemed / Skipped <AlertCircle className="h-3 w-3 text-amber-500" />
                   </span>
-                  <span className="font-semibold text-base text-amber-600">{skippedCount} skipped</span>
+                  <span className="font-semibold text-base text-amber-600">{skippedCount}</span>
                 </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-muted-foreground flex items-center gap-1">
+                <div className="flex flex-col items-center text-center gap-0.5">
+                  <span className="text-muted-foreground flex items-center justify-center gap-1">
                     Ready to Receive <CheckCircle2 className="h-3 w-3 text-green-500" />
                   </span>
-                  <span className="font-semibold text-base text-green-600">{eligibleRecipients.length} will send</span>
+                  <span className="font-semibold text-base text-green-600">{eligibleRecipients.length}</span>
                 </div>
               </div>
             )}

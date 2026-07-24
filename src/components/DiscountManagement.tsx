@@ -88,19 +88,19 @@ const DiscountManagement = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="container mx-auto px-4 sm:px-6 py-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
               <img
                 src={cinnamonLogo}
                 alt="Cinnamon Grand Colombo"
-                className="h-12 object-contain"
+                className="h-10 sm:h-12 w-auto object-contain shrink-0"
               />
-              <div className="border-l border-border pl-4">
-                <h1 className="text-2xl font-serif font-semibold text-foreground">
+              <div className="min-w-0 border-l border-border pl-3 sm:pl-4">
+                <h1 className="text-lg sm:text-2xl font-serif font-semibold text-foreground leading-tight">
                   Discount Management
                 </h1>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground leading-tight">
                   Corporate Benefits &amp; Member Discount System
                 </p>
               </div>
@@ -109,11 +109,11 @@ const DiscountManagement = () => {
             {/* User info + Logout */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" className="w-full justify-between gap-2 sm:w-auto sm:justify-start">
                   <User className="h-4 w-4" />
-                  <div className="text-left hidden sm:block">
+                  <div className="text-left min-w-0 flex-1 sm:flex-none">
                     <div className="text-xs font-semibold leading-none">{user?.full_name || user?.username}</div>
-                    <div className="text-xs text-muted-foreground capitalize">{user?.role === "superadmin" ? "Super Admin" : "User"}</div>
+                    <div className="text-xs text-muted-foreground capitalize truncate">{user?.role === "superadmin" ? "Super Admin" : "User"}</div>
                   </div>
                   <ChevronDown className="h-3 w-3" />
                 </Button>
@@ -137,44 +137,47 @@ const DiscountManagement = () => {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <div className="flex items-center gap-2 bg-muted p-1 rounded-lg">
-            <TabsList className="flex-1 grid bg-transparent p-0 h-auto" style={{ gridTemplateColumns: `repeat(${[isSuperAdmin || permissions?.registration, isSuperAdmin || permissions?.redemption, isSuperAdmin || permissions?.transactions, isSuperAdmin || permissions?.reports].filter(Boolean).length}, 1fr)` }}>
+          <div className="flex flex-col gap-2 bg-muted p-1 rounded-lg sm:flex-row sm:items-center">
+            <TabsList
+              className="flex-1 grid w-full bg-transparent p-0 h-auto overflow-x-auto sm:overflow-visible"
+              style={{ gridTemplateColumns: `repeat(${[isSuperAdmin || permissions?.registration, isSuperAdmin || permissions?.redemption, isSuperAdmin || permissions?.transactions, isSuperAdmin || permissions?.reports].filter(Boolean).length}, minmax(0, 1fr))` }}
+            >
               {(isSuperAdmin || permissions?.registration) && (
                 <TabsTrigger
                   value="registration"
-                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
                   <Building2 className="mr-2 h-4 w-4" />
-                  Registration
+                  <span className="truncate">Registration</span>
                 </TabsTrigger>
               )}
               {(isSuperAdmin || permissions?.redemption) && (
                 <TabsTrigger
                   value="redemption"
-                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Redemption
+                  <span className="truncate">Redemption</span>
                 </TabsTrigger>
               )}
               {(isSuperAdmin || permissions?.transactions) && (
                 <TabsTrigger
                   value="transactions"
-                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
                   <FileText className="mr-2 h-4 w-4" />
-                  Transactions
+                  <span className="truncate">Transactions</span>
                 </TabsTrigger>
               )}
               {(isSuperAdmin || permissions?.reports) && (
                 <TabsTrigger
                   value="reports"
-                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
                   <BarChart3 className="mr-2 h-4 w-4" />
-                  Reports
+                  <span className="truncate">Reports</span>
                 </TabsTrigger>
               )}
             </TabsList>
@@ -184,7 +187,7 @@ const DiscountManagement = () => {
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant={settingsActive ? "default" : "ghost"}
-                    className="gap-2"
+                    className="w-full justify-between gap-2 sm:w-auto sm:justify-start"
                   >
                     <Settings className="h-4 w-4" />
                     Settings
