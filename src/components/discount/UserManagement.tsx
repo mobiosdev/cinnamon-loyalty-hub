@@ -347,18 +347,19 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
         entityType: 'user',
         entityId: deactivateUserTarget.id,
         entityName: deactivateUserTarget.username,
-        action: 'update',
+        action: 'delete',
         details: {
-          event: 'deactivate_user',
-          deactivated_username: deactivateUserTarget.username
+          event: 'delete_user',
+          deleted_username: deactivateUserTarget.username,
+          soft_delete: true
         }
       });
 
-      toast.success(`User "${deactivateUserTarget.username}" deactivated`);
+      toast.success(`User "${deactivateUserTarget.username}" deleted successfully`);
       setDeactivateUserTarget(null);
       fetchData();
     } catch (err: any) {
-      toast.error(err.message || "Failed to deactivate user");
+      toast.error(err.message || "Failed to delete user");
     }
   };
 
@@ -843,27 +844,15 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           {user.id !== currentUser?.id && user.role !== "superadmin" && (
-                            user.is_active ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setDeactivateUserTarget(user)}
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                                title="Delete user"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleReactivateUser(user)}
-                                className="h-8 w-8 p-0 text-green-600 hover:text-green-600"
-                                title="Reactivate user"
-                              >
-                                <RefreshCw className="h-3.5 w-3.5" />
-                              </Button>
-                            )
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDeactivateUserTarget(user)}
+                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              title="Delete user"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           )}
                         </div>
                       </td>
@@ -1166,7 +1155,7 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
             <AlertDialogTitle>Delete User Account</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete the user account for <strong>{deactivateUserTarget?.full_name}</strong>?
-              They will not be able to log in. You can reactivate this account later.
+              This will soft delete the user account from the system.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1278,27 +1267,15 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           {user.id !== currentUser?.id && user.role !== "superadmin" && (
-                            user.is_active ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setDeactivateUserTarget(user)}
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                                title="Delete user"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleReactivateUser(user)}
-                                className="h-8 w-8 p-0 text-green-600 hover:text-green-600"
-                                title="Reactivate user"
-                              >
-                                <RefreshCw className="h-3.5 w-3.5" />
-                              </Button>
-                            )
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDeactivateUserTarget(user)}
+                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              title="Delete user"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           )}
                         </div>
                       </TableCell>
