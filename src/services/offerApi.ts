@@ -86,8 +86,9 @@ export const serializeOfferDescription = (description: string, category_recurren
 };
 
 export const offerApi = {
-  async getOffers(): Promise<PhysicalOffer[]> {
-    return apiManager.get<PhysicalOffer[]>('/offers');
+  async getOffers(search?: string): Promise<PhysicalOffer[]> {
+    const query = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+    return apiManager.get<PhysicalOffer[]>(`/offers${query}`);
   },
 
   async createOffer(offer: Omit<PhysicalOffer, 'id' | 'created_at'> & { category_ids?: number[] }): Promise<PhysicalOffer> {

@@ -993,7 +993,7 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
 
       {/* ROLE DIALOG */}
       <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingRole ? `Edit Role - ${editingRole.name}` : "Create New Role"}
@@ -1104,4 +1104,3 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
 };
 
 export default UserManagement;
-

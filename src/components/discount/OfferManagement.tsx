@@ -17,6 +17,7 @@ import { categoryApi } from "@/services/categoryApi";
 import { logOfferActivity } from "@/utils/auditLogger";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useDebounce } from "@/hooks/useDebounce";
 
 const OfferManagement = () => {
   const [offers, setOffers] = useState<any[]>([]);
@@ -48,6 +49,12 @@ const OfferManagement = () => {
   const [deletingPastOffer, setDeletingPastOffer] = useState(false);
   const [deletingPastBulk, setDeletingPastBulk] = useState(false);
   const [pastOfferToDelete, setPastOfferToDelete] = useState<any>(null);
+  const [activeSearch, setActiveSearch] = useState("");
+  const [pastSearch, setPastSearch] = useState("");
+  const [activeOffers, setActiveOffers] = useState<any[]>([]);
+  const [pastOffers, setPastOffers] = useState<any[]>([]);
+  const debouncedActiveSearch = useDebounce(activeSearch, 400);
+  const debouncedPastSearch = useDebounce(pastSearch, 400);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -77,9 +84,12 @@ const OfferManagement = () => {
   });
 
   useEffect(() => {
-    loadOffers();
     loadCategories();
   }, []);
+
+  useEffect(() => {
+    loadOffers();
+  }, [debouncedActiveSearch, debouncedPastSearch]);
 
   const isOfferExpired = (offer: any) => {
     if (!offer?.valid_to) return false;
@@ -90,6 +100,16 @@ const OfferManagement = () => {
 
   const isOfferActiveNow = (offer: any) => offer.is_active && !isOfferExpired(offer);
   const isOfferPastNow = (offer: any) => !isOfferActiveNow(offer);
+
+  const toDateInputValue = (value?: string | null) => {
+    if (!value) return "";
+    const dateOnlyMatch = value.match(/^\d{4}-\d{2}-\d{2}/);
+    if (dateOnlyMatch) return dateOnlyMatch[0];
+
+    const parsedDate = new Date(value);
+    if (Number.isNaN(parsedDate.getTime())) return "";
+    return parsedDate.toISOString().slice(0, 10);
+  };
 
   const handleCategoryToggle = (catId: number, checked: boolean) => {
     if (checked) {
@@ -129,8 +149,13 @@ const OfferManagement = () => {
 
   const loadOffers = async () => {
     try {
-      const data = await offerApi.getOffers();
-      setOffers(data);
+      const [activeData, pastData] = await Promise.all([
+        offerApi.getOffers(debouncedActiveSearch),
+        offerApi.getOffers(debouncedPastSearch),
+      ]);
+      setActiveOffers(activeData.filter(offer => isOfferActiveNow(offer)));
+      setPastOffers(pastData.filter(offer => isOfferPastNow(offer)));
+      setOffers([...activeData, ...pastData]);
     } catch (error) {
       toast.error("Failed to load offers");
     }
@@ -279,11 +304,6 @@ const OfferManagement = () => {
   };
 
   const handleEditClick = async (offer: any) => {
-    if (isOfferExpired(offer)) {
-      toast.error("This offer has expired. Extend the validity dates before editing it.");
-      return;
-    }
-
     setEditingOffer(offer);
     
     // Parse description and recurrence settings
@@ -292,8 +312,8 @@ const OfferManagement = () => {
     setEditFormData({
       name: offer.name,
       description: cleanDescription || "",
-      valid_from: offer.valid_from || "",
-      valid_to: offer.valid_to || "",
+      valid_from: toDateInputValue(offer.valid_from),
+      valid_to: toDateInputValue(offer.valid_to),
       hasMinBillValue: !!offer.min_bill_value,
       min_bill_value: offer.min_bill_value?.toString() || "",
       hasMaxDiscount: !!offer.max_discount_amount,
@@ -412,9 +432,6 @@ const OfferManagement = () => {
       setLoading(false);
     }
   };
-
-  const activeOffers = offers.filter(offer => isOfferActiveNow(offer));
-  const pastOffers = offers.filter(offer => isOfferPastNow(offer));
 
   const handleToggleSelectOffer = (offerId: string) => {
     setSelectedOfferIds(prev => {
@@ -895,6 +912,14 @@ const OfferManagement = () => {
             </div>
           </CardHeader>
           <CardContent>
+            <div className="mb-4">
+              <Input
+                value={activeSearch}
+                onChange={(e) => setActiveSearch(e.target.value)}
+                placeholder="Search active offers by name, category, or description"
+                className="max-w-md"
+              />
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -997,8 +1022,7 @@ const OfferManagement = () => {
                           variant="ghost"
                           size="icon"
                         onClick={() => handleEditClick(offer)}
-                        disabled={isOfferExpired(offer)}
-                        title={isOfferExpired(offer) ? "Expired offers must be extended before editing" : "Edit offer"}
+                        title="Edit offer"
                       >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -1054,6 +1078,14 @@ const OfferManagement = () => {
             </div>
           </CardHeader>
           <CardContent>
+            <div className="mb-4">
+              <Input
+                value={pastSearch}
+                onChange={(e) => setPastSearch(e.target.value)}
+                placeholder="Search past offers by name, category, or description"
+                className="max-w-md"
+              />
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1152,15 +1184,14 @@ const OfferManagement = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleEditClick(offer)}
-                          disabled={isOfferExpired(offer)}
-                          title={isOfferExpired(offer) ? "Expired offers must be extended before editing" : "Edit offer"}
+                          title="Edit offer"
                         >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -1383,62 +1414,6 @@ const OfferManagement = () => {
                 </div>
               </div>
 
-              <div>
-                <Label>Discount Policy (Optional)</Label>
-                <div className="border rounded-md p-4 space-y-4 bg-background mt-2">
-                  <p className="text-sm text-muted-foreground">Configure discount restrictions for this offer</p>
-                  
-                  <div className="space-y-3">
-                    <div className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        id="edit-hasMinBillValue"
-                        checked={editFormData.hasMinBillValue}
-                        onChange={(e) => setEditFormData({ ...editFormData, hasMinBillValue: e.target.checked })}
-                        className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
-                      />
-                      <div className="flex-1">
-                        <Label htmlFor="edit-hasMinBillValue" className="cursor-pointer font-medium">Minimum Bill Value</Label>
-                        {editFormData.hasMinBillValue && (
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="Enter minimum bill amount"
-                            value={editFormData.min_bill_value}
-                            onChange={(e) => setEditFormData({ ...editFormData, min_bill_value: e.target.value })}
-                            className="mt-2"
-                          />
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        id="edit-hasMaxDiscount"
-                        checked={editFormData.hasMaxDiscount}
-                        onChange={(e) => setEditFormData({ ...editFormData, hasMaxDiscount: e.target.checked })}
-                        className="h-4 w-4 mt-1 rounded border-primary text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
-                      />
-                      <div className="flex-1">
-                        <Label htmlFor="edit-hasMaxDiscount" className="cursor-pointer font-medium">Maximum Discount Amount (for percentage discounts)</Label>
-                        {editFormData.hasMaxDiscount && (
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="Enter maximum discount cap"
-                            value={editFormData.max_discount_amount}
-                            onChange={(e) => setEditFormData({ ...editFormData, max_discount_amount: e.target.value })}
-                            className="mt-2"
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Fixed Footer Actions */}

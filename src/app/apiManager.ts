@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import { APP_MESSAGES } from '@/constants/appMessages';
 
 // Load base URL from Vite environment variables.
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
@@ -99,7 +100,8 @@ axiosInstance.interceptors.response.use(
       }
     }
 
-    const errorMessage = error.response?.data?.message || error.message || 'An unexpected error occurred';
+    const rawMessage = error.response?.data?.message || error.message || APP_MESSAGES.common.unexpectedError;
+    const errorMessage = normalizeApiErrorMessage(rawMessage, error.response?.status);
     console.error('[API Error]:', errorMessage);
     
     const customError = new Error(errorMessage) as any;
@@ -130,4 +132,23 @@ export const apiManager = {
     const response = await axiosInstance.delete<T>(url, config);
     return response.data;
   },
+};
+
+const normalizeApiErrorMessage = (message: string | string[], status?: number): string => {
+  const text = Array.isArray(message) ? message.join(', ') : message;
+  const normalized = text?.trim() || '';
+
+  if (
+    status === 500 ||
+    normalized.toLowerCase() === 'internal server error' ||
+    normalized.toLowerCase().includes('internal server error')
+  ) {
+    return APP_MESSAGES.common.unableToComplete;
+  }
+
+  if (normalized.toLowerCase().includes('network error')) {
+    return APP_MESSAGES.common.networkError;
+  }
+
+  return normalized || APP_MESSAGES.common.unexpectedError;
 };
