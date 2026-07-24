@@ -1,4 +1,5 @@
 import { apiManager } from '@/app/apiManager';
+import { buildListQuery, ListParams, PaginatedResponse } from './pagination';
 
 export interface PhysicalOffer {
   id?: string;
@@ -89,6 +90,12 @@ export const offerApi = {
   async getOffers(search?: string): Promise<PhysicalOffer[]> {
     const query = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
     return apiManager.get<PhysicalOffer[]>(`/offers${query}`);
+  },
+
+  async getOffersPaginated(params: ListParams & { status?: 'active' | 'past' }): Promise<PaginatedResponse<PhysicalOffer>> {
+    const queryParams = new URLSearchParams(buildListQuery(params).replace(/^\?/, ''));
+    if (params.status) queryParams.append('status', params.status);
+    return apiManager.get<PaginatedResponse<PhysicalOffer>>(`/offers?${queryParams.toString()}`);
   },
 
   async createOffer(offer: Omit<PhysicalOffer, 'id' | 'created_at'> & { category_ids?: number[] }): Promise<PhysicalOffer> {

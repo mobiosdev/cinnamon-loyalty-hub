@@ -1,4 +1,5 @@
 import { apiManager } from '@/app/apiManager';
+import { buildListQuery, ListParams, PaginatedResponse } from './pagination';
 
 export interface CustomerCategory {
   id?: number;
@@ -12,6 +13,10 @@ export interface CustomerCategory {
 export const categoryApi = {
   async getCategories(): Promise<CustomerCategory[]> {
     return apiManager.get<CustomerCategory[]>('/categories');
+  },
+
+  async getCategoriesPaginated(params: ListParams): Promise<PaginatedResponse<CustomerCategory>> {
+    return apiManager.get<PaginatedResponse<CustomerCategory>>(`/categories${buildListQuery(params)}`);
   },
 
   async createCategory(category: Omit<CustomerCategory, 'id'>): Promise<CustomerCategory> {

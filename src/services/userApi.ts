@@ -1,4 +1,5 @@
 import { apiManager } from '@/app/apiManager';
+import { buildListQuery, ListParams, PaginatedResponse } from './pagination';
 
 export interface UserPermissions {
   registration: boolean;
@@ -80,6 +81,10 @@ export const userApi = {
     return apiManager.get<SystemRole[]>('/system-users/roles');
   },
 
+  async getRolesPaginated(params: ListParams): Promise<PaginatedResponse<SystemRole>> {
+    return apiManager.get<PaginatedResponse<SystemRole>>(`/system-users/roles${buildListQuery(params)}`);
+  },
+
   async createRole(payload: CreateRolePayload): Promise<SystemRole> {
     return apiManager.post<SystemRole>('/system-users/roles', payload);
   },
@@ -97,6 +102,13 @@ export const userApi = {
   // ==========================================
   async getUsers(): Promise<SystemUser[]> {
     return apiManager.get<SystemUser[]>('/system-users');
+  },
+
+  async getUsersPaginated(params: ListParams & { role_id?: string }): Promise<PaginatedResponse<SystemUser>> {
+    const queryParams = new URLSearchParams(buildListQuery(params).replace(/^\?/, ''));
+    if (params.role_id) queryParams.append('role_id', params.role_id);
+    const query = queryParams.toString();
+    return apiManager.get<PaginatedResponse<SystemUser>>(`/system-users${query ? `?${query}` : ''}`);
   },
 
   async createUser(payload: CreateUserPayload, createdById: string): Promise<SystemUser> {

@@ -18,6 +18,18 @@ import { logOfferActivity } from "@/utils/auditLogger";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useDebounce } from "@/hooks/useDebounce";
+import { TablePagination } from "@/components/common/TablePagination";
+import { PaginationMeta } from "@/services/pagination";
+
+const defaultPagination = (limit = 10): PaginationMeta => ({
+  total: 0,
+  page: 1,
+  currentPage: 1,
+  limit,
+  totalPages: 1,
+  hasNextPage: false,
+  hasPrevPage: false,
+});
 
 const OfferManagement = () => {
   const [offers, setOffers] = useState<any[]>([]);
@@ -53,6 +65,12 @@ const OfferManagement = () => {
   const [pastSearch, setPastSearch] = useState("");
   const [activeOffers, setActiveOffers] = useState<any[]>([]);
   const [pastOffers, setPastOffers] = useState<any[]>([]);
+  const [activePage, setActivePage] = useState(1);
+  const [pastPage, setPastPage] = useState(1);
+  const [activePageSize, setActivePageSize] = useState(10);
+  const [pastPageSize, setPastPageSize] = useState(10);
+  const [activePagination, setActivePagination] = useState<PaginationMeta>(defaultPagination());
+  const [pastPagination, setPastPagination] = useState<PaginationMeta>(defaultPagination());
   const debouncedActiveSearch = useDebounce(activeSearch, 400);
   const debouncedPastSearch = useDebounce(pastSearch, 400);
   const [formData, setFormData] = useState({
@@ -89,7 +107,15 @@ const OfferManagement = () => {
 
   useEffect(() => {
     loadOffers();
-  }, [debouncedActiveSearch, debouncedPastSearch]);
+  }, [debouncedActiveSearch, debouncedPastSearch, activePage, pastPage, activePageSize, pastPageSize]);
+
+  useEffect(() => {
+    setActivePage(1);
+  }, [debouncedActiveSearch]);
+
+  useEffect(() => {
+    setPastPage(1);
+  }, [debouncedPastSearch]);
 
   const isOfferExpired = (offer: any) => {
     if (!offer?.valid_to) return false;
@@ -150,12 +176,14 @@ const OfferManagement = () => {
   const loadOffers = async () => {
     try {
       const [activeData, pastData] = await Promise.all([
-        offerApi.getOffers(debouncedActiveSearch),
-        offerApi.getOffers(debouncedPastSearch),
+        offerApi.getOffersPaginated({ search: debouncedActiveSearch, status: 'active', page: activePage, limit: activePageSize }),
+        offerApi.getOffersPaginated({ search: debouncedPastSearch, status: 'past', page: pastPage, limit: pastPageSize }),
       ]);
-      setActiveOffers(activeData.filter(offer => isOfferActiveNow(offer)));
-      setPastOffers(pastData.filter(offer => isOfferPastNow(offer)));
-      setOffers([...activeData, ...pastData]);
+      setActiveOffers(activeData.data);
+      setPastOffers(pastData.data);
+      setActivePagination(activeData.pagination);
+      setPastPagination(pastData.pagination);
+      setOffers([...activeData.data, ...pastData.data]);
     } catch (error) {
       toast.error("Failed to load offers");
     }
@@ -1052,6 +1080,16 @@ const OfferManagement = () => {
                 )}
               </TableBody>
             </Table>
+            <TablePagination
+              pagination={activePagination}
+              pageSize={activePageSize}
+              onPageChange={setActivePage}
+              onPageSizeChange={(size) => {
+                setActivePageSize(size);
+                setActivePage(1);
+              }}
+              itemLabel="active offers"
+            />
           </CardContent>
         </Card>
       </TabsContent>
@@ -1218,6 +1256,16 @@ const OfferManagement = () => {
                 )}
               </TableBody>
             </Table>
+            <TablePagination
+              pagination={pastPagination}
+              pageSize={pastPageSize}
+              onPageChange={setPastPage}
+              onPageSizeChange={(size) => {
+                setPastPageSize(size);
+                setPastPage(1);
+              }}
+              itemLabel="past offers"
+            />
           </CardContent>
         </Card>
       </TabsContent>

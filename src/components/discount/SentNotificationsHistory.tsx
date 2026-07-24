@@ -45,6 +45,7 @@ import {
   SentNotification,
 } from "@/utils/notificationLogger";
 import { formatPhoneForDisplay } from "@/utils/phoneUtils";
+import { TablePagination } from "@/components/common/TablePagination";
 
 const SentNotificationsHistory = () => {
   const [logs, setLogs] = useState<SentNotification[]>([]);
@@ -54,7 +55,7 @@ const SentNotificationsHistory = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedLog, setSelectedLog] = useState<SentNotification | null>(null);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
-  const itemsPerPage = 8;
+  const [pageSize, setPageSize] = useState(8);
 
   useEffect(() => {
     loadLogs();
@@ -104,15 +105,19 @@ const SentNotificationsHistory = () => {
 
   // Paginated logs
   const paginatedLogs = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredLogs.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredLogs, currentPage]);
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredLogs.slice(startIndex, startIndex + pageSize);
+  }, [filteredLogs, currentPage, pageSize]);
 
-  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredLogs.length / pageSize);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, channelFilter, typeFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [pageSize]);
 
   const formatDateTime = (isoString: string) => {
     try {
@@ -247,35 +252,21 @@ const SentNotificationsHistory = () => {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-2">
-          <p className="text-xs text-muted-foreground">
-            Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-            {Math.min(currentPage * itemsPerPage, filteredLogs.length)} of{" "}
-            {filteredLogs.length} logs
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-            >
-              Next
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        </div>
-      )}
+      <TablePagination
+        pagination={{
+          total: filteredLogs.length,
+          page: currentPage,
+          currentPage,
+          limit: pageSize,
+          totalPages,
+          hasNextPage: currentPage < totalPages,
+          hasPrevPage: currentPage > 1,
+        }}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+        itemLabel="logs"
+      />
 
       {/* Dialog for details */}
       <Dialog open={!!selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)}>

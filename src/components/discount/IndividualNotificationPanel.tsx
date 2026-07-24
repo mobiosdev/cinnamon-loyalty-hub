@@ -39,6 +39,7 @@ import { BulkUploadWidget } from "./BulkUploadWidget";
 import { validateAndNormalizeSriLankanMobile, formatPhoneForDisplay } from "@/utils/phoneUtils";
 import { parseOfferDescription } from "@/services/offerApi";
 import { logSentNotification } from "@/utils/notificationLogger";
+import { TablePagination } from "@/components/common/TablePagination";
 
 interface Member {
   id: string;
@@ -65,7 +66,7 @@ const IndividualNotificationPanel = () => {
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [pageSize, setPageSize] = useState(8);
 
   const [sending, setSending] = useState(false);
   const [activeTab, setActiveTab] = useState("sms");
@@ -161,15 +162,19 @@ const IndividualNotificationPanel = () => {
 
   // Paginated members
   const paginatedMembers = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredMembers.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredMembers, currentPage]);
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredMembers.slice(startIndex, startIndex + pageSize);
+  }, [filteredMembers, currentPage, pageSize]);
 
-  const totalPages = Math.ceil(filteredMembers.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredMembers.length / pageSize);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [pageSize]);
 
   const toggleSelectMember = (member: Member) => {
     setSelectedMembers((prev) => {
@@ -545,36 +550,21 @@ const IndividualNotificationPanel = () => {
           </Table>
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between pt-2">
-            <p className="text-xs text-muted-foreground">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-              {Math.min(currentPage * itemsPerPage, filteredMembers.length)} of{" "}
-              {filteredMembers.length} database members
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          </div>
-        )}
+        <TablePagination
+          pagination={{
+            total: filteredMembers.length,
+            page: currentPage,
+            currentPage,
+            limit: pageSize,
+            totalPages,
+            hasNextPage: currentPage < totalPages,
+            hasPrevPage: currentPage > 1,
+          }}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          itemLabel="database members"
+        />
       </div>
 
       {/* Offer usage filter checklist */}

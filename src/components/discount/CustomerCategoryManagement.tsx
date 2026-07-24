@@ -15,6 +15,19 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { logCategoryActivity, logOfferActivity } from "@/utils/auditLogger";
 import { Switch } from "@/components/ui/switch";
 import { offerApi, parseOfferDescription } from "@/services/offerApi";
+import { TablePagination } from "@/components/common/TablePagination";
+import { PaginationMeta } from "@/services/pagination";
+import { useDebounce } from "@/hooks/useDebounce";
+
+const defaultPagination = (limit = 10): PaginationMeta => ({
+  total: 0,
+  page: 1,
+  currentPage: 1,
+  limit,
+  totalPages: 1,
+  hasNextPage: false,
+  hasPrevPage: false,
+});
 
 const CustomerCategoryManagement = () => {
   const [categories, setCategories] = useState<any[]>([]);
@@ -28,15 +41,29 @@ const CustomerCategoryManagement = () => {
   const [viewingCategory, setViewingCategory] = useState<any>(null);
   const [categoryOffers, setCategoryOffers] = useState<any[]>([]);
   const [loadingOffers, setLoadingOffers] = useState(false);
+  const [categorySearch, setCategorySearch] = useState("");
+  const [categoryPage, setCategoryPage] = useState(1);
+  const [categoryPageSize, setCategoryPageSize] = useState(10);
+  const [categoryPagination, setCategoryPagination] = useState<PaginationMeta>(defaultPagination());
+  const debouncedCategorySearch = useDebounce(categorySearch, 400);
 
   useEffect(() => {
     loadCategories();
-  }, []);
+  }, [categoryPage, categoryPageSize, debouncedCategorySearch]);
+
+  useEffect(() => {
+    setCategoryPage(1);
+  }, [debouncedCategorySearch]);
 
   const loadCategories = async () => {
     try {
-      const data = await categoryApi.getCategories();
-      setCategories(data);
+      const data = await categoryApi.getCategoriesPaginated({
+        page: categoryPage,
+        limit: categoryPageSize,
+        search: debouncedCategorySearch,
+      });
+      setCategories(data.data);
+      setCategoryPagination(data.pagination);
     } catch (error) {
       toast.error("Failed to load member categories");
     }
@@ -260,6 +287,14 @@ const CustomerCategoryManagement = () => {
           <CardDescription>All member categories in the system.</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-4">
+            <Input
+              value={categorySearch}
+              onChange={(e) => setCategorySearch(e.target.value)}
+              placeholder="Search member categories"
+              className="max-w-md"
+            />
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -318,6 +353,16 @@ const CustomerCategoryManagement = () => {
               )}
             </TableBody>
           </Table>
+          <TablePagination
+            pagination={categoryPagination}
+            pageSize={categoryPageSize}
+            onPageChange={setCategoryPage}
+            onPageSizeChange={(size) => {
+              setCategoryPageSize(size);
+              setCategoryPage(1);
+            }}
+            itemLabel="member categories"
+          />
         </CardContent>
       </Card>
 

@@ -3,6 +3,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -25,13 +26,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { UserPlus, Pencil, UserX, RefreshCw, Eye, EyeOff, Users, Shield, ShieldCheck, Trash2, Clock, Activity, Building2, FileText, Gift, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { UserPlus, Pencil, RefreshCw, Eye, EyeOff, Users, Shield, ShieldCheck, Trash2, Clock, Activity, Building2, FileText, Gift, ChevronLeft, ChevronRight, ChevronDown, UserCircle2 } from "lucide-react";
 import { userApi, SystemUser, SystemRole, CreateUserPayload, UpdateUserPayload, CreateRolePayload, UpdateRolePayload, UserPermissions } from "@/services/userApi";
 import { auditApi, AuditLog } from "@/services/auditApi";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
 import { logActivity } from "@/utils/auditLogger";
+import { TablePagination } from "@/components/common/TablePagination";
+import { PaginationMeta } from "@/services/pagination";
 
 const PERMISSION_LABELS: { key: keyof UserPermissions; label: string }[] = [
   { key: "registration", label: "Registration" },
@@ -84,6 +87,13 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
   const [roles, setRoles] = useState<SystemRole[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("users");
+  const [userRoleFilter, setUserRoleFilter] = useState("all");
+  const [userPage, setUserPage] = useState(1);
+  const [rolePage, setRolePage] = useState(1);
+  const [userPageSize, setUserPageSize] = useState(10);
+  const [rolePageSize, setRolePageSize] = useState(10);
+  const [userPagination, setUserPagination] = useState<PaginationMeta>({ total: 0, page: 1, currentPage: 1, limit: 10, totalPages: 1, hasNextPage: false, hasPrevPage: false });
+  const [rolePagination, setRolePagination] = useState<PaginationMeta>({ total: 0, page: 1, currentPage: 1, limit: 10, totalPages: 1, hasNextPage: false, hasPrevPage: false });
 
   // User Logs Dialog State
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
@@ -94,10 +104,19 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
   // Role logs states & expandable rows
   const [selectedRoleForLogs, setSelectedRoleForLogs] = useState<SystemRole | null>(null);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const [roleUsersDialogOpen, setRoleUsersDialogOpen] = useState(false);
+  const [selectedRoleForUsers, setSelectedRoleForUsers] = useState<SystemRole | null>(null);
+  const [roleUsers, setRoleUsers] = useState<SystemUser[]>([]);
+  const [roleUsersLoading, setRoleUsersLoading] = useState(false);
+  const [roleUsersPage, setRoleUsersPage] = useState(1);
+  const [roleUsersPageSize, setRoleUsersPageSize] = useState(8);
+  const [roleUsersPagination, setRoleUsersPagination] = useState<PaginationMeta>({ total: 0, page: 1, currentPage: 1, limit: 8, totalPages: 1, hasNextPage: false, hasPrevPage: false });
 
   const toggleRow = (id: string) => {
     setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
   };
+
+  const safeUserLogs = Array.isArray(userLogs) ? userLogs : [];
 
   // User Dialogs / Forms
   const [userDialogOpen, setUserDialogOpen] = useState(false);
@@ -130,11 +149,17 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
     setIsLoading(true);
     try {
       const [usersData, rolesData] = await Promise.all([
-        userApi.getUsers(),
-        userApi.getRoles()
+        userApi.getUsersPaginated({
+          page: userPage,
+          limit: userPageSize,
+          role_id: userRoleFilter !== "all" ? userRoleFilter : undefined,
+        }),
+        userApi.getRolesPaginated({ page: rolePage, limit: rolePageSize })
       ]);
-      setUsers(usersData);
-      setRoles(rolesData);
+      setUsers(usersData.data);
+      setRoles(rolesData.data);
+      setUserPagination(usersData.pagination);
+      setRolePagination(rolesData.pagination);
     } catch (err: any) {
       toast.error(err.message || "Failed to load management data");
     } finally {
@@ -144,7 +169,11 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [userPage, userPageSize, rolePage, rolePageSize, userRoleFilter]);
+
+  useEffect(() => {
+    setUserPage(1);
+  }, [userRoleFilter]);
 
   const openUserLogs = async (user: SystemUser) => {
     setSelectedUserForLogs(user);
@@ -153,7 +182,7 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
     setLogsLoading(true);
     try {
       const logs = await auditApi.getAuditLogs({ limit: 100, search: user.username });
-      setUserLogs(logs);
+      setUserLogs(Array.isArray(logs) ? logs : Array.isArray((logs as any)?.data) ? (logs as any).data : []);
     } catch (err: any) {
       toast.error(err.message || "Failed to load activity logs");
     } finally {
@@ -168,13 +197,43 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
     setLogsLoading(true);
     try {
       const logs = await auditApi.getAuditLogs({ limit: 100, search: role.name });
-      setUserLogs(logs);
+      setUserLogs(Array.isArray(logs) ? logs : Array.isArray((logs as any)?.data) ? (logs as any).data : []);
     } catch (err: any) {
       toast.error(err.message || "Failed to load activity logs");
     } finally {
       setLogsLoading(false);
     }
   };
+
+  const openRoleUsers = async (role: SystemRole) => {
+    setSelectedRoleForUsers(role);
+    setRoleUsersDialogOpen(true);
+    setRoleUsersPage(1);
+  };
+
+  const fetchRoleUsers = async () => {
+    if (!selectedRoleForUsers) return;
+    setRoleUsersLoading(true);
+    try {
+      const data = await userApi.getUsersPaginated({
+        page: roleUsersPage,
+        limit: roleUsersPageSize,
+        role_id: selectedRoleForUsers.id,
+      });
+      setRoleUsers(data.data);
+      setRoleUsersPagination(data.pagination);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load users for this role");
+    } finally {
+      setRoleUsersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (roleUsersDialogOpen && selectedRoleForUsers) {
+      fetchRoleUsers();
+    }
+  }, [roleUsersDialogOpen, selectedRoleForUsers, roleUsersPage, roleUsersPageSize]);
 
   // ==========================================
   // USER HANDLERS
@@ -488,7 +547,7 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
                 <RefreshCw className="h-8 w-8 animate-spin mb-2 text-primary" />
                 <span>Loading activity logs...</span>
               </div>
-            ) : userLogs.length === 0 ? (
+            ) : safeUserLogs.length === 0 ? (
               <div className="text-center py-20 text-muted-foreground">
                 <Activity className="h-12 w-12 mx-auto text-muted-foreground/30 mb-2" />
                 <p>No activity logs found.</p>
@@ -506,7 +565,7 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {userLogs.map((log) => {
+                    {safeUserLogs.map((log) => {
                       const isExpanded = !!expandedRows[log.id];
                       return (
                         <>
@@ -684,6 +743,23 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
 
         {/* USERS CONTENT */}
         <TabsContent value="users" className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="w-full sm:w-72">
+              <Select value={userRoleFilter} onValueChange={setUserRoleFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Roles</SelectItem>
+                  {roles.map((role) => (
+                    <SelectItem key={role.id} value={role.id}>
+                      {role.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="rounded-lg border border-border overflow-hidden bg-card shadow-sm">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
@@ -691,7 +767,7 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
                   <th className="px-4 py-3 text-left font-semibold">User Details</th>
                   <th className="px-4 py-3 text-left font-semibold">Assigned Role</th>
                   <th className="px-4 py-3 text-left font-semibold">Mobile (for OTP)</th>
-                  <th className="px-4 py-3 text-left font-semibold">Inherited Permissions</th>
+                  <th className="px-4 py-3 text-left font-semibold">Permissions Granted</th>
                   <th className="px-4 py-3 text-left font-semibold">Status</th>
                   <th className="px-4 py-3 text-right font-semibold">Actions</th>
                 </tr>
@@ -773,9 +849,9 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
                                 size="sm"
                                 onClick={() => setDeactivateUserTarget(user)}
                                 className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                                title="Deactivate user"
+                                title="Delete user"
                               >
-                                <UserX className="h-3.5 w-3.5" />
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             ) : (
                               <Button
@@ -796,6 +872,16 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
                 )}
               </tbody>
             </table>
+            <TablePagination
+              pagination={userPagination}
+              pageSize={userPageSize}
+              onPageChange={setUserPage}
+              onPageSizeChange={(size) => {
+                setUserPageSize(size);
+                setUserPage(1);
+              }}
+              itemLabel="users"
+            />
           </div>
         </TabsContent>
 
@@ -853,6 +939,15 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => openRoleUsers(role)}
+                            className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/5"
+                            title="View users in role"
+                          >
+                            <UserCircle2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => openRoleLogs(role)}
                             className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/5"
                             title="View role activity logs"
@@ -884,6 +979,16 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
                 )}
               </tbody>
             </table>
+            <TablePagination
+              pagination={rolePagination}
+              pageSize={rolePageSize}
+              onPageChange={setRolePage}
+              onPageSizeChange={(size) => {
+                setRolePageSize(size);
+                setRolePage(1);
+              }}
+              itemLabel="roles"
+            />
           </div>
         </TabsContent>
       </Tabs>
@@ -1054,13 +1159,13 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
         </DialogContent>
       </Dialog>
 
-      {/* User Deactivation Alert */}
+      {/* User Deletion Alert */}
       <AlertDialog open={!!deactivateUserTarget} onOpenChange={o => !o && setDeactivateUserTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate User Account</AlertDialogTitle>
+            <AlertDialogTitle>Delete User Account</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to deactivate the user account for <strong>{deactivateUserTarget?.full_name}</strong>?
+              Are you sure you want to delete the user account for <strong>{deactivateUserTarget?.full_name}</strong>?
               They will not be able to log in. You can reactivate this account later.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1070,7 +1175,7 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
               onClick={handleDeactivateUser}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Deactivate Account
+              Delete Account
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1097,6 +1202,125 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={roleUsersDialogOpen} onOpenChange={(open) => {
+        setRoleUsersDialogOpen(open);
+        if (!open) {
+          setSelectedRoleForUsers(null);
+          setRoleUsers([]);
+        }
+      }}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCircle2 className="h-5 w-5 text-primary" />
+              Users in Role: {selectedRoleForUsers?.name || "N/A"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="rounded-lg border border-border overflow-hidden bg-card shadow-sm">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead>User Details</TableHead>
+                  <TableHead>Mobile</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {roleUsersLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
+                      <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2" />
+                      Loading users...
+                    </TableCell>
+                  </TableRow>
+                ) : roleUsers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
+                      No users found for this role.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  roleUsers.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="font-semibold">{user.full_name}</div>
+                        <div className="text-xs text-muted-foreground">@{user.username}</div>
+                        {user.email && <div className="text-xs text-muted-foreground">{user.email}</div>}
+                      </TableCell>
+                      <TableCell>{user.mobile || "Not set"}</TableCell>
+                      <TableCell>
+                        <Badge variant={user.is_active ? "outline" : "destructive"} className={user.is_active ? "border-green-500 text-green-600 bg-green-50/50" : ""}>
+                          {user.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openUserLogs(user)}
+                            className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/5"
+                            title="View user activity logs"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditUser(user)}
+                            className="h-8 w-8 p-0"
+                            disabled={user.role === "superadmin" && user.id !== currentUser?.id}
+                            title="Edit user"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          {user.id !== currentUser?.id && user.role !== "superadmin" && (
+                            user.is_active ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setDeactivateUserTarget(user)}
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                title="Delete user"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleReactivateUser(user)}
+                                className="h-8 w-8 p-0 text-green-600 hover:text-green-600"
+                                title="Reactivate user"
+                              >
+                                <RefreshCw className="h-3.5 w-3.5" />
+                              </Button>
+                            )
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <TablePagination
+            pagination={roleUsersPagination}
+            pageSize={roleUsersPageSize}
+            onPageChange={setRoleUsersPage}
+            onPageSizeChange={(size) => {
+              setRoleUsersPageSize(size);
+              setRoleUsersPage(1);
+            }}
+            itemLabel="users"
+          />
+        </DialogContent>
+      </Dialog>
 
 
     </div>

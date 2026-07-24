@@ -1,4 +1,5 @@
 import { apiManager } from '@/app/apiManager';
+import { buildListQuery, ListParams, PaginatedResponse } from './pagination';
 
 export interface AuditLog {
   id: string;
@@ -25,18 +26,8 @@ export interface PhoneView {
   };
 }
 
-interface AuditLogSearchParams {
-  limit?: number;
-  search?: string;
-}
-
-interface PhoneViewSearchParams {
-  limit?: number;
-  search?: string;
-}
-
 export const auditApi = {
-  async getAuditLogs(params: AuditLogSearchParams = {}): Promise<AuditLog[]> {
+  async getAuditLogs(params: ListParams = {}): Promise<AuditLog[]> {
     const queryParams = new URLSearchParams();
     if (params.limit) queryParams.append('limit', params.limit.toString());
     if (params.search) queryParams.append('search', params.search);
@@ -44,12 +35,20 @@ export const auditApi = {
     return apiManager.get<AuditLog[]>(`/audit/logs?${queryParams.toString()}`);
   },
 
-  async getPhoneViews(params: PhoneViewSearchParams = {}): Promise<PhoneView[]> {
+  async getAuditLogsPaginated(params: ListParams): Promise<PaginatedResponse<AuditLog>> {
+    return apiManager.get<PaginatedResponse<AuditLog>>(`/audit/logs${buildListQuery(params)}`);
+  },
+
+  async getPhoneViews(params: ListParams = {}): Promise<PhoneView[]> {
     const queryParams = new URLSearchParams();
     if (params.limit) queryParams.append('limit', params.limit.toString());
     if (params.search) queryParams.append('search', params.search);
 
     return apiManager.get<PhoneView[]>(`/audit/phone-views?${queryParams.toString()}`);
+  },
+
+  async getPhoneViewsPaginated(params: ListParams): Promise<PaginatedResponse<PhoneView>> {
+    return apiManager.get<PaginatedResponse<PhoneView>>(`/audit/phone-views${buildListQuery(params)}`);
   },
 
   async logPhoneView(memberId: string, viewerInfo: string = 'Admin User'): Promise<void> {

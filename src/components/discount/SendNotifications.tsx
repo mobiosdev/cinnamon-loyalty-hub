@@ -13,15 +13,7 @@ import { SendMessageDialog } from "./SendMessageDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import IndividualNotificationPanel from "./IndividualNotificationPanel";
 import SentNotificationsHistory from "./SentNotificationsHistory";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+import { TablePagination } from "@/components/common/TablePagination";
 
 interface OfferWithCategories {
   id: string;
@@ -47,7 +39,7 @@ const SendNotifications = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     loadOffersWithCategories();
@@ -140,17 +132,21 @@ const SendNotifications = () => {
 
   // Paginate filtered offers
   const paginatedOffers = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
     return filteredOffers.slice(startIndex, endIndex);
-  }, [filteredOffers, currentPage, itemsPerPage]);
+  }, [filteredOffers, currentPage, pageSize]);
 
-  const totalPages = Math.ceil(filteredOffers.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredOffers.length / pageSize);
 
   // Reset to page 1 when search query changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [pageSize]);
 
   return (
     <div className="space-y-6">
@@ -270,59 +266,21 @@ const SendNotifications = () => {
                     </Table>
                   </div>
 
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-muted-foreground">
-                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredOffers.length)} of {filteredOffers.length} offers
-                      </p>
-                      <Pagination>
-                        <PaginationContent>
-                          <PaginationItem>
-                            <PaginationPrevious
-                              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                              className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                            />
-                          </PaginationItem>
-                          
-                          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                            // Show first page, last page, current page, and pages around current
-                            if (
-                              page === 1 ||
-                              page === totalPages ||
-                              (page >= currentPage - 1 && page <= currentPage + 1)
-                            ) {
-                              return (
-                                <PaginationItem key={page}>
-                                  <PaginationLink
-                                    onClick={() => setCurrentPage(page)}
-                                    isActive={currentPage === page}
-                                    className="cursor-pointer"
-                                  >
-                                    {page}
-                                  </PaginationLink>
-                                </PaginationItem>
-                              );
-                            } else if (page === currentPage - 2 || page === currentPage + 2) {
-                              return (
-                                <PaginationItem key={page}>
-                                  <PaginationEllipsis />
-                                </PaginationItem>
-                              );
-                            }
-                            return null;
-                          })}
-                          
-                          <PaginationItem>
-                            <PaginationNext
-                              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                              className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                            />
-                          </PaginationItem>
-                        </PaginationContent>
-                      </Pagination>
-                    </div>
-                  )}
+                  <TablePagination
+                    pagination={{
+                      total: filteredOffers.length,
+                      page: currentPage,
+                      currentPage,
+                      limit: pageSize,
+                      totalPages,
+                      hasNextPage: currentPage < totalPages,
+                      hasPrevPage: currentPage > 1,
+                    }}
+                    pageSize={pageSize}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={setPageSize}
+                    itemLabel="offers"
+                  />
                 </>
               )}
             </TabsContent>

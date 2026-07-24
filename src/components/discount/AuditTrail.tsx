@@ -10,6 +10,18 @@ import { Loader2, Search, Eye, Activity, Shield, Users, FileText, Gift, Building
 import { toast } from "sonner";
 import { auditApi } from "@/services/auditApi";
 import { format, formatDistanceToNow } from "date-fns";
+import { TablePagination } from "@/components/common/TablePagination";
+import { PaginationMeta } from "@/services/pagination";
+
+const defaultPagination = (limit = 15): PaginationMeta => ({
+  total: 0,
+  page: 1,
+  currentPage: 1,
+  limit,
+  totalPages: 1,
+  hasNextPage: false,
+  hasPrevPage: false,
+});
 
 interface AuditLog {
   id: string;
@@ -52,8 +64,8 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
   const [filterAction, setFilterAction] = useState<string>("all");
   const [filterEntityType, setFilterEntityType] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const itemsPerPage = 15;
+  const [pageSize, setPageSize] = useState(15);
+  const [pagination, setPagination] = useState<PaginationMeta>(defaultPagination());
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
   const toggleRow = (id: string) => {
@@ -66,7 +78,7 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
     } else {
       fetchAuditLogs();
     }
-  }, [activeTab, currentPage, filterAction, filterEntityType, searchTerm]);
+  }, [activeTab, currentPage, pageSize, filterAction, filterEntityType, searchTerm]);
 
   useEffect(() => {
     setExpandedRows({});
@@ -96,13 +108,14 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
   const fetchAuditLogs = async () => {
     try {
       setLoading(true);
-      const data = await auditApi.getAuditLogs({
-        limit: 100,
+      const data = await auditApi.getAuditLogsPaginated({
+        page: currentPage,
+        limit: pageSize,
         search: searchTerm || undefined,
       });
       
       // Filter in memory for entity type and action if selected (to preserve existing UI behaviors)
-      let filteredData = data || [];
+      let filteredData = data.data || [];
       if (filterEntityType !== 'all') {
         filteredData = filteredData.filter((log: any) => log.entity_type === filterEntityType);
       }
@@ -110,13 +123,8 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
         filteredData = filteredData.filter((log: any) => log.action === filterAction);
       }
 
-      // Pagination
-      const count = filteredData.length;
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
-
-      setAuditLogs(paginatedData);
-      setTotalPages(Math.ceil(count / itemsPerPage));
+      setAuditLogs(filteredData);
+      setPagination(data.pagination);
     } catch (error) {
       console.error("Error fetching audit logs:", error);
       toast.error("Failed to load audit logs");
@@ -128,18 +136,14 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
   const fetchPhoneViews = async () => {
     try {
       setLoading(true);
-      const data = await auditApi.getPhoneViews({
-        limit: 100,
+      const data = await auditApi.getPhoneViewsPaginated({
+        page: currentPage,
+        limit: pageSize,
         search: searchTerm || undefined,
       });
 
-      // Pagination
-      const count = data.length;
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const paginatedData = data.slice(startIndex, startIndex + itemsPerPage);
-
-      setPhoneViews(paginatedData);
-      setTotalPages(Math.ceil(count / itemsPerPage));
+      setPhoneViews(data.data);
+      setPagination(data.pagination);
     } catch (error) {
       console.error("Error fetching phone views:", error);
       toast.error("Failed to load phone view logs");
@@ -640,34 +644,16 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
                 </div>
               )}
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-2 pt-4 border-t">
-                  <div className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalPages}
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1 || loading}
-                    >
-                      <ChevronLeft className="h-4 w-4 mr-1" />
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage >= totalPages || loading}
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <TablePagination
+                pagination={pagination}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setCurrentPage(1);
+                }}
+                itemLabel="activity logs"
+              />
             </CardContent>
           </TabsContent>
 
@@ -737,34 +723,16 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
                 )}
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-2 pt-4 border-t">
-                  <div className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalPages}
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1 || loading}
-                    >
-                      <ChevronLeft className="h-4 w-4 mr-1" />
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage >= totalPages || loading}
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <TablePagination
+                pagination={pagination}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setCurrentPage(1);
+                }}
+                itemLabel="phone views"
+              />
             </CardContent>
           </TabsContent>
         </Card>
