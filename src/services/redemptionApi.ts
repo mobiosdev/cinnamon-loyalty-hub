@@ -23,6 +23,7 @@ export interface Transaction {
   discount_type: string;
   discount_value: number;
   redeemed_at: string;
+  status?: string;
   type: 'discount' | 'offer';
   offer_name?: string;
 }
@@ -33,6 +34,7 @@ interface TransactionFilters {
   searchTerm?: string;
   dateFrom?: string;
   dateTo?: string;
+  statusFilter?: string;
 }
 
 interface ReportFilters {
@@ -52,6 +54,9 @@ export const redemptionApi = {
     }
     if (filters.offerFilter && filters.offerFilter !== 'all') {
       queryParams.append('offerFilter', filters.offerFilter);
+    }
+    if (filters.statusFilter && filters.statusFilter !== 'all') {
+      queryParams.append('statusFilter', filters.statusFilter);
     }
     if (filters.searchTerm) {
       queryParams.append('searchTerm', filters.searchTerm);

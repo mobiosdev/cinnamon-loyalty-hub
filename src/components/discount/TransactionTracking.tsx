@@ -30,6 +30,7 @@ export interface Transaction {
   discount_type: string;
   discount_value: number;
   redeemed_at: string;
+  status?: string;
   type: "discount" | "offer";
   offer_name?: string;
 }
@@ -46,6 +47,7 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
   const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [offerFilter, setOfferFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   
   // Popover open states for calendars
   const [fromDateOpen, setFromDateOpen] = useState(false);
@@ -108,6 +110,7 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
       const data = await redemptionApi.getTransactions({
         categoryFilter,
         offerFilter,
+        statusFilter,
         searchTerm: effectiveSearch,
         dateFrom: dateFrom?.toISOString(),
         dateTo: formattedDateTo,
@@ -168,7 +171,7 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
   useEffect(() => {
     setCurrentPage(1);
     fetchTransactions();
-  }, [categoryFilter, offerFilter, dateFrom, dateTo]);
+  }, [categoryFilter, offerFilter, statusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     updateDisplayedTransactions(allTransactions, currentPage, pageSize);
@@ -188,6 +191,21 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
     );
   };
 
+  const getStatusBadge = (status?: string) => {
+    if (status === 'reversed') {
+      return (
+        <Badge variant="destructive" className="capitalize">
+          Reversed
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white capitalize">
+        Redeemed
+      </Badge>
+    );
+  };
+
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
       setCurrentPage(newPage);
@@ -201,7 +219,7 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
 
   // Export functions
   const exportToCSV = () => {
-    const headers = ['Bill No', 'Member', 'Phone', 'Company', 'Category', 'Type', 'Details', 'Date & Time'];
+    const headers = ['Bill No', 'Member', 'Phone', 'Company', 'Category', 'Type', 'Details', 'Status', 'Date & Time'];
     const csvData = allTransactions.map(t => [
       t.bill_number,
       t.member_name,
@@ -212,6 +230,7 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
       t.type === 'discount' 
         ? `${t.discount_type === 'percentage' ? t.discount_value + '%' : 'Rs ' + t.discount_value}${t.discount_amount > 0 ? ' (Saved: Rs ' + t.discount_amount.toFixed(2) + ')' : ''}`
         : t.offer_name,
+      t.status === 'reversed' ? 'Reversed' : 'Redeemed',
       new Date(t.redeemed_at).toLocaleString()
     ]);
 
@@ -237,6 +256,7 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
         'Details': t.type === 'discount' 
           ? `${t.discount_type === 'percentage' ? t.discount_value + '%' : 'Rs ' + t.discount_value}${t.discount_amount > 0 ? ' (Saved: Rs ' + t.discount_amount.toFixed(2) + ')' : ''}`
           : t.offer_name,
+        'Status': t.status === 'reversed' ? 'Reversed' : 'Redeemed',
         'Date & Time': new Date(t.redeemed_at).toLocaleString()
       }))
     );
@@ -264,11 +284,12 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
       t.type === 'discount' 
         ? `${t.discount_type === 'percentage' ? t.discount_value + '%' : 'Rs ' + t.discount_value}`
         : t.offer_name,
+      t.status === 'reversed' ? 'Reversed' : 'Redeemed',
       format(new Date(t.redeemed_at), 'PP')
     ]);
 
     autoTable(doc, {
-      head: [['Bill No', 'Member', 'Company', 'Category', 'Type', 'Details', 'Date']],
+      head: [['Bill No', 'Member', 'Company', 'Category', 'Type', 'Details', 'Status', 'Date']],
       body: tableData,
       startY: 28,
       styles: { fontSize: 8 },
@@ -389,8 +410,8 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
             </div>
           </div>
 
-          {/* Member Category Filter with Offer Filter and Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          {/* Member Category, Offer, Status Filters with Search & Clear Buttons */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
             <div className="space-y-2">
               <Label htmlFor="category">
                 <Filter className="inline h-4 w-4 mr-1" />
@@ -439,13 +460,37 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
               </Select>
             </div>
 
-            {(dateFrom || dateTo) && (
+            <div className="space-y-2">
+              <Label htmlFor="status">
+                <Filter className="inline h-4 w-4 mr-1" />
+                Status
+              </Label>
+              <Select 
+                value={statusFilter} 
+                onValueChange={setStatusFilter}
+                disabled={loading}
+              >
+                <SelectTrigger id="status">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="active">Redeemed</SelectItem>
+                  <SelectItem value="reversed">Reversed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(dateFrom || dateTo || categoryFilter !== 'all' || offerFilter !== 'all' || statusFilter !== 'all') && (
               <Button
                 variant="outline"
                 className="h-10"
                 onClick={() => {
                   setDateFrom(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
                   setDateTo(new Date());
+                  setCategoryFilter('all');
+                  setOfferFilter('all');
+                  setStatusFilter('all');
                 }}
               >
                 Clear Filters
@@ -505,13 +550,14 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
                 <TableHead>Category</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Details</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Date & Time</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
+                  <TableCell colSpan={8} className="h-24 text-center">
                     <div className="flex items-center justify-center gap-2">
                       <Loader2 className="h-5 w-5 animate-spin" />
                       <span>Loading transactions...</span>
@@ -551,12 +597,13 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
                         <span className="font-medium">{transaction.offer_name}</span>
                       )}
                     </TableCell>
+                    <TableCell>{getStatusBadge(transaction.status)}</TableCell>
                     <TableCell>{new Date(transaction.redeemed_at).toLocaleString()}</TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
+                  <TableCell colSpan={8} className="h-24 text-center">
                     No transactions found.
                   </TableCell>
                 </TableRow>

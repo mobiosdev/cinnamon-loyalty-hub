@@ -1153,8 +1153,8 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete User Account</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete the user account for <strong>{deactivateUserTarget?.full_name}</strong>?
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
+              Are you sure you want to delete the user account for <strong className="font-semibold text-red-700 dark:text-red-300">{deactivateUserTarget?.full_name}</strong>?
               This will soft delete the user account from the system.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1174,9 +1174,9 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
       <AlertDialog open={!!deleteRoleTarget} onOpenChange={o => !o && setDeleteRoleTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Role</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete the role <strong>{deleteRoleTarget?.name}</strong>?
+            <AlertDialogTitle className="text-red-600 dark:text-red-400">Delete Role</AlertDialogTitle>
+            <AlertDialogDescription className="text-red-600 dark:text-red-400">
+              Are you sure you want to delete the role <strong className="font-semibold text-red-700 dark:text-red-300">{deleteRoleTarget?.name}</strong>?
               This action cannot be undone. You can only delete roles that are not currently assigned to active users.
             </AlertDialogDescription>
           </AlertDialogHeader>
