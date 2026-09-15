@@ -105,7 +105,7 @@ export const staffApi = {
   },
 
   async bulkImport(membersList: any[], uploadCategoryId: number, companyId?: string): Promise<Response> {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7257/api';
     return fetch(`${apiBase}/members/bulk-import`, {
       method: 'POST',
       headers: {

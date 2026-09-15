@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { User, AuthState } from '../types';
 
-const API_BASE = () => import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
+const API_BASE = () => import.meta.env.VITE_API_BASE_URL || 'http://localhost:7257/api';
 
 interface Step1Credentials {
   email: string;
@@ -168,12 +168,18 @@ export const loginStep2 = createAsyncThunk(
 // Keep backward-compat loginUser alias (not used in new flow)
 export const loginUser = loginStep1;
 
-const savedUser = localStorage.getItem('user');
+let savedUser: User | null = null;
+try {
+  const u = localStorage.getItem('user');
+  if (u) savedUser = JSON.parse(u);
+} catch {
+  localStorage.removeItem('user');
+}
 const savedToken = localStorage.getItem('token');
 
 const initialState: AuthState = {
-  user: savedUser ? JSON.parse(savedUser) : null,
-  isAuthenticated: !!savedToken,
+  user: savedUser,
+  isAuthenticated: !!savedToken && !!savedUser,
   isLoading: false,
   error: null,
   pendingUsername: null,

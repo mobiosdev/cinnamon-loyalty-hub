@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { APP_MESSAGES } from '@/constants/appMessages';
 
 // Load base URL from Vite environment variables.
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7050/api';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7257/api';
 
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -43,12 +43,17 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const url = originalRequest?.url || '';
+    const isPublicAuthUrl = 
+      url.includes('/users/login') || 
+      url.includes('/users/refresh') || 
+      url.includes('/users/reset-password') ||
+      url.includes('/audit/logs');
 
     if (
       error.response?.status === 401 && 
       !originalRequest._retry && 
-      originalRequest.url &&
-      !originalRequest.url.includes('/users/refresh')
+      !isPublicAuthUrl
     ) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -89,14 +94,18 @@ axiosInstance.interceptors.response.use(
           localStorage.removeItem('token');
           localStorage.removeItem('refresh_token');
           localStorage.removeItem('user');
-          window.location.href = '/login';
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
 
           return Promise.reject(refreshError);
         }
       } else {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        window.location.href = '/login';
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
       }
     }
 
