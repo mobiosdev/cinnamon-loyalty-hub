@@ -95,6 +95,7 @@ const CompanyRegistration = () => {
     first_name: '',
     last_name: '',
     mobile: '',
+    secondary_mobile: '',
     email: '',
     address: '',
     dateOfBirth: '',
@@ -244,6 +245,7 @@ const CompanyRegistration = () => {
       first_name: '',
       last_name: '',
       mobile: '',
+      secondary_mobile: '',
       email: '',
       address: '',
       dateOfBirth: '',
@@ -331,6 +333,7 @@ const CompanyRegistration = () => {
       first_name: staff.first_name,
       last_name: staff.last_name,
       mobile: staff.mobile,
+      secondary_mobile: staff.secondary_mobile || '',
       email: staff.email,
       address: staff.address,
       dateOfBirth: staff.date_of_birth?.split('T')[0] || '',
@@ -423,10 +426,10 @@ const CompanyRegistration = () => {
 
   const downloadSampleExcel = () => {
     const headers = [
-      ["Title", "First Name", "Last Name", "Mobile", "Date of Birth", "Email", "Designation", "Address", "Company Name", "Company Address", "Company Phone", "Company Email", "Company Manager", "Renewal Date"]
+      ["Title", "First Name", "Last Name", "Mobile", "Secondary Mobile", "Date of Birth", "Email", "Designation", "Address", "Company Name", "Company Address", "Company Phone", "Company Email", "Company Manager", "Renewal Date"]
     ];
     const sampleData = [
-      ["Mr", "John", "Doe", "0771234567", "1990-05-15", "john.doe@example.com", "Manager", "123 Galle Road, Colombo", "Cinnamon Hotels", "77 Galle Road, Colombo 03", "0112345678", "info@cinnamon.com", "Mr. Manager", "2027-06-24"]
+      ["Mr", "John", "Doe", "0771234567", "0719876543", "1990-05-15", "john.doe@example.com", "Manager", "123 Galle Road, Colombo", "Cinnamon Hotels", "77 Galle Road, Colombo 03", "0112345678", "info@cinnamon.com", "Mr. Manager", "2027-06-24"]
     ];
     
     const worksheet = XLSX.utils.aoa_to_sheet([...headers, ...sampleData]);
@@ -479,6 +482,17 @@ const CompanyRegistration = () => {
             const first_name = row["First Name"] || row["first_name"] || row["FirstName"] || "";
             const last_name = row["Last Name"] || row["last_name"] || row["LastName"] || "";
             const mobile = String(row["Mobile"] || row["mobile"] || row["phone"] || row["Phone"] || "").trim();
+            const secondary_mobile = String(
+              row["Secondary Mobile"] || 
+              row["secondary_mobile"] || 
+              row["Secondary Phone"] || 
+              row["secondary_phone"] || 
+              row["Alternate Mobile"] || 
+              row["alternate_mobile"] || 
+              row["Alternate Phone"] || 
+              row["alternate_phone"] || 
+              ""
+            ).trim();
             const email = row["Email"] || row["email"] || "";
             const designation = row["Designation"] || row["designation"] || "";
             const address = row["Address"] || row["address"] || "";
@@ -502,6 +516,7 @@ const CompanyRegistration = () => {
               first_name,
               last_name,
               mobile,
+              secondary_mobile,
               email,
               designation,
               address,
@@ -757,26 +772,36 @@ const CompanyRegistration = () => {
       // Step 2: Save or update member with company ID
       if (memberFormData.id) {
         // Update existing member
-        const updateData = {
+        let normalizedSecMobile: string | null = null;
+        if (memberFormData.secondary_mobile && memberFormData.secondary_mobile.trim()) {
+          const secVal = validateAndNormalizeSriLankanMobile(memberFormData.secondary_mobile.trim());
+          normalizedSecMobile = secVal.isValid && secVal.normalized ? secVal.normalized : memberFormData.secondary_mobile.trim();
+        }
+
+        const updateData: any = {
           title: memberFormData.title,
-          company_id: companyId,
-          first_name: memberFormData.first_name || '',
-          last_name: memberFormData.last_name || '',
-          mobile: mobileValidation.normalized!,
-          email: memberFormData.email || '',
-          address: memberFormData.address || '',
+          first_name: memberFormData.first_name,
+          last_name: memberFormData.last_name,
+          mobile: mobileValidation.normalized,
+          secondary_mobile: normalizedSecMobile,
+          email: memberFormData.email,
+          address: memberFormData.address,
           date_of_birth: memberFormData.dateOfBirth || null,
-          designation: memberFormData.designation || '',
-          registered_date: memberFormData.registeredDate || new Date().toISOString().split('T')[0],
-          renew_date: memberFormData.renewDate || new Date().toISOString().split('T')[0],
-          discount_amount: parseFloat(memberFormData.discountAmount || '0'),
-          discount_percentage: parseFloat(memberFormData.discountPercentage || '10'),
-          discount_policy: memberFormData.discountPolicy || 'percentage',
-          is_active: true,
+          designation: memberFormData.designation,
           category_id: memberFormData.category_id,
           discount_enabled: discountEnabled,
+          discount_policy: memberFormData.discountPolicy,
+          discount_amount: parseFloat(memberFormData.discountAmount || '0'),
+          discount_percentage: parseFloat(memberFormData.discountPercentage || '10'),
+          is_active: true,
+          registered_date: memberFormData.registeredDate || null,
+          renew_date: memberFormData.renewDate || null,
           selected_offers: selectedOfferIds,
         };
+
+        if (companyId) {
+          updateData.company_id = companyId;
+        }
         
         await staffApi.updateStaff(memberFormData.id, updateData);
         
@@ -795,12 +820,19 @@ const CompanyRegistration = () => {
         toast.success("Member updated successfully!");
       } else {
         // Create new member
+        let normalizedSecMobile: string | null = null;
+        if (memberFormData.secondary_mobile && memberFormData.secondary_mobile.trim()) {
+          const secVal = validateAndNormalizeSriLankanMobile(memberFormData.secondary_mobile.trim());
+          normalizedSecMobile = secVal.isValid && secVal.normalized ? secVal.normalized : memberFormData.secondary_mobile.trim();
+        }
+
         const staffData = {
           title: memberFormData.title,
           company_id: companyId,
           first_name: memberFormData.first_name || '',
           last_name: memberFormData.last_name || '',
           mobile: mobileValidation.normalized!,
+          secondary_mobile: normalizedSecMobile || undefined,
           email: memberFormData.email || '',
           address: memberFormData.address || '',
           date_of_birth: memberFormData.dateOfBirth || null,
@@ -1002,6 +1034,56 @@ const CompanyRegistration = () => {
                               });
                             }}
                             placeholder="77 123 4567"
+                            className="flex-1"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Secondary Mobile (Optional)</Label>
+                        <div className="flex gap-2">
+                          <div className="w-[110px] shrink-0">
+                            <Select 
+                              value={splitPhoneNumber(memberFormData.secondary_mobile || '').countryCode} 
+                              onValueChange={(newCode) => {
+                                const country = COUNTRIES.find(c => c.code === newCode);
+                                const currentLocal = splitPhoneNumber(memberFormData.secondary_mobile || '').number;
+                                if (country) {
+                                  setMemberFormData({
+                                    ...memberFormData,
+                                    secondary_mobile: currentLocal ? country.dialCode + currentLocal : ''
+                                  });
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[300px]">
+                                {COUNTRIES.map((c) => (
+                                  <SelectItem key={c.code} value={c.code}>
+                                    <span className="mr-2">{c.flag}</span>
+                                    <span>+{c.dialCode}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Input 
+                            value={splitPhoneNumber(memberFormData.secondary_mobile || '').number} 
+                            onChange={(e) => {
+                              const currentCountry = splitPhoneNumber(memberFormData.secondary_mobile || '').countryCode;
+                              const country = COUNTRIES.find(c => c.code === currentCountry) || COUNTRIES.find(c => c.code === 'LK')!;
+                              let val = e.target.value.replace(/\D/g, '');
+                              if (val.startsWith('0')) {
+                                val = val.substring(1);
+                              }
+                              setMemberFormData({
+                                ...memberFormData, 
+                                secondary_mobile: val ? country.dialCode + val : ''
+                              });
+                            }}
+                            placeholder="71 987 6543"
                             className="flex-1"
                           />
                         </div>

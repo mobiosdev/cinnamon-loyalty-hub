@@ -7,6 +7,7 @@ export interface StaffMember {
   first_name: string;
   last_name: string;
   mobile: string;
+  secondary_mobile?: string;
   email?: string;
   address?: string;
   date_of_birth?: string;

@@ -361,23 +361,36 @@ const IndividualNotificationPanel = () => {
         const smsPassword = import.meta.env.VITE_SMS_PASSWORD_PROMOTIONAL || import.meta.env.VITE_SMS_PASSWORD || 'as7WuKxkp@pPW';
         const smsSrc = import.meta.env.VITE_SMS_SRC_PROMOTIONAL || import.meta.env.VITE_SMS_SRC || 'Cinnamon';
 
-        // Loop through each recipient and send the SMS request
-        await Promise.all(
-          recipientAnalysis.eligibleList.map(async (m) => {
-            const phoneValidation = validateAndNormalizeSriLankanMobile(m.mobile);
-            if (phoneValidation.isValid) {
-              const smsUrl = new URL(smsApiUrl);
-              smsUrl.searchParams.append('username', smsUsername);
-              smsUrl.searchParams.append('password', smsPassword);
-              smsUrl.searchParams.append('src', smsSrc);
-              smsUrl.searchParams.append('dst', phoneValidation.normalized!);
-              smsUrl.searchParams.append('msg', message);
-              smsUrl.searchParams.append('dr', '1');
+        // Loop through each recipient (including secondary mobile if present) and send the SMS request
+        const phonesToSend: string[] = [];
+        recipientAnalysis.eligibleList.forEach((m: any) => {
+          if (m.mobile) {
+            const val = validateAndNormalizeSriLankanMobile(m.mobile);
+            if (val.isValid && val.normalized && !phonesToSend.includes(val.normalized)) {
+              phonesToSend.push(val.normalized);
+            }
+          }
+          if (m.secondary_mobile && m.secondary_mobile.trim()) {
+            const val = validateAndNormalizeSriLankanMobile(m.secondary_mobile.trim());
+            if (val.isValid && val.normalized && !phonesToSend.includes(val.normalized)) {
+              phonesToSend.push(val.normalized);
+            }
+          }
+        });
 
-              const response = await fetch(smsUrl.toString());
-              if (!response.ok) {
-                console.error(`Failed to send SMS to ${m.mobile}`);
-              }
+        await Promise.all(
+          phonesToSend.map(async (phone) => {
+            const smsUrl = new URL(smsApiUrl);
+            smsUrl.searchParams.append('username', smsUsername);
+            smsUrl.searchParams.append('password', smsPassword);
+            smsUrl.searchParams.append('src', smsSrc);
+            smsUrl.searchParams.append('dst', phone);
+            smsUrl.searchParams.append('msg', message);
+            smsUrl.searchParams.append('dr', '1');
+
+            const response = await fetch(smsUrl.toString());
+            if (!response.ok) {
+              console.error(`Failed to send SMS to ${phone}`);
             }
           })
         );

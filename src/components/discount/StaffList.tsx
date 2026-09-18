@@ -379,6 +379,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
         first_name: selectedMember.first_name || '',
         last_name: selectedMember.last_name || '',
         mobile: selectedMember.mobile || '',
+        secondary_mobile: selectedMember.secondary_mobile || '',
         email: selectedMember.email || '',
         address: selectedMember.address || '',
         designation: selectedMember.designation || '',
@@ -474,11 +475,18 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
       }
 
       // Step 2: Save member details
+      let normalizedSecMobile: string | null = null;
+      if (editFormData.secondary_mobile && editFormData.secondary_mobile.trim()) {
+        const secVal = validateAndNormalizeSriLankanMobile(editFormData.secondary_mobile.trim());
+        normalizedSecMobile = secVal.isValid && secVal.normalized ? secVal.normalized : editFormData.secondary_mobile.trim();
+      }
+
       const memberUpdateData = {
         title: editFormData.title,
         first_name: editFormData.first_name,
         last_name: editFormData.last_name,
         mobile: mobileValidation.normalized!,
+        secondary_mobile: normalizedSecMobile,
         email: editFormData.email,
         address: editFormData.address,
         designation: editFormData.designation,
@@ -1106,6 +1114,12 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                         )}
                       </button>
                     </div>
+                    {selectedMember.secondary_mobile && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">Secondary Mobile</p>
+                        <p className="text-sm font-semibold mt-1 font-mono">{formatPhoneForDisplay(selectedMember.secondary_mobile)}</p>
+                      </div>
+                    )}
                     <div className="md:col-span-2 lg:col-span-3">
                       <p className="text-xs font-medium text-muted-foreground">Address</p>
                       <p className="text-sm font-semibold mt-1">{selectedMember.address || 'N/A'}</p>
@@ -1383,6 +1397,54 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                             }}
                             placeholder="77 123 4567"
                             required
+                            className="flex-1"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="secondary_mobile">Secondary Mobile (Optional)</Label>
+                        <div className="flex gap-2">
+                          <div className="w-[110px] shrink-0">
+                            <Select
+                              value={splitPhoneNumber(editFormData.secondary_mobile || '').countryCode}
+                              onValueChange={(newCode) => {
+                                const country = COUNTRIES.find(c => c.code === newCode);
+                                const currentLocal = splitPhoneNumber(editFormData.secondary_mobile || '').number;
+                                if (country) {
+                                  setEditFormData({
+                                    ...editFormData,
+                                    secondary_mobile: currentLocal ? country.dialCode + currentLocal : ''
+                                  });
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[300px]">
+                                {COUNTRIES.map((c) => (
+                                  <SelectItem key={c.code} value={c.code}>
+                                    <span className="mr-2">{c.flag}</span>
+                                    <span>+{c.dialCode}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Input
+                            id="secondary_mobile"
+                            value={splitPhoneNumber(editFormData.secondary_mobile || '').number}
+                            onChange={(e) => {
+                              const currentCountry = splitPhoneNumber(editFormData.secondary_mobile || '').countryCode;
+                              const country = COUNTRIES.find(c => c.code === currentCountry) || COUNTRIES.find(c => c.code === 'LK')!;
+                              let val = e.target.value.replace(/\D/g, '');
+                              if (val.startsWith('0')) {
+                                val = val.substring(1);
+                              }
+                              setEditFormData({ ...editFormData, secondary_mobile: val ? country.dialCode + val : '' });
+                            }}
+                            placeholder="71 987 6543"
                             className="flex-1"
                           />
                         </div>

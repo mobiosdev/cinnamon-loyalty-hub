@@ -228,15 +228,23 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
         }
       }
 
-      // 2. Send via SMS if registered
+      // 2. Send via SMS if registered (dual mobile dispatch if secondary exists)
+      const mobilesToNotify: string[] = [];
       if (member.mobile) {
-        try {
-          const phoneValidation = validateAndNormalizeSriLankanMobile(member.mobile);
-          if (!phoneValidation.isValid) {
-            throw new Error(phoneValidation.error || "Invalid mobile number");
-          }
-          const finalMobileNumber = phoneValidation.normalized!;
+        const phoneValidation = validateAndNormalizeSriLankanMobile(member.mobile);
+        if (phoneValidation.isValid && phoneValidation.normalized) {
+          mobilesToNotify.push(phoneValidation.normalized);
+        }
+      }
+      if (member.secondary_mobile && member.secondary_mobile.trim()) {
+        const secValidation = validateAndNormalizeSriLankanMobile(member.secondary_mobile.trim());
+        if (secValidation.isValid && secValidation.normalized && !mobilesToNotify.includes(secValidation.normalized)) {
+          mobilesToNotify.push(secValidation.normalized);
+        }
+      }
 
+      if (mobilesToNotify.length > 0) {
+        try {
           const smsMessage = `🏨 Cinnamon Grand Colombo\n${categoryName.toUpperCase()} MEMBERSHIP CARD\n\n👤 Member: ${memberName}\n🔢 Membership No: ${memberCode}\n📅 Expiry Date: ${expiryDate}\n\nView and download your digital card here: ${cardUrl}`;
 
           const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://message.text-ware.com/send_sms.php';
@@ -244,17 +252,19 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
           const smsPassword = import.meta.env.VITE_SMS_PASSWORD_TRANSACTIONAL || import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
           const smsSrc = import.meta.env.VITE_SMS_SRC_TRANSACTIONAL || import.meta.env.VITE_SMS_SRC || 'Cinnamon';
 
-          const smsUrl = new URL(smsApiUrl);
-          smsUrl.searchParams.append('username', smsUsername);
-          smsUrl.searchParams.append('password', smsPassword);
-          smsUrl.searchParams.append('src', smsSrc);
-          smsUrl.searchParams.append('dst', finalMobileNumber);
-          smsUrl.searchParams.append('msg', smsMessage);
-          smsUrl.searchParams.append('dr', '1');
+          for (const targetMobile of mobilesToNotify) {
+            const smsUrl = new URL(smsApiUrl);
+            smsUrl.searchParams.append('username', smsUsername);
+            smsUrl.searchParams.append('password', smsPassword);
+            smsUrl.searchParams.append('src', smsSrc);
+            smsUrl.searchParams.append('dst', targetMobile);
+            smsUrl.searchParams.append('msg', smsMessage);
+            smsUrl.searchParams.append('dr', '1');
 
-          const response = await fetch(smsUrl.toString());
-          if (!response.ok) {
-            throw new Error('Failed to send SMS');
+            const response = await fetch(smsUrl.toString());
+            if (!response.ok) {
+              console.error(`Failed to send SMS to ${targetMobile}`);
+            }
           }
 
           smsSent = true;
