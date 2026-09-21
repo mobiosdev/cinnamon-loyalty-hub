@@ -43,7 +43,7 @@ export function useWhatsappNotification() {
       for (const recipient of recipients.values()) {
         const key = JSON.stringify({ ...payload, msisdn: recipient.phone });
         if (accepted.current.has(key)) continue;
-        await whatsappApi.sendMessage({ ...payload, msisdn: recipient.phone });
+        await whatsappApi.sendMessage({ ...payload, msisdn: recipient.phone, client_ref_id: crypto.randomUUID() });
         accepted.current.add(key);
         completed.push(recipient);
       }

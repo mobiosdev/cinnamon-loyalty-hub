@@ -1,6 +1,7 @@
 import { apiManager } from '@/app/apiManager';
 
 export interface WhatsappMessage {
+  client_ref_id: string;
   templateName: string;
   uploadedFileName: string;
   campaignName: string;
