@@ -1,3 +1,5 @@
+import { WhatsappComposer } from "./WhatsappComposer";
+import { useWhatsappNotification } from "@/hooks/useWhatsappNotification";
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -56,11 +58,9 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
   const [smsMessage, setSmsMessage] = useState(
     `Special Offer: ${offer.name}\n\n${offer.description}\n\nVisit us to redeem this exclusive offer!`
   );
-  const [whatsappMessage, setWhatsappMessage] = useState(
-    `🎁 *${offer.name}*\n\n${offer.description}\n\n✨ This is an exclusive offer for you! Visit us to redeem.\n\nThank you for being a valued member!`
-  );
+  const whatsapp = useWhatsappNotification();
   const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [smsSending, setSending] = useState(false);
   const [activeTab, setActiveTab] = useState("sms");
 
   // Recipient lists
@@ -285,13 +285,21 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
     setManualNumbers([]);
   };
 
+  const sending = smsSending || whatsapp.sending || whatsapp.uploading;
+
   const handleSend = async () => {
+    if (sending) return;
+    if (activeTab === "whatsapp") {
+      if (await whatsapp.send(eligibleRecipients, "Offer Reminder", offer.name)) onClose();
+      return;
+    }
+
     if (eligibleRecipients.length === 0) {
       toast.error("No eligible recipients found to send messages to");
       return;
     }
 
-    const message = activeTab === "sms" ? smsMessage : whatsappMessage;
+    const message = smsMessage;
     if (!message.trim()) {
       toast.error("Message content cannot be empty");
       return;
@@ -351,9 +359,6 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
             }
           })
         );
-      } else {
-        // Simulate WhatsApp call
-        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
 
       // Log notification to log list
@@ -386,7 +391,7 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
   const totalRawRecipients = categoryRecipientsCount + manualNumbers.length;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={() => { if (!sending) onClose(); }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl font-bold">
@@ -534,7 +539,7 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
           </div>
 
           {/* Tabs for SMS/WhatsApp */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs value={activeTab} onValueChange={(value) => { if (!sending) setActiveTab(value); }} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="sms">SMS</TabsTrigger>
               <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
@@ -562,26 +567,8 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
               </div>
             </TabsContent>
 
-            <TabsContent value="whatsapp" className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="whatsapp-message" className="text-sm font-semibold">WhatsApp Message</Label>
-                <Textarea
-                  id="whatsapp-message"
-                  value={whatsappMessage}
-                  onChange={(e) => setWhatsappMessage(e.target.value)}
-                  rows={6}
-                  className="resize-none"
-                  placeholder="Enter your WhatsApp message..."
-                />
-                <p className="text-xs text-muted-foreground">
-                  You can use *bold*, _italic_, and emojis in WhatsApp messages
-                </p>
-              </div>
-
-              <div className="border rounded-lg p-3 bg-muted/50 text-sm">
-                <p className="font-medium mb-1 text-xs text-muted-foreground uppercase tracking-wide">WhatsApp Preview:</p>
-                <p className="whitespace-pre-wrap text-muted-foreground">{whatsappMessage}</p>
-              </div>
+            <TabsContent value="whatsapp" className="space-y-3 mt-4">
+              <WhatsappComposer value={whatsapp.draft} onChange={whatsapp.setDraft} disabled={sending} onUploading={whatsapp.setUploading} />
             </TabsContent>
           </Tabs>
 
@@ -592,7 +579,7 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
             </Button>
             <Button
               onClick={handleSend}
-              disabled={sending || loading || eligibleRecipients.length === 0}
+              disabled={sending || loading || eligibleRecipients.length === 0 || (activeTab === "whatsapp" && !whatsapp.ready)}
               className="gap-2 px-6"
             >
               <Send className="h-4 w-4" />

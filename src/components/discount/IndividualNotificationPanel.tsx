@@ -1,3 +1,5 @@
+import { WhatsappComposer } from "./WhatsappComposer";
+import { useWhatsappNotification } from "@/hooks/useWhatsappNotification";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,10 +70,10 @@ const IndividualNotificationPanel = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(8);
 
-  const [sending, setSending] = useState(false);
+  const [smsSending, setSending] = useState(false);
   const [activeTab, setActiveTab] = useState("sms");
   const [smsMessage, setSmsMessage] = useState("");
-  const [whatsappMessage, setWhatsappMessage] = useState("");
+  const whatsapp = useWhatsappNotification();
 
   // Offer Filtering State
   const [offers, setOffers] = useState<ActiveOffer[]>([]);
@@ -331,12 +333,24 @@ const IndividualNotificationPanel = () => {
     };
   }, [selectedMembers, selectedOfferIds, excludeRedeemed, redemptions, selectedOffersDetails]);
 
+  const sending = smsSending || whatsapp.sending || whatsapp.uploading;
+
   const handleSend = async () => {
+    if (sending) return;
+    if (activeTab === "whatsapp") {
+      const offerNames = offers.filter(o => selectedOfferIds.includes(o.id)).map(o => o.name).join(", ");
+      if (await whatsapp.send(recipientAnalysis.eligibleList, "Individual Custom", offerNames || undefined)) {
+        setSelectedMembers([]);
+        setSelectedOfferIds([]);
+      }
+      return;
+    }
+
     if (recipientAnalysis.eligibleList.length === 0) {
       toast.error("No eligible recipients found to send messages to");
       return;
     }
-    const message = activeTab === "sms" ? smsMessage : whatsappMessage;
+    const message = smsMessage;
     if (!message.trim()) {
       toast.error("Please enter a message");
       return;
@@ -394,9 +408,6 @@ const IndividualNotificationPanel = () => {
             }
           })
         );
-      } else {
-        // Simulate WhatsApp call
-        await new Promise((r) => setTimeout(r, 2000));
       }
 
       const selectedOffersNames = offers
@@ -419,7 +430,6 @@ const IndividualNotificationPanel = () => {
         `Message sent successfully to ${recipientAnalysis.eligibleList.length} recipient(s)!`
       );
       setSmsMessage("");
-      setWhatsappMessage("");
       setSelectedMembers([]);
       setSelectedOfferIds([]);
     } catch (err) {
@@ -692,7 +702,7 @@ const IndividualNotificationPanel = () => {
           Compose Message
         </Label>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={(value) => { if (!sending) setActiveTab(value); }}>
           <TabsList className="grid w-full grid-cols-2 max-w-xs">
             <TabsTrigger value="sms">SMS</TabsTrigger>
             <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
@@ -712,28 +722,19 @@ const IndividualNotificationPanel = () => {
             </p>
           </TabsContent>
 
-          <TabsContent value="whatsapp" className="space-y-2 mt-3">
-            <Textarea
-              value={whatsappMessage}
-              onChange={(e) => setWhatsappMessage(e.target.value)}
-              placeholder="Enter WhatsApp message text... Use *bold*, _italic_, emojis 🎁"
-              rows={4}
-              className="resize-none"
-            />
-            <p className="text-xs text-muted-foreground">
-              Supports *bold*, _italic_, and emoji formatting
-            </p>
-          </TabsContent>
+          <TabsContent value="whatsapp" className="space-y-3 mt-4">
+              <WhatsappComposer value={whatsapp.draft} onChange={whatsapp.setDraft} disabled={sending} onUploading={whatsapp.setUploading} />
+            </TabsContent>
         </Tabs>
 
         {/* Message Preview */}
-        {(activeTab === "sms" ? smsMessage : whatsappMessage).trim() && (
+        {activeTab === "sms" && smsMessage.trim() && (
           <div className="border rounded-lg p-3 bg-muted/50 text-sm">
             <p className="font-medium mb-1 text-xs text-muted-foreground uppercase tracking-wide">
               Preview
             </p>
             <p className="whitespace-pre-wrap">
-              {activeTab === "sms" ? smsMessage : whatsappMessage}
+              {smsMessage}
             </p>
           </div>
         )}
@@ -746,7 +747,7 @@ const IndividualNotificationPanel = () => {
           disabled={
             sending ||
             recipientAnalysis.eligibleList.length === 0 ||
-            !(activeTab === "sms" ? smsMessage : whatsappMessage).trim()
+            (activeTab === "sms" ? !smsMessage.trim() : !whatsapp.ready)
           }
           className="gap-2 min-w-[180px]"
         >
