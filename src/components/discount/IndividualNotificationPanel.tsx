@@ -49,6 +49,7 @@ import { BulkUploadWidget } from "./BulkUploadWidget";
 import { validateAndNormalizeSriLankanMobile, formatPhoneForDisplay } from "@/utils/phoneUtils";
 import { parseOfferDescription } from "@/services/offerApi";
 import { logSentNotification } from "@/utils/notificationLogger";
+import { notificationApi } from "@/services/notificationApi";
 import { TablePagination } from "@/components/common/TablePagination";
 
 interface Member {
@@ -387,53 +388,42 @@ const IndividualNotificationPanel = () => {
 
       console.log(`Sending individual message (${activeTab.toUpperCase()}) to:`, payload);
 
-      if (activeTab === "sms") {
-        const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://message.text-ware.com/send_sms.php';
-        const smsUsername = import.meta.env.VITE_SMS_USERNAME_TRANSACTIONAL || 'TW01287_cinnamon_tr';
-        const smsPassword = import.meta.env.VITE_SMS_PASSWORD_TRANSACTIONAL || 'as7Wu@x2';
-        const smsSrc = import.meta.env.VITE_SMS_SRC_TRANSACTIONAL || 'Cinnamon';
-
-        // Loop through each recipient (including secondary mobile if present) and send the SMS request
-        const phonesToSend: string[] = [];
-        recipientAnalysis.eligibleList.forEach((m: any) => {
-          if (m.mobile) {
-            const val = validateAndNormalizeSriLankanMobile(m.mobile);
-            if (val.isValid && val.normalized && !phonesToSend.includes(val.normalized)) {
-              phonesToSend.push(val.normalized);
-            }
-          }
-          if (m.secondary_mobile && m.secondary_mobile.trim()) {
-            const val = validateAndNormalizeSriLankanMobile(m.secondary_mobile.trim());
-            if (val.isValid && val.normalized && !phonesToSend.includes(val.normalized)) {
-              phonesToSend.push(val.normalized);
-            }
-          }
-        });
-
-        await Promise.all(
-          phonesToSend.map(async (phone) => {
-            try {
-              const smsUrl = new URL(smsApiUrl);
-              smsUrl.searchParams.append('username', smsUsername);
-              smsUrl.searchParams.append('password', smsPassword);
-              smsUrl.searchParams.append('src', smsSrc);
-              smsUrl.searchParams.append('dst', phone);
-              smsUrl.searchParams.append('msg', message);
-              smsUrl.searchParams.append('dr', '1');
-
-              await fetch(smsUrl.toString(), { mode: 'no-cors' });
-              console.log(`[SMS TR] Dispatched SMS to ${phone} via ${smsSrc}`);
-            } catch (err) {
-              console.error(`Failed to send SMS to ${phone}:`, err);
-            }
-          })
-        );
-      }
-
       const selectedOffersNames = offers
         .filter((o) => selectedOfferIds.includes(o.id))
         .map((o) => o.name)
         .join(", ");
+
+      if (activeTab === "sms") {
+        // Collect destination recipients (including secondary mobile if present)
+        const phonesToSend: { phone: string; name: string }[] = [];
+        recipientAnalysis.eligibleList.forEach((m: any) => {
+          const fullName = `${m.first_name} ${m.last_name}`.trim();
+          if (m.mobile) {
+            const val = validateAndNormalizeSriLankanMobile(m.mobile);
+            if (val.isValid && val.normalized && !phonesToSend.some((p) => p.phone === val.normalized)) {
+              phonesToSend.push({ phone: val.normalized, name: fullName });
+            }
+          }
+          if (m.secondary_mobile && m.secondary_mobile.trim()) {
+            const val = validateAndNormalizeSriLankanMobile(m.secondary_mobile.trim());
+            if (val.isValid && val.normalized && !phonesToSend.some((p) => p.phone === val.normalized)) {
+              phonesToSend.push({ phone: val.normalized, name: fullName });
+            }
+          }
+        });
+
+        // Dispatch via Backend Transactional SMS Gateway
+        const smsResponse = await notificationApi.sendSms({
+          recipients: phonesToSend,
+          message,
+          type: "Individual Custom",
+          offer_name: selectedOffersNames || undefined,
+        });
+
+        if (!smsResponse.success && smsResponse.successful === 0) {
+          throw new Error("Failed to dispatch SMS through backend gateway");
+        }
+      }
 
       await logSentNotification({
         type: "Individual Custom",

@@ -29,6 +29,7 @@ import { offerApi, parseOfferDescription } from "@/services/offerApi";
 import { validateAndNormalizeSriLankanMobile, formatPhoneForDisplay } from "@/utils/phoneUtils";
 import { BulkUploadWidget } from "./BulkUploadWidget";
 import { logSentNotification } from "@/utils/notificationLogger";
+import { notificationApi } from "@/services/notificationApi";
 
 interface SendMessageDialogProps {
   offer: {
@@ -315,46 +316,35 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
       console.log(`Sending Offer Reminders (${activeTab.toUpperCase()}) to:`, payload);
 
       if (activeTab === "sms") {
-        const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://message.text-ware.com/send_sms.php';
-        const smsUsername = import.meta.env.VITE_SMS_USERNAME_TRANSACTIONAL || 'TW01287_cinnamon_tr';
-        const smsPassword = import.meta.env.VITE_SMS_PASSWORD_TRANSACTIONAL || 'as7Wu@x2';
-        const smsSrc = import.meta.env.VITE_SMS_SRC_TRANSACTIONAL || 'Cinnamon';
-
-        // Loop through each recipient (including secondary mobile if present) and send the SMS request
-        const phonesToSend: string[] = [];
+        // Collect destination recipients (including secondary mobile if present)
+        const phonesToSend: { phone: string; name: string }[] = [];
         eligibleRecipients.forEach((m: any) => {
+          const fullName = `${m.first_name} ${m.last_name}`.trim();
           if (m.mobile) {
             const val = validateAndNormalizeSriLankanMobile(m.mobile);
-            if (val.isValid && val.normalized && !phonesToSend.includes(val.normalized)) {
-              phonesToSend.push(val.normalized);
+            if (val.isValid && val.normalized && !phonesToSend.some((p) => p.phone === val.normalized)) {
+              phonesToSend.push({ phone: val.normalized, name: fullName });
             }
           }
           if (m.secondary_mobile && m.secondary_mobile.trim()) {
             const val = validateAndNormalizeSriLankanMobile(m.secondary_mobile.trim());
-            if (val.isValid && val.normalized && !phonesToSend.includes(val.normalized)) {
-              phonesToSend.push(val.normalized);
+            if (val.isValid && val.normalized && !phonesToSend.some((p) => p.phone === val.normalized)) {
+              phonesToSend.push({ phone: val.normalized, name: fullName });
             }
           }
         });
 
-        await Promise.all(
-          phonesToSend.map(async (phone) => {
-            try {
-              const smsUrl = new URL(smsApiUrl);
-              smsUrl.searchParams.append('username', smsUsername);
-              smsUrl.searchParams.append('password', smsPassword);
-              smsUrl.searchParams.append('src', smsSrc);
-              smsUrl.searchParams.append('dst', phone);
-              smsUrl.searchParams.append('msg', message);
-              smsUrl.searchParams.append('dr', '1');
+        // Dispatch via Backend Transactional SMS Gateway
+        const smsResponse = await notificationApi.sendSms({
+          recipients: phonesToSend,
+          message,
+          type: "Offer Reminder",
+          offer_name: offer.name,
+        });
 
-              await fetch(smsUrl.toString(), { mode: 'no-cors' });
-              console.log(`[SMS TR] Dispatched SMS to ${phone} via ${smsSrc}`);
-            } catch (err) {
-              console.error(`Failed to send SMS to ${phone}:`, err);
-            }
-          })
-        );
+        if (!smsResponse.success && smsResponse.successful === 0) {
+          throw new Error("Failed to dispatch SMS through backend gateway");
+        }
       }
 
       // Log notification to log list and backend API
