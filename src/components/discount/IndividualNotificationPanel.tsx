@@ -1,6 +1,6 @@
 import { WhatsappComposer } from "./WhatsappComposer";
 import { useWhatsappNotification } from "@/hooks/useWhatsappNotification";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,11 +28,19 @@ import {
   Send,
   MessageSquare,
   CheckSquare2,
+  Square,
+  Filter,
+  Users,
   User,
   ChevronLeft,
   ChevronRight,
+  Info,
+  Calendar,
+  Layers,
   X,
   Sparkles,
+  Phone,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { staffApi } from "@/services/staffApi";
@@ -45,15 +53,16 @@ import { TablePagination } from "@/components/common/TablePagination";
 
 interface Member {
   id?: string;
+  member_code?: string;
   first_name: string;
   last_name: string;
   mobile: string;
   secondary_mobile?: string;
-  category_id?: number;
   category_name?: string;
   customer_categories?: {
     name?: string;
   };
+  category_id?: number;
 }
 
 interface ActiveOffer {
@@ -83,6 +92,8 @@ const IndividualNotificationPanel = () => {
   const [excludeRedeemed, setExcludeRedeemed] = useState(true);
   const [redemptions, setRedemptions] = useState<any[]>([]); // Array of { offer_id, customer_phone }
   const [selectedOffersDetails, setSelectedOffersDetails] = useState<any[]>([]);
+  const rawOffersRef = useRef<any[]>([]);
+  const cachedRedemptionsRef = useRef<any[] | null>(null);
 
   useEffect(() => {
     loadMembers();
@@ -108,7 +119,8 @@ const IndividualNotificationPanel = () => {
   const loadOffers = async () => {
     try {
       const offersData = await offerApi.getOffers();
-      const activeOffers = offersData.filter(o => o.is_active);
+      rawOffersRef.current = offersData || [];
+      const activeOffers = (offersData || []).filter(o => o.is_active);
       setOffers(activeOffers.map(o => ({
         id: o.id!,
         name: o.name,
@@ -133,12 +145,16 @@ const IndividualNotificationPanel = () => {
 
   const fetchOffersRedemptions = async () => {
     try {
-      const offersData = await offerApi.getOffers();
-      const details = offersData.filter(o => o.id && selectedOfferIds.includes(o.id));
+      // Use cached/in-memory offers instead of re-hitting network
+      const details = rawOffersRef.current.filter(o => o.id && selectedOfferIds.includes(o.id));
       setSelectedOffersDetails(details || []);
 
-      const allRedemptions = await offerApi.getRedemptions();
-      const activeRedData = allRedemptions.filter(r => 
+      // Fetch redemptions once and cache in ref
+      if (!cachedRedemptionsRef.current) {
+        cachedRedemptionsRef.current = await offerApi.getRedemptions();
+      }
+
+      const activeRedData = (cachedRedemptionsRef.current || []).filter(r => 
         selectedOfferIds.includes(r.offer_id) && 
         (r as any).status === 'active'
       );

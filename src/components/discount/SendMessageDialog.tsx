@@ -41,6 +41,8 @@ interface SendMessageDialogProps {
       memberCount: number;
     }>;
     totalMembers: number;
+    is_recurrent?: boolean;
+    usage_limit?: number | null;
   };
   isOpen: boolean;
   onClose: () => void;
@@ -89,18 +91,14 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
   const loadAllCategories = async () => {
     try {
       const cats = await categoryApi.getCategories();
-      const catsWithCounts = await Promise.all(
-        (cats || []).map(async (cat) => {
-          if (!cat.id) return { id: -1, name: cat.name, memberCount: 0 };
-          const res = await staffApi.getStaff({
-            category_id: cat.id.toString(),
-            is_active: true,
-            limit: 1
-          });
-          return { id: cat.id, name: cat.name, memberCount: res.pagination?.total || 0 };
-        })
-      );
-      setAllCategories(catsWithCounts.filter(c => c.id !== -1));
+      const catsWithCounts = (cats || [])
+        .filter((cat) => cat.id != null)
+        .map((cat) => ({
+          id: cat.id!,
+          name: cat.name,
+          memberCount: cat.member_count || 0,
+        }));
+      setAllCategories(catsWithCounts);
     } catch (err) {
       console.error("Error loading categories in modal:", err);
     }
@@ -124,14 +122,10 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
   const calculateRecipients = async () => {
     setLoading(true);
     try {
-      // 1. Fetch full offer detail for recurrence and usage limits
-      const offersData = await offerApi.getOffers();
-      const offerDetails = offersData.find(o => o.id === offer.id);
-      if (!offerDetails) throw new Error("Offer not found");
-
-      const { category_recurrence } = parseOfferDescription(offerDetails.description);
-      const isOfferRecurrent = offerDetails.is_recurrent;
-      const offerUsageLimit = offerDetails.usage_limit;
+      // 1. Get recurrence and usage limits directly from passed offer prop
+      const { category_recurrence } = parseOfferDescription(offer.description || '');
+      const isOfferRecurrent = offer.is_recurrent;
+      const offerUsageLimit = offer.usage_limit;
 
       // 2. Fetch all active members in target categories
       const membersLists = await Promise.all(

@@ -8,6 +8,7 @@ export interface CustomerCategory {
   created_by: number;
   valid_from?: string | null;
   valid_to?: string | null;
+  member_count?: number;
 }
 
 export const categoryApi = {

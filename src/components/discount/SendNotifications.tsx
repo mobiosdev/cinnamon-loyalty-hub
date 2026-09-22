@@ -40,6 +40,7 @@ const SendNotifications = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [activeTab, setActiveTab] = useState("reminders");
 
   useEffect(() => {
     loadOffersWithCategories();
@@ -48,52 +49,52 @@ const SendNotifications = () => {
   const loadOffersWithCategories = async () => {
     setLoading(true);
     try {
-      const offersData = await offerApi.getOffers();
-      const categoriesData = await categoryApi.getCategories();
-      
-      // For each offer, get its categories and count members
-      const offersWithCategories = await Promise.all(
-        offersData.map(async (offer) => {
-          const categoryIds = await offerApi.getOfferCategories(offer.id);
-          
-          // Get member count for each category
-          const categoriesWithCounts = await Promise.all(
-            categoryIds.map(async (categoryId) => {
-              const categoryInfo = categoriesData.find(c => c.id === categoryId);
-              
-              const membersResp = await staffApi.getStaff({
-                category_id: categoryId.toString(),
-                is_active: true,
-                limit: 1
-              });
+      const [offersData, categoriesData] = await Promise.all([
+        offerApi.getOffers(),
+        categoryApi.getCategories(),
+      ]);
 
-              return {
-                id: categoryId,
-                name: categoryInfo?.name || 'Unknown',
-                memberCount: membersResp.pagination?.total || 0,
-              };
-            })
-          );
+      const catMap = new Map<number, { id: number; name: string; memberCount: number }>();
+      (categoriesData || []).forEach((c) => {
+        if (c.id != null) {
+          catMap.set(c.id, {
+            id: c.id,
+            name: c.name,
+            memberCount: (c as any).member_count || 0,
+          });
+        }
+      });
 
-          const totalMembers = categoriesWithCounts.reduce(
-            (sum, cat) => sum + cat.memberCount,
-            0
-          );
+      const offersWithCategories = (offersData || []).map((offer: any) => {
+        const catIds: number[] = offer.category_ids || (offer.categories?.map((c: any) => c.id) || []);
 
+        const categoriesWithCounts = catIds.map((categoryId) => {
+          const categoryInfo = catMap.get(categoryId);
           return {
-            id: offer.id,
-            name: offer.name,
-            description: offer.description || '',
-            valid_from: offer.valid_from,
-            valid_to: offer.valid_to,
-            is_active: offer.is_active,
-            categories: categoriesWithCounts,
-            totalMembers,
-            is_recurrent: offer.is_recurrent,
-            usage_limit: offer.usage_limit,
+            id: categoryId,
+            name: categoryInfo?.name || 'Unknown',
+            memberCount: categoryInfo?.memberCount || 0,
           };
-        })
-      );
+        });
+
+        const totalMembers = categoriesWithCounts.reduce(
+          (sum, cat) => sum + cat.memberCount,
+          0
+        );
+
+        return {
+          id: offer.id,
+          name: offer.name,
+          description: offer.description || '',
+          valid_from: offer.valid_from,
+          valid_to: offer.valid_to,
+          is_active: offer.is_active,
+          categories: categoriesWithCounts,
+          totalMembers,
+          is_recurrent: offer.is_recurrent,
+          usage_limit: offer.usage_limit,
+        };
+      });
 
       setOffers(offersWithCategories);
     } catch (error) {
@@ -163,7 +164,7 @@ const SendNotifications = () => {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Tabs defaultValue="reminders" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3 max-w-xl mb-6">
               <TabsTrigger value="reminders">Offer Reminders</TabsTrigger>
               {/* <TabsTrigger value="categories">By Category</TabsTrigger> */}
@@ -292,12 +293,12 @@ const SendNotifications = () => {
 
             {/* Tab 3: Individual Members */}
             <TabsContent value="individuals" className="pt-2">
-              <IndividualNotificationPanel />
+              {activeTab === "individuals" && <IndividualNotificationPanel />}
             </TabsContent>
 
             {/* Tab 4: Sent History */}
             <TabsContent value="history" className="pt-2">
-              <SentNotificationsHistory />
+              {activeTab === "history" && <SentNotificationsHistory />}
             </TabsContent>
           </Tabs>
         </CardContent>
