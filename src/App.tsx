@@ -7,6 +7,7 @@ import { Provider } from "react-redux";
 import { store } from "@/store";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
+import DigitalCard from "./pages/DigitalCard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -21,6 +22,8 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/card/:id" element={<DigitalCard />} />
+            <Route path="/card" element={<NotFound />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

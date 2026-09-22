@@ -381,6 +381,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
         mobile: selectedMember.mobile || '',
         secondary_mobile: selectedMember.secondary_mobile || '',
         email: selectedMember.email || '',
+        secondary_email: selectedMember.secondary_email || '',
         address: selectedMember.address || '',
         designation: selectedMember.designation || '',
         company_id: selectedMember.company_id || '',
@@ -488,6 +489,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
         mobile: mobileValidation.normalized!,
         secondary_mobile: normalizedSecMobile,
         email: editFormData.email,
+        secondary_email: editFormData.secondary_email || undefined,
         address: editFormData.address,
         designation: editFormData.designation,
         company_id: companyId || undefined,
@@ -1114,6 +1116,12 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                         )}
                       </button>
                     </div>
+                    {selectedMember.secondary_email && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">Secondary Email</p>
+                        <p className="text-sm font-semibold mt-1 break-all">{selectedMember.secondary_email}</p>
+                      </div>
+                    )}
                     {selectedMember.secondary_mobile && (
                       <div>
                         <p className="text-xs font-medium text-muted-foreground">Secondary Mobile</p>
@@ -1350,6 +1358,17 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                           onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
                           placeholder="email@example.com"
                           required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="secondary_email">Secondary Email (Optional)</Label>
+                        <Input 
+                          id="secondary_email"
+                          type="email"
+                          value={editFormData.secondary_email || ''} 
+                          onChange={(e) => setEditFormData({ ...editFormData, secondary_email: e.target.value })}
+                          placeholder="alternate.email@example.com"
                         />
                       </div>
                       
