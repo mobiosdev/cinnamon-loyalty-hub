@@ -46,7 +46,9 @@ interface StaffMember {
   first_name: string;
   last_name: string;
   mobile: string;
+  secondary_mobile?: string;
   email: string;
+  secondary_email?: string;
   address: string;
   dateOfBirth?: string;
   designation: string;
