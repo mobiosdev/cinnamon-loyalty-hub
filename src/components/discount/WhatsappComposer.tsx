@@ -64,8 +64,15 @@ export function WhatsappComposer({ value, onChange, disabled, onUploading }: {
       onChange({ ...value, uploadedFileName: '' });
       try {
         const result = await whatsappApi.uploadFile(file);
-        if (result && typeof result === 'object' && 'uploadedFileName' in result && typeof result.uploadedFileName === 'string') {
-          onChange({ ...value, uploadedFileName: result.uploadedFileName });
+        const uploadedFileName = result && typeof result === 'object'
+          ? ('fileName' in result && typeof result.fileName === 'string'
+            ? result.fileName
+            : 'uploadedFileName' in result && typeof result.uploadedFileName === 'string'
+              ? result.uploadedFileName
+              : '')
+          : '';
+        if (uploadedFileName.trim()) {
+          onChange({ ...value, uploadedFileName: uploadedFileName.trim() });
         } else {
           setResponse(typeof result === 'string' ? result : JSON.stringify(result) ?? 'Empty response');
           toast.info('Enter the uploaded filename returned by the provider.');
@@ -76,6 +83,7 @@ export function WhatsappComposer({ value, onChange, disabled, onUploading }: {
         onUploading(false);
       }
     }} />
+    {value.uploadedFileName && <p className="text-xs text-muted-foreground break-all">Uploaded media: {value.uploadedFileName}</p>}
     {response && <div className="text-xs space-y-1"><p>Upload response — copy the returned filename into the field above:</p><pre className="whitespace-pre-wrap break-all">{response}</pre></div>}
     </>}
   </fieldset>;
