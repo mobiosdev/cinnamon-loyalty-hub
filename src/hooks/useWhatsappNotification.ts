@@ -18,7 +18,7 @@ export function useWhatsappNotification() {
   const send = async (members: Recipient[], type: string, offerName?: string) => {
     if (busy.current || uploading) return false;
     if (!isWhatsappReady(draft)) {
-      toast.error('Enter the template name, campaign name and uploaded filename.');
+      toast.error('Enter message content, a campaign name, and an uploaded filename when sending an image.');
       return false;
     }
     const recipients = new Map<string, { phone: string; name: string }>();
@@ -28,12 +28,13 @@ export function useWhatsappNotification() {
         toast.error(`Invalid recipient number: ${member.mobile}`);
         return false;
       }
-      recipients.set(result.normalized, { phone: result.normalized, name: `${member.first_name} ${member.last_name}` });
+      const name = [member.first_name, member.last_name].filter(Boolean).join(' ').trim() || 'Valued member';
+      recipients.set(result.normalized, { phone: result.normalized, name });
     }
     if (!recipients.size) { toast.error('Select at least one recipient.'); return false; }
     const payload = {
-      templateName: draft.templateName.trim(),
-      uploadedFileName: draft.uploadedFileName.trim(),
+      templateName: draft.templateName,
+      ...(draft.templateName === 'message' ? { uploadedFileName: draft.uploadedFileName.trim() } : {}),
       campaignName: draft.campaignName.trim(),
     };
     busy.current = true;
@@ -41,9 +42,10 @@ export function useWhatsappNotification() {
     const completed: { phone: string; name: string }[] = [];
     try {
       for (const recipient of recipients.values()) {
-        const key = JSON.stringify({ ...payload, msisdn: recipient.phone });
+        const values: [string, string] = [recipient.name, draft.content.trim()];
+        const key = JSON.stringify({ ...payload, msisdn: recipient.phone, values });
         if (accepted.current.has(key)) continue;
-        await whatsappApi.sendMessage({ ...payload, msisdn: recipient.phone, client_ref_id: crypto.randomUUID() });
+        await whatsappApi.sendMessage({ ...payload, values, msisdn: recipient.phone, client_ref_id: crypto.randomUUID() });
         accepted.current.add(key);
         completed.push(recipient);
       }
@@ -56,7 +58,7 @@ export function useWhatsappNotification() {
     } finally {
       if (completed.length) logSentNotification({
         type, channel: 'whatsapp',
-        message: `Template: ${payload.templateName}\nCampaign: ${payload.campaignName}\nFile: ${payload.uploadedFileName}\nStatus: request accepted (delivery not confirmed)`,
+        message: `${draft.content.trim()}\n\nTemplate: ${payload.templateName}\nCampaign: ${payload.campaignName}${payload.uploadedFileName ? `\nFile: ${payload.uploadedFileName}` : ''}\nStatus: request accepted (delivery not confirmed)`,
         recipients: completed, offerName,
       });
       busy.current = false;
