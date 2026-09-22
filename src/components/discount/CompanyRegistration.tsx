@@ -874,7 +874,7 @@ const CompanyRegistration = () => {
           const cardUrl = `${window.location.origin}/card/${result.id}`;
           try {
             await staffApi.dispatchCard(result.id, cardUrl);
-            toast.success("Member registered! Digital card sent to all emails and mobile numbers.");
+            toast.success("Member registered! Welcome message & digital card sent to all emails and mobile numbers.");
           } catch (dispatchErr) {
             console.warn("Card auto-dispatch warning:", dispatchErr);
             toast.success("Member registered successfully!");
