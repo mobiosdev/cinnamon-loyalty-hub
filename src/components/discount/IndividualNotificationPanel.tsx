@@ -44,13 +44,15 @@ import { logSentNotification } from "@/utils/notificationLogger";
 import { TablePagination } from "@/components/common/TablePagination";
 
 interface Member {
-  id: string;
+  id?: string;
   first_name: string;
   last_name: string;
   mobile: string;
-  category_id: number;
+  secondary_mobile?: string;
+  category_id?: number;
+  category_name?: string;
   customer_categories?: {
-    name: string;
+    name?: string;
   };
 }
 

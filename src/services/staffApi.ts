@@ -9,6 +9,7 @@ export interface StaffMember {
   mobile: string;
   secondary_mobile?: string;
   email?: string;
+  secondary_email?: string;
   address?: string;
   date_of_birth?: string;
   deactivation_note?: string;
@@ -103,6 +104,14 @@ export const staffApi = {
 
   async sendCardEmail(id: string, email: string, cardUrl?: string): Promise<any> {
     return apiManager.post<any>(`/members/${id}/send-card`, { email, card_url: cardUrl });
+  },
+
+  async dispatchCard(id: string, cardUrl?: string): Promise<any> {
+    return apiManager.post<any>(`/members/${id}/dispatch-card`, { card_url: cardUrl });
+  },
+
+  async getPublicCard(idOrCode: string): Promise<any> {
+    return apiManager.get<any>(`/members/card/${encodeURIComponent(idOrCode)}`);
   },
 
   async bulkImport(membersList: any[], uploadCategoryId: number, companyId?: string): Promise<Response> {

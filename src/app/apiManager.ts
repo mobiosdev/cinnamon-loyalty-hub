@@ -48,6 +48,7 @@ axiosInstance.interceptors.response.use(
       url.includes('/users/login') || 
       url.includes('/users/refresh') || 
       url.includes('/users/reset-password') ||
+      url.includes('/members/card/') ||
       url.includes('/audit/logs');
 
     if (

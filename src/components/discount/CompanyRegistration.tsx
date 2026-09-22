@@ -46,7 +46,9 @@ interface StaffMember {
   first_name: string;
   last_name: string;
   mobile: string;
+  secondary_mobile?: string;
   email: string;
+  secondary_email?: string;
   address: string;
   dateOfBirth?: string;
   designation: string;
@@ -97,6 +99,7 @@ const CompanyRegistration = () => {
     mobile: '',
     secondary_mobile: '',
     email: '',
+    secondary_email: '',
     address: '',
     dateOfBirth: '',
     designation: '',
@@ -247,6 +250,7 @@ const CompanyRegistration = () => {
       mobile: '',
       secondary_mobile: '',
       email: '',
+      secondary_email: '',
       address: '',
       dateOfBirth: '',
       designation: '',
@@ -335,6 +339,7 @@ const CompanyRegistration = () => {
       mobile: staff.mobile,
       secondary_mobile: staff.secondary_mobile || '',
       email: staff.email,
+      secondary_email: staff.secondary_email || '',
       address: staff.address,
       dateOfBirth: staff.date_of_birth?.split('T')[0] || '',
       designation: staff.designation,
@@ -785,6 +790,7 @@ const CompanyRegistration = () => {
           mobile: mobileValidation.normalized,
           secondary_mobile: normalizedSecMobile,
           email: memberFormData.email,
+          secondary_email: memberFormData.secondary_email || undefined,
           address: memberFormData.address,
           date_of_birth: memberFormData.dateOfBirth || null,
           designation: memberFormData.designation,
@@ -834,6 +840,7 @@ const CompanyRegistration = () => {
           mobile: mobileValidation.normalized!,
           secondary_mobile: normalizedSecMobile || undefined,
           email: memberFormData.email || '',
+          secondary_email: memberFormData.secondary_email || undefined,
           address: memberFormData.address || '',
           date_of_birth: memberFormData.dateOfBirth || null,
           designation: memberFormData.designation || '',
@@ -862,7 +869,19 @@ const CompanyRegistration = () => {
           }
         );
         
-        toast.success("Member registered successfully!");
+        // Automatically dispatch membership card to all emails and all mobile numbers
+        if (result?.id) {
+          const cardUrl = `${window.location.origin}/card/${result.id}`;
+          try {
+            await staffApi.dispatchCard(result.id, cardUrl);
+            toast.success("Member registered! Welcome message & digital card sent to all emails and mobile numbers.");
+          } catch (dispatchErr) {
+            console.warn("Card auto-dispatch warning:", dispatchErr);
+            toast.success("Member registered successfully!");
+          }
+        } else {
+          toast.success("Member registered successfully!");
+        }
       }
       
       // Trigger reload of members list
@@ -986,6 +1005,16 @@ const CompanyRegistration = () => {
                          value={memberFormData.email || ''} 
                          onChange={(e) => setMemberFormData({...memberFormData, email: e.target.value})}
                          placeholder="email@example.com"
+                       />
+                     </div>
+
+                     <div className="space-y-2">
+                       <Label>Secondary Email (Optional)</Label>
+                       <Input 
+                         type="email"
+                         value={memberFormData.secondary_email || ''} 
+                         onChange={(e) => setMemberFormData({...memberFormData, secondary_email: e.target.value})}
+                         placeholder="alternate.email@example.com"
                        />
                      </div>
                      

@@ -23,7 +23,9 @@ interface MembershipCardProps {
     renew_date?: string;
     registered_date?: string;
     email?: string;
+    secondary_email?: string;
     mobile?: string;
+    secondary_mobile?: string;
     card_token?: string;
     is_active?: boolean;
   } | null;
@@ -198,114 +200,48 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
   };
 
   const handleSendCard = async () => {
-    if (!member.email && !member.mobile) {
+    if (!member.email && !member.secondary_email && !member.mobile && !member.secondary_mobile) {
       toast.error("Member does not have a registered email address or mobile number.");
       return;
     }
 
-    setSendingCard(true);
-    let emailSent = false;
-    let smsSent = false;
-    const errors: string[] = [];
+    if (!member.id) {
+      toast.error("Member ID is missing.");
+      return;
+    }
 
+    setSendingCard(true);
     try {
-      // Ensure token is generated and updated in DB
-      const cardToken = await ensureCardToken(member.id!, member.card_token);
+      const cardToken = await ensureCardToken(member.id, member.card_token);
       const cardUrl = `${window.location.origin}/card/${cardToken}`;
 
-      // 1. Send via email if registered
-      if (member.email && member.id) {
+      const res = await staffApi.dispatchCard(member.id, cardUrl);
+      if (res && res.success) {
+        const emailCount = res.emails?.filter((e: any) => e.success)?.length || 0;
+        const smsCount = res.mobiles?.filter((m: any) => m.success)?.length || 0;
+        toast.success(`Membership card dispatched to ${emailCount} email(s) and ${smsCount} mobile number(s).`);
+
         try {
-          const response = await staffApi.sendCardEmail(member.id, member.email, cardUrl);
-          if (response && response.success) {
-            emailSent = true;
-          } else {
-            throw new Error(response?.message || 'Failed to send email');
-          }
-        } catch (err: any) {
-          console.error("Failed to send membership card email:", err);
-          errors.push(`Email: ${err.message || 'Unknown error'}`);
+          await auditApi.logActivity({
+            activity_type: 'member_management',
+            entity_type: 'member',
+            entity_id: member.id,
+            entity_name: memberName,
+            action: 'update',
+            details: { info: `Sent membership card to all registered emails (${emailCount}) and mobiles (${smsCount})` },
+            performed_by: 'Admin User',
+          });
+        } catch (logErr) {
+          console.error("Failed to write audit log:", logErr);
         }
-      }
-
-      // 2. Send via SMS if registered (dual mobile dispatch if secondary exists)
-      const mobilesToNotify: string[] = [];
-      if (member.mobile) {
-        const phoneValidation = validateAndNormalizeSriLankanMobile(member.mobile);
-        if (phoneValidation.isValid && phoneValidation.normalized) {
-          mobilesToNotify.push(phoneValidation.normalized);
-        }
-      }
-      if (member.secondary_mobile && member.secondary_mobile.trim()) {
-        const secValidation = validateAndNormalizeSriLankanMobile(member.secondary_mobile.trim());
-        if (secValidation.isValid && secValidation.normalized && !mobilesToNotify.includes(secValidation.normalized)) {
-          mobilesToNotify.push(secValidation.normalized);
-        }
-      }
-
-      if (mobilesToNotify.length > 0) {
-        try {
-          const smsMessage = `🏨 Cinnamon Grand Colombo\n${categoryName.toUpperCase()} MEMBERSHIP CARD\n\n👤 Member: ${memberName}\n🔢 Membership No: ${memberCode}\n📅 Expiry Date: ${expiryDate}\n\nView and download your digital card here: ${cardUrl}`;
-
-          const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://message.text-ware.com/send_sms.php';
-          const smsUsername = import.meta.env.VITE_SMS_USERNAME_TRANSACTIONAL || 'TW01287_cinnamon_tr';
-          const smsPassword = import.meta.env.VITE_SMS_PASSWORD_TRANSACTIONAL || import.meta.env.VITE_SMS_PASSWORD || 'tisJFd9jH@1aR';
-          const smsSrc = import.meta.env.VITE_SMS_SRC_TRANSACTIONAL || import.meta.env.VITE_SMS_SRC || 'Cinnamon';
-
-          for (const targetMobile of mobilesToNotify) {
-            const smsUrl = new URL(smsApiUrl);
-            smsUrl.searchParams.append('username', smsUsername);
-            smsUrl.searchParams.append('password', smsPassword);
-            smsUrl.searchParams.append('src', smsSrc);
-            smsUrl.searchParams.append('dst', targetMobile);
-            smsUrl.searchParams.append('msg', smsMessage);
-            smsUrl.searchParams.append('dr', '1');
-
-            const response = await fetch(smsUrl.toString());
-            if (!response.ok) {
-              console.error(`Failed to send SMS to ${targetMobile}`);
-            }
-          }
-
-          smsSent = true;
-        } catch (err: any) {
-          console.error("Failed to send membership card SMS:", err);
-          errors.push(`SMS: ${err.message || 'Unknown error'}`);
-        }
+      } else {
+        throw new Error(res?.message || "Failed to dispatch card");
       }
     } catch (err: any) {
       console.error("Failed to process sending card:", err);
-      errors.push(`Process: ${err.message || 'Unknown error'}`);
-    }
-
-    setSendingCard(false);
-
-    if (errors.length === 0) {
-      let successMsg = "Membership card sent successfully";
-      if (emailSent && smsSent) {
-        successMsg += ` to email (${member.email}) and mobile (${member.mobile})`;
-      } else if (emailSent) {
-        successMsg += ` to email (${member.email})`;
-      } else if (smsSent) {
-        successMsg += ` to mobile (${member.mobile})`;
-      }
-      toast.success(successMsg);
-
-      try {
-        await auditApi.logActivity({
-          activity_type: 'member_management',
-          entity_type: 'member',
-          entity_id: member.id || null,
-          entity_name: memberName,
-          action: 'update',
-          details: { info: `Sent membership card to email: ${member.email || 'N/A'}, mobile: ${member.mobile || 'N/A'}` },
-          performed_by: 'Admin User',
-        });
-      } catch (logErr) {
-        console.error("Failed to write audit log:", logErr);
-      }
-    } else {
-      toast.error(`Failed to send membership card: ${errors.join(', ')}`);
+      toast.error(`Failed to send membership card: ${err.message || 'Unknown error'}`);
+    } finally {
+      setSendingCard(false);
     }
   };
 
