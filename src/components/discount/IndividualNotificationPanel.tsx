@@ -373,9 +373,9 @@ const IndividualNotificationPanel = () => {
 
       if (activeTab === "sms") {
         const smsApiUrl = import.meta.env.VITE_SMS_API_URL || 'https://message.text-ware.com/send_sms.php';
-        const smsUsername = import.meta.env.VITE_SMS_USERNAME_PROMOTIONAL || 'TW01287_cinnamon_pr';
-        const smsPassword = import.meta.env.VITE_SMS_PASSWORD_PROMOTIONAL || import.meta.env.VITE_SMS_PASSWORD || 'as7WuKxkp@pPW';
-        const smsSrc = import.meta.env.VITE_SMS_SRC_PROMOTIONAL || import.meta.env.VITE_SMS_SRC || 'Cinnamon';
+        const smsUsername = import.meta.env.VITE_SMS_USERNAME_TRANSACTIONAL || 'TW01287_cinnamon_tr';
+        const smsPassword = import.meta.env.VITE_SMS_PASSWORD_TRANSACTIONAL || 'as7Wu@x2';
+        const smsSrc = import.meta.env.VITE_SMS_SRC_TRANSACTIONAL || 'Cinnamon';
 
         // Loop through each recipient (including secondary mobile if present) and send the SMS request
         const phonesToSend: string[] = [];
@@ -396,17 +396,19 @@ const IndividualNotificationPanel = () => {
 
         await Promise.all(
           phonesToSend.map(async (phone) => {
-            const smsUrl = new URL(smsApiUrl);
-            smsUrl.searchParams.append('username', smsUsername);
-            smsUrl.searchParams.append('password', smsPassword);
-            smsUrl.searchParams.append('src', smsSrc);
-            smsUrl.searchParams.append('dst', phone);
-            smsUrl.searchParams.append('msg', message);
-            smsUrl.searchParams.append('dr', '1');
+            try {
+              const smsUrl = new URL(smsApiUrl);
+              smsUrl.searchParams.append('username', smsUsername);
+              smsUrl.searchParams.append('password', smsPassword);
+              smsUrl.searchParams.append('src', smsSrc);
+              smsUrl.searchParams.append('dst', phone);
+              smsUrl.searchParams.append('msg', message);
+              smsUrl.searchParams.append('dr', '1');
 
-            const response = await fetch(smsUrl.toString());
-            if (!response.ok) {
-              console.error(`Failed to send SMS to ${phone}`);
+              await fetch(smsUrl.toString(), { mode: 'no-cors' });
+              console.log(`[SMS TR] Dispatched SMS to ${phone} via ${smsSrc}`);
+            } catch (err) {
+              console.error(`Failed to send SMS to ${phone}:`, err);
             }
           })
         );
@@ -417,7 +419,7 @@ const IndividualNotificationPanel = () => {
         .map((o) => o.name)
         .join(", ");
 
-      logSentNotification({
+      await logSentNotification({
         type: "Individual Custom",
         channel: activeTab as "sms" | "whatsapp",
         message,
