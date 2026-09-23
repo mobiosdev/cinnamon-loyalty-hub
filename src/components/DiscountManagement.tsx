@@ -86,190 +86,192 @@ const DiscountManagement = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 sm:px-6 py-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <img
-                src={cinnamonLogo}
-                alt="Cinnamon Grand Colombo"
-                className="h-10 sm:h-12 w-auto object-contain shrink-0"
-              />
-              <div className="min-w-0 border-l border-border pl-3 sm:pl-4">
-                <h1 className="text-lg sm:text-2xl font-serif font-semibold text-foreground leading-tight">
-                  Discount Management
-                </h1>
-                <p className="text-xs sm:text-sm text-muted-foreground leading-tight">
-                  Corporate Benefits &amp; Member Discount System
-                </p>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <div className="sticky top-0 z-30 bg-background">
+          {/* Header */}
+          <header className="border-b border-border bg-card">
+            <div className="container mx-auto px-4 sm:px-6 py-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                  <img
+                    src={cinnamonLogo}
+                    alt="Cinnamon Grand Colombo"
+                    className="h-10 sm:h-12 w-auto object-contain shrink-0"
+                  />
+                  <div className="min-w-0 border-l border-border pl-3 sm:pl-4">
+                    <h1 className="text-lg sm:text-2xl font-serif font-semibold text-foreground leading-tight">
+                      Discount Management
+                    </h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground leading-tight">
+                      Corporate Benefits &amp; Member Discount System
+                    </p>
+                  </div>
+                </div>
+
+                {/* User info + Logout */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between gap-2 sm:w-auto sm:justify-start">
+                      <User className="h-4 w-4" />
+                      <div className="text-left min-w-0 flex-1 sm:flex-none">
+                        <div className="text-xs font-semibold leading-none">{user?.full_name || user?.username}</div>
+                        <div className="text-xs text-muted-foreground capitalize truncate">{user?.role === "superadmin" ? "Super Admin" : "User"}</div>
+                      </div>
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <div className="px-3 py-2 text-xs text-muted-foreground">@{user?.username}</div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setIsProfileOpen(true)} className="cursor-pointer">
+                      <UserCog className="mr-2 h-4 w-4" />
+                      My Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
+          </header>
+          <div className="container mx-auto px-4 sm:px-6 py-4">
+            <div className="flex flex-col gap-2 bg-muted p-1 rounded-lg sm:flex-row sm:items-center">
+              <TabsList
+                className="flex-1 grid w-full bg-transparent p-0 h-auto overflow-x-auto sm:overflow-visible"
+                style={{ gridTemplateColumns: `repeat(${[isSuperAdmin || permissions?.registration, isSuperAdmin || permissions?.redemption, isSuperAdmin || permissions?.transactions, isSuperAdmin || permissions?.reports].filter(Boolean).length}, minmax(0, 1fr))` }}
+              >
+                {(isSuperAdmin || permissions?.registration) && (
+                  <TabsTrigger
+                    value="registration"
+                    className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  >
+                    <Building2 className="mr-2 h-4 w-4" />
+                    <span className="truncate">Registration</span>
+                  </TabsTrigger>
+                )}
+                {(isSuperAdmin || permissions?.redemption) && (
+                  <TabsTrigger
+                    value="redemption"
+                    className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  >
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    <span className="truncate">Redemption</span>
+                  </TabsTrigger>
+                )}
+                {(isSuperAdmin || permissions?.transactions) && (
+                  <TabsTrigger
+                    value="transactions"
+                    className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    <span className="truncate">Transactions</span>
+                  </TabsTrigger>
+                )}
+                {(isSuperAdmin || permissions?.reports) && (
+                  <TabsTrigger
+                    value="reports"
+                    className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  >
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    <span className="truncate">Reports</span>
+                  </TabsTrigger>
+                )}
+              </TabsList>
 
-            {/* User info + Logout */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="w-full justify-between gap-2 sm:w-auto sm:justify-start">
-                  <User className="h-4 w-4" />
-                  <div className="text-left min-w-0 flex-1 sm:flex-none">
-                    <div className="text-xs font-semibold leading-none">{user?.full_name || user?.username}</div>
-                    <div className="text-xs text-muted-foreground capitalize truncate">{user?.role === "superadmin" ? "Super Admin" : "User"}</div>
-                  </div>
-                  <ChevronDown className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <div className="px-3 py-2 text-xs text-muted-foreground">@{user?.username}</div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setIsProfileOpen(true)} className="cursor-pointer">
-                  <UserCog className="mr-2 h-4 w-4" />
-                  My Profile
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign Out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              {hasSettings && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant={settingsActive ? "default" : "ghost"}
+                      className="w-full justify-between gap-2 sm:w-auto sm:justify-start"
+                    >
+                      <Settings className="h-4 w-4" />
+                      Settings
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    {(isSuperAdmin || permissions?.settings_categories) && (
+                      <DropdownMenuItem onClick={() => setActiveTab("categories")} className="cursor-pointer">
+                        <Users className="mr-2 h-4 w-4" />
+                        Member Categories
+                      </DropdownMenuItem>
+                    )}
+                    {(isSuperAdmin || permissions?.settings_offers) && (
+                      <DropdownMenuItem onClick={() => setActiveTab("offers")} className="cursor-pointer">
+                        <Gift className="mr-2 h-4 w-4" />
+                        Offers
+                      </DropdownMenuItem>
+                    )}
+                    {(isSuperAdmin || permissions?.settings_notifications) && (
+                      <DropdownMenuItem onClick={() => setActiveTab("notifications")} className="cursor-pointer">
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Send Notifications
+                      </DropdownMenuItem>
+                    )}
+                    {(isSuperAdmin || permissions?.settings_audit) && (
+                      <DropdownMenuItem onClick={() => setActiveTab("audit")} className="cursor-pointer">
+                        <Shield className="mr-2 h-4 w-4" />
+                        Audit Trail
+                      </DropdownMenuItem>
+                    )}
+                    {isSuperAdmin && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setActiveTab("usermanagement")} className="cursor-pointer font-medium">
+                          <UserCog className="mr-2 h-4 w-4" />
+                          User Management
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
           </div>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <div className="flex flex-col gap-2 bg-muted p-1 rounded-lg sm:flex-row sm:items-center">
-            <TabsList
-              className="flex-1 grid w-full bg-transparent p-0 h-auto overflow-x-auto sm:overflow-visible"
-              style={{ gridTemplateColumns: `repeat(${[isSuperAdmin || permissions?.registration, isSuperAdmin || permissions?.redemption, isSuperAdmin || permissions?.transactions, isSuperAdmin || permissions?.reports].filter(Boolean).length}, minmax(0, 1fr))` }}
-            >
-              {(isSuperAdmin || permissions?.registration) && (
-                <TabsTrigger
-                  value="registration"
-                  className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                >
-                  <Building2 className="mr-2 h-4 w-4" />
-                  <span className="truncate">Registration</span>
-                </TabsTrigger>
-              )}
-              {(isSuperAdmin || permissions?.redemption) && (
-                <TabsTrigger
-                  value="redemption"
-                  className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                >
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  <span className="truncate">Redemption</span>
-                </TabsTrigger>
-              )}
-              {(isSuperAdmin || permissions?.transactions) && (
-                <TabsTrigger
-                  value="transactions"
-                  className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                >
-                  <FileText className="mr-2 h-4 w-4" />
-                  <span className="truncate">Transactions</span>
-                </TabsTrigger>
-              )}
-              {(isSuperAdmin || permissions?.reports) && (
-                <TabsTrigger
-                  value="reports"
-                  className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                >
-                  <BarChart3 className="mr-2 h-4 w-4" />
-                  <span className="truncate">Reports</span>
-                </TabsTrigger>
-              )}
-            </TabsList>
-
-            {hasSettings && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant={settingsActive ? "default" : "ghost"}
-                    className="w-full justify-between gap-2 sm:w-auto sm:justify-start"
-                  >
-                    <Settings className="h-4 w-4" />
-                    Settings
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  {(isSuperAdmin || permissions?.settings_categories) && (
-                    <DropdownMenuItem onClick={() => setActiveTab("categories")} className="cursor-pointer">
-                      <Users className="mr-2 h-4 w-4" />
-                      Member Categories
-                    </DropdownMenuItem>
-                  )}
-                  {(isSuperAdmin || permissions?.settings_offers) && (
-                    <DropdownMenuItem onClick={() => setActiveTab("offers")} className="cursor-pointer">
-                      <Gift className="mr-2 h-4 w-4" />
-                      Offers
-                    </DropdownMenuItem>
-                  )}
-                  {(isSuperAdmin || permissions?.settings_notifications) && (
-                    <DropdownMenuItem onClick={() => setActiveTab("notifications")} className="cursor-pointer">
-                      <MessageSquare className="mr-2 h-4 w-4" />
-                      Send Notifications
-                    </DropdownMenuItem>
-                  )}
-                  {(isSuperAdmin || permissions?.settings_audit) && (
-                    <DropdownMenuItem onClick={() => setActiveTab("audit")} className="cursor-pointer">
-                      <Shield className="mr-2 h-4 w-4" />
-                      Audit Trail
-                    </DropdownMenuItem>
-                  )}
-                  {isSuperAdmin && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => setActiveTab("usermanagement")} className="cursor-pointer font-medium">
-                        <UserCog className="mr-2 h-4 w-4" />
-                        User Management
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-
-          <TabsContent value="registration" className="space-y-4">
+        <main className="container mx-auto px-4 sm:px-6 pt-2 pb-4 sm:pb-8">
+          <TabsContent value="registration" className="mt-0 space-y-4">
             {canAccess("registration") ? <CompanyRegistration /> : <AccessDenied />}
           </TabsContent>
 
-          <TabsContent value="redemption" className="space-y-4">
+          <TabsContent value="redemption" className="mt-0 space-y-4">
             {canAccess("redemption") ? <Redemption /> : <AccessDenied />}
           </TabsContent>
 
-          <TabsContent value="transactions" className="space-y-4">
+          <TabsContent value="transactions" className="mt-0 space-y-4">
             {canAccess("transactions") ? <TransactionTracking activeTab={activeTab} /> : <AccessDenied />}
           </TabsContent>
 
-          <TabsContent value="reports" className="space-y-4">
+          <TabsContent value="reports" className="mt-0 space-y-4">
             {canAccess("reports") ? <ReportsAnalytics activeTab={activeTab} /> : <AccessDenied />}
           </TabsContent>
 
-          <TabsContent value="offers" className="space-y-4">
+          <TabsContent value="offers" className="mt-0 space-y-4">
             {canAccess("offers") ? <OfferManagement /> : <AccessDenied />}
           </TabsContent>
 
-          <TabsContent value="categories" className="space-y-4">
+          <TabsContent value="categories" className="mt-0 space-y-4">
             {canAccess("categories") ? <CustomerCategoryManagement /> : <AccessDenied />}
           </TabsContent>
 
-          <TabsContent value="audit" className="space-y-4">
+          <TabsContent value="audit" className="mt-0 space-y-4">
             {canAccess("audit") ? <AuditTrail parentActiveTab={activeTab} /> : <AccessDenied />}
           </TabsContent>
 
-          <TabsContent value="notifications" className="space-y-4">
+          <TabsContent value="notifications" className="mt-0 space-y-4">
             {canAccess("notifications") ? <SendNotifications /> : <AccessDenied />}
           </TabsContent>
 
-          <TabsContent value="usermanagement" className="space-y-4">
+          <TabsContent value="usermanagement" className="mt-0 space-y-4">
             {isSuperAdmin ? <UserManagement /> : <AccessDenied />}
           </TabsContent>
-        </Tabs>
-      </main>
+        </main>
+      </Tabs>
 
       <ProfileDialog open={isProfileOpen} onOpenChange={setIsProfileOpen} />
     </div>

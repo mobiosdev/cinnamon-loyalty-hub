@@ -106,8 +106,8 @@ export const offerApi = {
     return apiManager.put<PhysicalOffer>(`/offers/${id}`, offer);
   },
 
-  async getAvailableOffers(search: string): Promise<AvailableOffersResponse> {
-    return apiManager.get<AvailableOffersResponse>(`/offers/available?search=${encodeURIComponent(search)}`);
+  async getAvailableOffers(search: string, includePast = false): Promise<AvailableOffersResponse> {
+    return apiManager.get<AvailableOffersResponse>(`/offers/available?search=${encodeURIComponent(search)}${includePast ? "&includePast=true" : ""}`);
   },
 
   async redeemOffer(redemption: Omit<OfferRedemption, 'id' | 'redeemed_at'>): Promise<OfferRedemption> {
