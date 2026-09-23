@@ -18,6 +18,7 @@ import { categoryApi } from "@/services/categoryApi";
 import { offerApi } from "@/services/offerApi";
 import { useDebounce } from "@/hooks/useDebounce";
 import { StaffList } from "./StaffList";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
 import { logCompanyActivity, logMemberActivity } from "@/utils/auditLogger";
 import { validateAndNormalizeSriLankanMobile, validateAndNormalizeSriLankanPhone, splitPhoneNumber } from "@/utils/phoneUtils";
@@ -117,7 +118,6 @@ const CompanyRegistration = () => {
 
   // Bulk Upload states
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
-  const [uploadCategoryId, setUploadCategoryId] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] = useState<{
@@ -126,6 +126,10 @@ const CompanyRegistration = () => {
     errors: { rowName: string; error: string; index: number }[];
   } | null>(null);
   const [originalUploadRows, setOriginalUploadRows] = useState<any[]>([]);
+  const [parsedUploadMembers, setParsedUploadMembers] = useState<any[]>([]);
+  const [uploadPhase, setUploadPhase] = useState<"validate" | "preview" | "saved">("validate");
+  const [uploadFilter, setUploadFilter] = useState("all");
+  const [savedUploadIndexes, setSavedUploadIndexes] = useState<Set<number>>(new Set());
 
   // Fetch all companies and categories for the dropdowns
   useEffect(() => {
@@ -431,15 +435,21 @@ const CompanyRegistration = () => {
 
   const downloadSampleExcel = () => {
     const headers = [
-      ["Title", "First Name", "Last Name", "Mobile", "Secondary Mobile", "Date of Birth", "Email", "Designation", "Address", "Company Name", "Company Address", "Company Phone", "Company Email", "Company Manager", "Renewal Date"]
+      ["Title", "First Name", "Last Name", "Mobile", "Secondary Mobile", "Date of Birth", "Email", "Designation", "Address", "Company Name", "Company Address", "Company Phone", "Company Email", "Company Manager", "Renewal Date", "Category"]
     ];
     const sampleData = [
-      ["Mr", "John", "Doe", "0771234567", "0719876543", "1990-05-15", "john.doe@example.com", "Manager", "123 Galle Road, Colombo", "Cinnamon Hotels", "77 Galle Road, Colombo 03", "0112345678", "info@cinnamon.com", "Mr. Manager", "2027-06-24"]
+      ["Mr", "John", "Doe", "0771234567", "0719876543", "1990-05-15", "john.doe@example.com", "Manager", "123 Galle Road, Colombo", "Cinnamon Hotels", "77 Galle Road, Colombo 03", "0112345678", "info@cinnamon.com", "Mr. Manager", "2027-06-24", categories[0]?.name || "Enter an existing category name"]
     ];
     
     const worksheet = XLSX.utils.aoa_to_sheet([...headers, ...sampleData]);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Members Template");
+    const categorySheet = XLSX.utils.aoa_to_sheet([
+      ["Category"],
+      ...categories.map(category => [category.name]),
+    ]);
+    categorySheet["!cols"] = [{ wch: 35 }];
+    XLSX.utils.book_append_sheet(workbook, categorySheet, "Categories");
     XLSX.writeFile(workbook, "bulk_members_template.xlsx");
     toast.success("Sample Excel template downloaded!");
   };
@@ -452,10 +462,6 @@ const CompanyRegistration = () => {
   };
 
   const handleBulkSubmit = async () => {
-    if (!uploadCategoryId) {
-      toast.error("Please select a member category");
-      return;
-    }
     if (!uploadFile) {
       toast.error("Please select an Excel file");
       return;
@@ -483,6 +489,7 @@ const CompanyRegistration = () => {
           setOriginalUploadRows(jsonData);
 
           const membersList = jsonData.map((row) => {
+            const category_name = String(row["Category"] || row["category"] || row["Member Category"] || row["category_name"] || "").trim();
             const title = row["Title"] || row["title"] || "";
             const first_name = row["First Name"] || row["first_name"] || row["FirstName"] || "";
             const last_name = row["Last Name"] || row["last_name"] || row["LastName"] || "";
@@ -504,10 +511,10 @@ const CompanyRegistration = () => {
 
             // Date columns parsing
             const rawRenewDate = row["Renewal Date"] || row["renewal_date"] || row["Renew Date"] || row["renew_date"];
-            const renew_date = parseExcelDate(rawRenewDate) || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0];
+            const renew_date = (rawRenewDate ? parseExcelDate(rawRenewDate) || String(rawRenewDate) : null) || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0];
 
             const rawDob = row["Date of Birth"] || row["date_of_birth"] || row["DOB"] || row["dob"];
-            const date_of_birth = parseExcelDate(rawDob) || null;
+            const date_of_birth = rawDob ? parseExcelDate(rawDob) || String(rawDob) : null;
 
             // Company details columns
             const company_name = (row["Company Name"] || row["company_name"] || row["Company"] || row["company"] || "").toString().trim();
@@ -517,6 +524,7 @@ const CompanyRegistration = () => {
             const company_manager = row["Company Manager"] || row["company_manager"] || "";
 
             return {
+              category_name,
               title,
               first_name,
               last_name,
@@ -535,89 +543,67 @@ const CompanyRegistration = () => {
             };
           });
 
-          setUploadResult(null);
-
-          const response = await staffApi.bulkImport(
-            membersList,
-            Number(uploadCategoryId),
-            selectedCompany?.id
-          );
-
-          if (!response.ok) {
-            throw new Error(`Failed to upload file: ${response.statusText}`);
-          }
-
-          const reader = response.body?.getReader();
-          if (!reader) {
-            throw new Error("Cannot get reader from stream");
-          }
-
-          const decoder = new TextDecoder();
-          let buffer = '';
-          let allErrors: { rowName: string; error: string; index: number }[] = [];
-          let successCount = 0;
-          let failedCount = 0;
-          
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            
-            for (const line of lines) {
-              if (!line.trim()) continue;
-              try {
-                const progress = JSON.parse(line);
-                successCount = progress.success;
-                failedCount = progress.failed;
-                if (progress.errors && progress.errors.length > 0) {
-                  allErrors = [...allErrors, ...progress.errors];
-                }
-                
-                // Show real-time notification
-                toast.info(`Import progress: Batch ${progress.batch} complete. Saved ${progress.success} members.`, {
-                  id: "bulk-upload-toast"
-                });
-              } catch (e) {
-                console.error("Error parsing progress chunk:", e);
-              }
-            }
-          }
-
-          setUploadResult({
-            success: successCount,
-            failed: failedCount,
-            errors: allErrors
-          });
-
-          if (failedCount === 0) {
-            toast.success(`Uploaded ${successCount} member(s) successfully.`, {
-              id: "bulk-upload-toast"
-            });
-            setIsReload(!isReload);
-            setBulkUploadOpen(false);
-            setUploadFile(null);
-            setUploadResult(null);
-          } else {
-            toast.warning(`Upload completed with ${failedCount} failure(s).`, {
-              id: "bulk-upload-toast"
-            });
-            setIsReload(!isReload);
-          }
+          const result = await staffApi.validateBulkImport(membersList, selectedCompany?.id);
+          setParsedUploadMembers(membersList);
+          setUploadResult(result);
+          setUploadPhase("preview");
+          setUploadFilter("all");
+          setSavedUploadIndexes(new Set());
+          toast.success("Validation complete. Review the records before saving.");
         } catch (err: any) {
           console.error(err);
-          toast.error("Failed to parse the file structure");
+          toast.error(err.message || "Failed to validate the file");
         } finally {
           setIsUploading(false);
         }
       };
 
+      reader.onerror = () => {
+        setIsUploading(false);
+        toast.error("Failed to read the file");
+      };
       reader.readAsBinaryString(uploadFile);
     } catch (err) {
       console.error(err);
       toast.error("Failed to read the file");
+      setIsUploading(false);
+    }
+  };
+
+  const handleConfirmBulkSave = async () => {
+    if (!uploadResult || uploadPhase !== "preview" || isUploading) return;
+    const invalidIndexes = new Set(uploadResult.errors.map(error => error.index));
+    const validIndexes = parsedUploadMembers.map((_, index) => index).filter(index => !invalidIndexes.has(index));
+    if (!validIndexes.length) return;
+    setIsUploading(true);
+    try {
+      const response = await staffApi.bulkImport(validIndexes.map(index => parsedUploadMembers[index]), undefined, selectedCompany?.id);
+      if (!response.ok) throw new Error("Failed to save members");
+      const lines = (await response.text()).trim().split("\n").filter(Boolean);
+      if (!lines.length) throw new Error("No save result received");
+      const progress = lines.map(line => JSON.parse(line));
+      const finalResult = progress[progress.length - 1];
+      const saveErrors = progress.flatMap(batch => batch.errors || []).map(error => ({
+        ...error,
+        index: validIndexes[error.index] ?? -1,
+      }));
+      const failedIndexes = new Set(saveErrors.map(error => error.index));
+      setSavedUploadIndexes(new Set(validIndexes.filter(index => !failedIndexes.has(index))));
+      setUploadResult({
+        success: finalResult.success,
+        failed: uploadResult.failed + finalResult.failed,
+        errors: [...uploadResult.errors, ...saveErrors],
+      });
+      setUploadPhase("saved");
+      setIsReload(previous => !previous);
+      toast.success(`Saved ${finalResult.success} member(s).`);
+    } catch (error) {
+      // A lost response may follow a successful commit; require fresh validation before retrying.
+      setUploadPhase("validate");
+      setUploadResult(null);
+      setIsReload(previous => !previous);
+      toast.error(error instanceof Error ? error.message + ". Validate the file again before retrying." : "Save failed. Validate again before retrying.");
+    } finally {
       setIsUploading(false);
     }
   };
@@ -683,7 +669,10 @@ const CompanyRegistration = () => {
       return;
     }
 
-    const worksheet = XLSX.utils.json_to_sheet(failedRowsData);
+    const headers = Array.from(new Set(failedRowsData.flatMap(row => Object.keys(row!)))).filter(key => key !== "Error Reason");
+    headers.push("Error Reason");
+    const worksheet = XLSX.utils.json_to_sheet(failedRowsData, { header: headers });
+    worksheet["!cols"] = headers.map(header => ({ wch: header === "Error Reason" ? 80 : 22 }));
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Failed Rows");
     
@@ -1536,21 +1525,24 @@ const CompanyRegistration = () => {
 
       {/* Bulk Upload Dialog */}
       <Dialog open={bulkUploadOpen} onOpenChange={(open) => {
+        if (isUploading) return;
         setBulkUploadOpen(open);
         if (!open) {
           setUploadFile(null);
           setUploadResult(null);
+          setUploadPhase("validate");
+          setParsedUploadMembers([]);
         }
       }}>
         {uploadResult ? (
-          <DialogContent className="sm:max-w-md flex flex-col p-6 gap-4">
+          <DialogContent className="w-[95vw] sm:max-w-6xl max-h-[90vh] overflow-y-auto flex flex-col p-6 gap-4">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
-                Upload Summary
+                {uploadPhase === "preview" ? "Review Member Upload" : "Upload Summary"}
               </DialogTitle>
               <DialogDescription className="text-sm">
-                Review the bulk upload results below.
+                {uploadPhase === "preview" ? "Backend validation is complete. No records have been saved. Confirm to save only valid records." : "Review the saved records and any errors below."}
               </DialogDescription>
             </DialogHeader>
 
@@ -1558,11 +1550,11 @@ const CompanyRegistration = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400">{uploadResult.success}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Successfully Saved</p>
+                  <p className="text-xs text-muted-foreground mt-1">{uploadPhase === "preview" ? "Valid Records" : "Successfully Saved"}</p>
                 </div>
                 <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-center">
                   <p className="text-2xl font-bold text-red-600 dark:text-red-400">{uploadResult.failed}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Failed / Duplicates</p>
+                  <p className="text-xs text-muted-foreground mt-1">Records with Errors</p>
                 </div>
               </div>
 
@@ -1575,7 +1567,7 @@ const CompanyRegistration = () => {
                         Uniqueness & Validation Failures
                       </p>
                       <p className="text-xs text-amber-700 dark:text-amber-400">
-                        Some rows were skipped because the mobile number or email is already registered, contains duplicates within the file, or has validation errors.
+                        Records with errors will not be saved. Hover over or focus an error status to see the reason, or download the error records to correct them.
                       </p>
                     </div>
                   </div>
@@ -1602,30 +1594,87 @@ const CompanyRegistration = () => {
                 </div>
               )}
 
-              <DialogFooter className="pt-2">
+              <div className="space-y-3">
+                <Tabs value={uploadFilter} onValueChange={setUploadFilter}>
+                  <TabsList>
+                    <TabsTrigger value="all">All Records ({originalUploadRows.length})</TabsTrigger>
+                    <TabsTrigger value="valid">{uploadPhase === "preview" ? "Valid" : "Saved"} ({uploadResult.success})</TabsTrigger>
+                    <TabsTrigger value="errors">Errors ({uploadResult.failed})</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                <TooltipProvider>
+                  <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-muted"><tr>
+                        {["Row", "Member", "Mobile", "Email", "Category", "Company", "Status"].map(label => <th key={label} className="p-3 font-medium">{label}</th>)}
+                      </tr></thead>
+                      <tbody>
+                        {parsedUploadMembers.map((member, index) => {
+                          const errors = uploadResult.errors.filter(error => error.index === index);
+                          const errorText = errors.map(error => error.error).join("; ");
+                          if ((uploadFilter === "valid" && errors.length > 0) || (uploadFilter === "errors" && errors.length === 0)) return null;
+                          return (
+                            <tr key={index} className={cn("border-t", errors.length > 0 && "bg-red-500/5")}>
+                              <td className="p-3">{index + 2}</td>
+                              <td className="p-3">{member.first_name} {member.last_name}</td>
+                              <td className="p-3 whitespace-nowrap">{member.mobile}</td>
+                              <td className="p-3">{member.email || "-"}</td>
+                              <td className="p-3">{member.category_name || "-"}</td>
+                              <td className="p-3">{member.company_name || selectedCompany?.name || "-"}</td>
+                              <td className="p-3">
+                                {errors.length ? (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button type="button" className="inline-flex items-center gap-1 text-red-600 underline decoration-dotted" aria-label={errorText}>
+                                        <AlertTriangle className="h-4 w-4" /> Error
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-sm whitespace-normal">{errorText}</TooltipContent>
+                                  </Tooltip>
+                                ) : <span className="text-green-600">{savedUploadIndexes.has(index) ? "Saved" : "Valid"}</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </TooltipProvider>
+              </div>
+
+              <DialogFooter className="pt-2 gap-2">
+                {uploadPhase === "preview" && (
+                  <>
+                    <Button variant="outline" disabled={isUploading} onClick={() => { setUploadResult(null); setUploadPhase("validate"); }}>Choose Another File</Button>
+                    <Button disabled={isUploading || uploadResult.success === 0} onClick={handleConfirmBulkSave}>
+                      {isUploading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : `Confirm Bulk Save (${uploadResult.success})`}
+                    </Button>
+                  </>
+                )}
                 <Button
                   type="button"
-                  className="w-full"
+                  variant="outline"
+                  disabled={isUploading}
                   onClick={() => {
                     setBulkUploadOpen(false);
                     setUploadFile(null);
                     setUploadResult(null);
                   }}
                 >
-                  Close & Refresh
+                  Close
                 </Button>
               </DialogFooter>
             </div>
           </DialogContent>
         ) : (
-          <DialogContent className="sm:max-w-md flex flex-col p-6 gap-4">
+          <DialogContent className="w-[95vw] sm:max-w-6xl max-h-[90vh] overflow-y-auto flex flex-col p-6 gap-4">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <Upload className="h-5 w-5 text-primary" />
                 Bulk Upload Member Details
               </DialogTitle>
               <DialogDescription className="text-sm">
-                Upload an Excel file containing member details.
+                Upload an Excel file containing member details and a Category for each row. Use an existing category name from the Categories sheet in the template.
               </DialogDescription>
             </DialogHeader>
 
@@ -1639,25 +1688,6 @@ const CompanyRegistration = () => {
                   No company selected. Your Excel file must include the **Company Name** column to automatically find or register companies.
                 </div>
               )} */}
-
-              <div className="space-y-2">
-                <Label htmlFor="upload-category">Member Category *</Label>
-                <Select
-                  value={uploadCategoryId}
-                  onValueChange={setUploadCategoryId}
-                >
-                  <SelectTrigger id="upload-category" className="w-full">
-                    <SelectValue placeholder="Select category for uploaded members" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id.toString()}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
 
               <div className="p-4 border border-dashed rounded-lg bg-muted/20 flex flex-col items-center justify-center gap-2 text-center">
                 <p className="text-xs text-muted-foreground">
@@ -1703,18 +1733,18 @@ const CompanyRegistration = () => {
                 <Button
                   type="button"
                   onClick={handleBulkSubmit}
-                  disabled={isUploading || !uploadCategoryId || !uploadFile}
+                  disabled={isUploading || !uploadFile}
                   className="gap-1.5"
                 >
                   {isUploading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Uploading...
+                      Validating...
                     </>
                   ) : (
                     <>
                       <Upload className="h-4 w-4" />
-                      Upload Members
+                      Validate Members
                     </>
                   )}
                 </Button>

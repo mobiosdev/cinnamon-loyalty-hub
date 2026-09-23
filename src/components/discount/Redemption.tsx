@@ -17,7 +17,7 @@ import { staffApi } from "@/services/staffApi";
 import { redemptionApi } from "@/services/redemptionApi";
 import { transactionApi } from "@/services/transactionApi";
 import { validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
-import { format } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import axios from "axios";
 import { cn } from "@/lib/utils";
 import { QrScannerDialog } from "./QrScannerDialog";
@@ -56,6 +56,13 @@ interface AvailableOffer {
     bill_number?: string;
   }>;
 }
+
+const getBenefitDates = (offer: AvailableOffer) => {
+  const now = Date.now();
+  const start = offer.valid_from ? startOfDay(parseISO(offer.valid_from)).getTime() : -Infinity;
+  const end = offer.valid_to ? endOfDay(parseISO(offer.valid_to)).getTime() : Infinity;
+  return { start, isUpcoming: start > now, isExpired: end < now };
+};
 
 const Redemption = () => {
   const currentUser = useSelector((state: RootState) => state.auth.user);
@@ -327,7 +334,7 @@ const Redemption = () => {
       // Fetch member data and available offers
       const [member, offers] = await Promise.all([
         staffApi.getMemberByPhone(cleanMobile),
-        offerApi.getAvailableOffers(cleanMobile)
+        offerApi.getAvailableOffers(cleanMobile, true)
       ]);
 
       if (!member) {
@@ -412,6 +419,11 @@ const Redemption = () => {
   };
 
   const handleRedeemOffer = (offer: AvailableOffer) => {
+    const { isUpcoming, isExpired } = getBenefitDates(offer);
+    if (isUpcoming || isExpired) {
+      toast.error(isUpcoming ? "This benefit is not available yet" : "This benefit has expired");
+      return;
+    }
     if (offer.is_redeemed) {
       toast.error("This offer has already been redeemed");
       return;
@@ -990,7 +1002,20 @@ const Redemption = () => {
   const renderBenefitsStep = () => {
     const hasDiscount = memberData?.discount_enabled;
     const discountRedeemed = redeemedItems.has('discount');
-    const hasOffers = availableOffers.length > 0;
+    const isOfferUsed = (offer: AvailableOffer) => {
+      const count = offer.redemptions_count || 0;
+      return offer.is_recurrent
+        ? offer.usage_limit != null && count >= offer.usage_limit
+        : offer.is_redeemed || count >= 1 || redeemedItems.has(offer.id);
+    };
+    const pastOffers = availableOffers.filter(offer => getBenefitDates(offer).isExpired || isOfferUsed(offer));
+    const currentOffers = availableOffers.filter(offer => !pastOffers.includes(offer))
+      .sort((a, b) => {
+        const first = getBenefitDates(a);
+        const second = getBenefitDates(b);
+        return Number(first.isUpcoming) - Number(second.isUpcoming)
+          || (first.isUpcoming && second.isUpcoming ? first.start - second.start : 0);
+      });
 
     return (
       <div className="space-y-6">
@@ -999,11 +1024,18 @@ const Redemption = () => {
           <p className="text-sm text-muted-foreground">Bill Number: {billNumber}</p>
         </div>
 
-        <div className="space-y-4">
-          <h3 className="font-semibold text-lg">Available Benefits</h3>
+        <Tabs defaultValue="available" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="available">Available Benefits</TabsTrigger>
+            <TabsTrigger value="past">Past Benefits</TabsTrigger>
+          </TabsList>
+          {(["available", "past"] as const).map(benefitsTab => {
+            const offers = benefitsTab === "available" ? currentOffers : pastOffers;
+            return (
+          <TabsContent key={benefitsTab} value={benefitsTab} className="space-y-4">
 
           {/* Discount Section */}
-          {hasDiscount && (
+          {hasDiscount && benefitsTab === "available" && (
             <Card className={discountRedeemed ? "border-success bg-success/5" : ""}>
               {/* <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
@@ -1050,9 +1082,10 @@ const Redemption = () => {
           )}
 
           {/* Offers Section */}
-          {hasOffers ? (
+          {offers.length > 0 ? (
             <>
-              {availableOffers.map((offer) => {
+              {offers.map((offer) => {
+                const { isUpcoming, isExpired } = getBenefitDates(offer);
                 const redemptionsCount = offer.redemptions_count || 0;
                 const usageLimit = offer.usage_limit;
                 const isRecurrent = offer.is_recurrent;
@@ -1096,7 +1129,9 @@ const Redemption = () => {
                   <Card 
                     key={offer.id} 
                     className={`transition-colors border ${
-                      isRedeemed 
+                      isExpired || isUpcoming
+                        ? "border-border bg-muted/30"
+                        : isRedeemed
                         ? "border-red-200 dark:border-red-900/30 bg-red-500/5 dark:bg-red-950/10 opacity-90" 
                         : "border-green-200 dark:border-green-900/30 bg-green-500/5 dark:bg-green-950/10 hover:border-green-300"
                     }`}
@@ -1109,17 +1144,19 @@ const Redemption = () => {
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className={`font-semibold text-sm ${isRedeemed ? "text-red-700 dark:text-red-400 line-through" : "text-green-700 dark:text-green-400"}`}>
+                              <h4 className={`font-semibold text-sm ${isExpired || isUpcoming ? "text-muted-foreground" : isRedeemed ? "text-red-700 dark:text-red-400 line-through" : "text-green-700 dark:text-green-400"}`}>
                                 {offer.name}
                               </h4>
                               <Badge 
                                 className={`text-[10px] py-0 px-1.5 font-semibold ${
-                                  isRedeemed 
+                                  isExpired || isUpcoming
+                                    ? "bg-muted text-muted-foreground"
+                                    : isRedeemed
                                     ? "bg-red-600 text-white hover:bg-red-700" 
                                     : "bg-green-600 text-white hover:bg-green-700"
                                 }`}
                               >
-                                {isRedeemed ? "Used" : "Active"}
+                                {isExpired ? "Expired" : isRedeemed ? "Used" : isUpcoming ? "Upcoming" : "Active"}
                               </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground mt-1">{offer.description}</p>
@@ -1162,7 +1199,11 @@ const Redemption = () => {
                           </div>
                         </div>
                         <div>
-                          {isRedeemed ? (
+                          {isExpired || isUpcoming ? (
+                            <Button disabled size="sm" variant="outline">
+                              {isExpired ? "Expired" : "Upcoming"}
+                            </Button>
+                          ) : isRedeemed ? (
                             <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
                               <CheckCircle className="h-5 w-5" />
                               <span className="text-sm font-semibold">Redeemed</span>
@@ -1193,15 +1234,18 @@ const Redemption = () => {
                 );
               })}
             </>
-          ) : !hasDiscount && (
+          ) : (
             <Card>
               <CardContent className="p-6 text-center text-muted-foreground">
                 <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No benefits available for this member</p>
+                <p>{benefitsTab === "past" ? "No past benefits for this member" : "No benefits available for this member"}</p>
               </CardContent>
             </Card>
           )}
-        </div>
+          </TabsContent>
+            );
+          })}
+        </Tabs>
 
         <div className="flex gap-3 pt-4">
           <Button onClick={handleReset} variant="outline" size="lg" className="flex-1">
@@ -1413,7 +1457,7 @@ const Redemption = () => {
   );
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="w-full">
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
