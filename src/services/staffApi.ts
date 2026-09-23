@@ -114,7 +114,15 @@ export const staffApi = {
     return apiManager.get<any>(`/members/card/${encodeURIComponent(idOrCode)}`);
   },
 
-  async bulkImport(membersList: any[], uploadCategoryId: number, companyId?: string): Promise<Response> {
+  async validateBulkImport(members: any[], companyId?: string): Promise<{
+    success: number;
+    failed: number;
+    errors: { rowName: string; error: string; index: number }[];
+  }> {
+    return apiManager.post('/members/bulk-validate', { members, company_id: companyId });
+  },
+
+  async bulkImport(membersList: any[], uploadCategoryId?: number, companyId?: string): Promise<Response> {
     const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7257/api';
     return fetch(`${apiBase}/members/bulk-import`, {
       method: 'POST',
