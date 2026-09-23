@@ -50,7 +50,9 @@ interface SendMessageDialogProps {
 }
 
 interface MemberRecipient {
+  id?: string;
   mobile: string;
+  secondary_mobile?: string;
   first_name: string;
   last_name: string;
   category_id: number;
@@ -158,7 +160,9 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
           const dbMatch = matchedDbMembers[index];
           if (dbMatch && dbMatch.is_active && !dbMatch.is_deleted) {
             manualMemberData.push({
+              id: dbMatch.id,
               mobile,
+              secondary_mobile: dbMatch.secondary_mobile,
               first_name: dbMatch.first_name,
               last_name: dbMatch.last_name,
               category_id: dbMatch.category_id ?? -1,
@@ -177,8 +181,10 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
       }
 
       // Merge category members and manual members
-      const allMembersToProcess = [...(catMembers || [])].map(m => ({
+      const allMembersToProcess: MemberRecipient[] = [...(catMembers || [])].map((m: any) => ({
+        id: m.id,
         mobile: m.mobile,
+        secondary_mobile: m.secondary_mobile,
         first_name: m.first_name,
         last_name: m.last_name,
         category_id: m.category_id ?? -1,
@@ -316,27 +322,19 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
       console.log(`Sending Offer Reminders (${activeTab.toUpperCase()}) to:`, payload);
 
       if (activeTab === "sms") {
-        // Collect destination recipients (including secondary mobile if present)
-        const phonesToSend: { phone: string; name: string }[] = [];
-        eligibleRecipients.forEach((m: any) => {
-          const fullName = `${m.first_name} ${m.last_name}`.trim();
-          if (m.mobile) {
-            const val = validateAndNormalizeSriLankanMobile(m.mobile);
-            if (val.isValid && val.normalized && !phonesToSend.some((p) => p.phone === val.normalized)) {
-              phonesToSend.push({ phone: val.normalized, name: fullName });
-            }
-          }
-          if (m.secondary_mobile && m.secondary_mobile.trim()) {
-            const val = validateAndNormalizeSriLankanMobile(m.secondary_mobile.trim());
-            if (val.isValid && val.normalized && !phonesToSend.some((p) => p.phone === val.normalized)) {
-              phonesToSend.push({ phone: val.normalized, name: fullName });
-            }
-          }
-        });
+        // Collect recipient payload with member identity and phone numbers
+        const recipientsPayload = eligibleRecipients.map((m: any) => ({
+          id: m.id,
+          member_id: m.id,
+          phone: m.mobile,
+          mobile: m.mobile,
+          secondary_mobile: m.secondary_mobile,
+          name: `${m.first_name} ${m.last_name}`.trim(),
+        }));
 
-        // Dispatch via Backend Transactional SMS Gateway
+        // Dispatch via Backend Transactional SMS Gateway (handles primary + secondary numbers)
         const smsResponse = await notificationApi.sendSms({
-          recipients: phonesToSend,
+          recipients: recipientsPayload,
           message,
           type: "Offer Reminder",
           offer_name: offer.name,

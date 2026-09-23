@@ -5,15 +5,21 @@ import { validateAndNormalizeSriLankanMobile } from '@/utils/phoneUtils';
 import { logSentNotification } from '@/utils/notificationLogger';
 import { emptyWhatsappDraft, isWhatsappReady } from '@/components/discount/WhatsappComposer';
 
-interface Recipient { mobile: string; first_name: string; last_name: string }
+interface Recipient {
+  id?: string;
+  member_id?: string;
+  mobile: string;
+  phone?: string;
+  secondary_mobile?: string;
+  first_name: string;
+  last_name: string;
+}
 
 export function useWhatsappNotification() {
   const [draft, setDraft] = useState({ ...emptyWhatsappDraft });
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const busy = useRef(false);
-  // Keep accepted recipients when retrying a partially failed batch.
-  const accepted = useRef(new Set<string>());
 
   const send = async (members: Recipient[], type: string, offerName?: string) => {
     if (busy.current || uploading) return false;
@@ -21,46 +27,63 @@ export function useWhatsappNotification() {
       toast.error('Enter message content, a campaign name, and an uploaded filename when sending an image.');
       return false;
     }
-    const recipients = new Map<string, { phone: string; name: string }>();
-    for (const member of members) {
-      const result = validateAndNormalizeSriLankanMobile(member.mobile);
-      if (!result.isValid || !result.normalized || !/^[1-9]\d{6,14}$/.test(result.normalized)) {
-        toast.error(`Invalid recipient number: ${member.mobile}`);
-        return false;
-      }
-      const name = [member.first_name, member.last_name].filter(Boolean).join(' ').trim() || 'Valued member';
-      recipients.set(result.normalized, { phone: result.normalized, name });
+    if (!members || members.length === 0) {
+      toast.error('Select at least one recipient.');
+      return false;
     }
-    if (!recipients.size) { toast.error('Select at least one recipient.'); return false; }
-    const payload = {
-      templateName: draft.templateName,
-      ...(draft.templateName === 'message' ? { uploadedFileName: draft.uploadedFileName.trim() } : {}),
-      campaignName: draft.campaignName.trim(),
-    };
+
+    const recipientsPayload = members.map((m: any) => ({
+      id: m.id && !String(m.id).startsWith('manual-') ? m.id : undefined,
+      member_id: m.id && !String(m.id).startsWith('manual-') ? m.id : undefined,
+      phone: m.mobile || m.phone,
+      mobile: m.mobile || m.phone,
+      secondary_mobile: m.secondary_mobile,
+      name: `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Valued member',
+    }));
+
     busy.current = true;
     setSending(true);
-    const completed: { phone: string; name: string }[] = [];
     try {
-      for (const recipient of recipients.values()) {
-        const values: [string, string] = [recipient.name, draft.content.trim()];
-        const key = JSON.stringify({ ...payload, msisdn: recipient.phone, values });
-        if (accepted.current.has(key)) continue;
-        await whatsappApi.sendMessage({ ...payload, values, msisdn: recipient.phone, client_ref_id: crypto.randomUUID() });
-        accepted.current.add(key);
-        completed.push(recipient);
+      const response = await whatsappApi.sendNotification({
+        recipients: recipientsPayload,
+        templateName: draft.templateName,
+        uploadedFileName: draft.uploadedFileName?.trim() || undefined,
+        campaignName: draft.campaignName.trim(),
+        content: draft.content.trim(),
+        type,
+        offer_name: offerName,
+      });
+
+      if (!response.success && response.successful === 0) {
+        throw new Error('WhatsApp requests were not accepted by the gateway');
       }
-      toast.success(`WhatsApp requests accepted for ${recipients.size} recipient(s).`);
-      accepted.current.clear();
+
+      toast.success(
+        `WhatsApp request accepted for ${response.successful} recipient number(s) (including secondary numbers).`
+      );
+
+      const completed = (response.results || [])
+        .filter((r) => r.success)
+        .map((r) => ({ phone: r.phone, name: r.name }));
+
+      if (completed.length) {
+        logSentNotification({
+          type,
+          channel: 'whatsapp',
+          message: `${draft.content.trim()}\n\nTemplate: ${draft.templateName}\nCampaign: ${draft.campaignName}${draft.uploadedFileName ? `\nFile: ${draft.uploadedFileName}` : ''}\nStatus: request accepted (delivery not confirmed)`,
+          recipients: completed,
+          offerName,
+        });
+      }
+
       return true;
     } catch (error) {
-      toast.error(`${completed.length} request(s) accepted in this attempt. ${error instanceof Error ? error.message : 'WhatsApp request failed'}. Check delivery before retrying.`);
+      console.error('Error dispatching WhatsApp notifications:', error);
+      toast.error(
+        `${error instanceof Error ? error.message : 'WhatsApp request failed'}. Check delivery before retrying.`
+      );
       return false;
     } finally {
-      if (completed.length) logSentNotification({
-        type, channel: 'whatsapp',
-        message: `${draft.content.trim()}\n\nTemplate: ${payload.templateName}\nCampaign: ${payload.campaignName}${payload.uploadedFileName ? `\nFile: ${payload.uploadedFileName}` : ''}\nStatus: request accepted (delivery not confirmed)`,
-        recipients: completed, offerName,
-      });
       busy.current = false;
       setSending(false);
     }

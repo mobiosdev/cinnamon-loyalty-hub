@@ -394,27 +394,19 @@ const IndividualNotificationPanel = () => {
         .join(", ");
 
       if (activeTab === "sms") {
-        // Collect destination recipients (including secondary mobile if present)
-        const phonesToSend: { phone: string; name: string }[] = [];
-        recipientAnalysis.eligibleList.forEach((m: any) => {
-          const fullName = `${m.first_name} ${m.last_name}`.trim();
-          if (m.mobile) {
-            const val = validateAndNormalizeSriLankanMobile(m.mobile);
-            if (val.isValid && val.normalized && !phonesToSend.some((p) => p.phone === val.normalized)) {
-              phonesToSend.push({ phone: val.normalized, name: fullName });
-            }
-          }
-          if (m.secondary_mobile && m.secondary_mobile.trim()) {
-            const val = validateAndNormalizeSriLankanMobile(m.secondary_mobile.trim());
-            if (val.isValid && val.normalized && !phonesToSend.some((p) => p.phone === val.normalized)) {
-              phonesToSend.push({ phone: val.normalized, name: fullName });
-            }
-          }
-        });
+        // Collect recipient payload with member identity and phone numbers
+        const recipientsPayload = recipientAnalysis.eligibleList.map((m: any) => ({
+          id: m.id && !String(m.id).startsWith("manual-") ? m.id : undefined,
+          member_id: m.id && !String(m.id).startsWith("manual-") ? m.id : undefined,
+          phone: m.mobile,
+          mobile: m.mobile,
+          secondary_mobile: m.secondary_mobile,
+          name: `${m.first_name} ${m.last_name}`.trim(),
+        }));
 
-        // Dispatch via Backend Transactional SMS Gateway
+        // Dispatch via Backend Transactional SMS Gateway (handles primary + secondary numbers)
         const smsResponse = await notificationApi.sendSms({
-          recipients: phonesToSend,
+          recipients: recipientsPayload,
           message,
           type: "Individual Custom",
           offer_name: selectedOffersNames || undefined,
