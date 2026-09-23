@@ -160,8 +160,8 @@ export const offerApi = {
     return apiManager.post<any>('/offers/fix-member-offers');
   },
 
-  async requestReversal(billNumber: string): Promise<any> {
-    return apiManager.post<any>('/offers/reverse/request', { bill_number: billNumber });
+  async requestReversal(billNumber: string, sendToSecondary?: boolean): Promise<any> {
+    return apiManager.post<any>('/offers/reverse/request', { bill_number: billNumber, send_to_secondary: sendToSecondary });
   },
 
   async confirmReversal(payload: { bill_number: string; otp: string; staff_id: number }): Promise<any> {

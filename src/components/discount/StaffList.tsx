@@ -6,7 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash, Ban, Building2, User, Check, ChevronsUpDown, Calendar, FileText, QrCode, Download, CreditCard } from "lucide-react";
+import { Loader2, Search, Eye, EyeOff, Gift, CheckCircle2, X, RotateCcw, Pencil, Save, Trash2, Trash, Ban, Building2, User, Check, ChevronsUpDown, Calendar, FileText, QrCode, Download, CreditCard, KeyRound } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { staffApi } from "@/services/staffApi";
 import { offerApi, parseOfferDescription } from "@/services/offerApi";
 import { companyApi } from "@/services/companyApi";
@@ -76,6 +77,19 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
     if (!member?.is_active) return;
     setCardMember(member);
     setCardDialogOpen(true);
+  };
+
+  const handleSendPasswordResetEmail = async (member: any) => {
+    if (!member?.email || !member.email.trim()) {
+      toast.error(`No email registered for ${member?.first_name || 'this member'} ${member?.last_name || ''}`);
+      return;
+    }
+    try {
+      const res = await staffApi.sendPasswordResetEmail(member.id);
+      toast.success(res?.message || `Password reset email sent to ${member.email}`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.message || "Failed to send password reset email");
+    }
   };
   const [memberOffers, setMemberOffers] = useState<any[]>([]);
   const [redeemedOffers, setRedeemedOffers] = useState<any[]>([]);
@@ -914,6 +928,24 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                           </Button>
                         </>
                       )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleSendPasswordResetEmail(member)}
+                            disabled={!member.is_active || !member.email}
+                            className="text-indigo-600 hover:text-white hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                            title="password reset email send"
+                          >
+                            <KeyRound className="h-4 w-4 mr-1" />
+                            Reset
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>password reset email send</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -984,6 +1016,23 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                         <Ban className="h-4 w-4" />
                       </Button>
                     )}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleSendPasswordResetEmail(selectedMember)}
+                          disabled={!selectedMember.is_active || !selectedMember.email}
+                          className="h-8 w-8 text-indigo-600 hover:text-white hover:bg-indigo-600 disabled:opacity-40"
+                          title="password reset email send"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>password reset email send</p>
+                      </TooltipContent>
+                    </Tooltip>
                     <Button
                       variant="ghost"
                       size="icon"

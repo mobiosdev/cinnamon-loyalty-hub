@@ -12,6 +12,7 @@ export interface SendSmsPayload {
   offer_name?: string;
   categories_name?: string;
   performed_by?: string;
+  send_to_secondary?: boolean;
 }
 
 export interface SendSmsResponse {

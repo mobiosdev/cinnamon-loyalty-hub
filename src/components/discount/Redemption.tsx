@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { CreditCard, Gift, Send, CheckCircle, AlertCircle, Percent, QrCode, Loader2 } from "lucide-react";
@@ -72,6 +73,7 @@ const Redemption = () => {
   const [loading, setLoading] = useState(false);
   const [expiryTime, setExpiryTime] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
+  const [sendOtpToSecondary, setSendOtpToSecondary] = useState(false);
   
   // Member and benefits data
   const [memberData, setMemberData] = useState<MemberData | null>(null);
@@ -97,6 +99,7 @@ const Redemption = () => {
   const [reversalExpiryTime, setReversalExpiryTime] = useState<string | null>(null);
   const [reversalSecondsLeft, setReversalSecondsLeft] = useState<number>(0);
   const [showReverseConfirm, setShowReverseConfirm] = useState(false);
+  const [reversalSendOtpToSecondary, setReversalSendOtpToSecondary] = useState(false);
 
   // Countdown timer for reversal OTP
   useEffect(() => {
@@ -283,6 +286,7 @@ const Redemption = () => {
         notes: `OTP for redeeming benefits on bill #${billNumber}`,
         user_id: 1,
         bill_number: billNumber,
+        send_to_secondary: sendOtpToSecondary,
       });
 
       setStaffId(data.data.staff_id);
@@ -521,6 +525,8 @@ const Redemption = () => {
     setSearchNameQuery("");
     setSearchResults([]);
     setRemark("");
+    setSendOtpToSecondary(false);
+    setReversalSendOtpToSecondary(false);
   };
 
   const handleRequestReversal = async () => {
@@ -531,7 +537,7 @@ const Redemption = () => {
 
     setLoading(true);
     try {
-      const res = await offerApi.requestReversal(reversalBillNumber.trim());
+      const res = await offerApi.requestReversal(reversalBillNumber.trim(), reversalSendOtpToSecondary);
       setReversalStaffId(res.data.staff_id);
       setReversalMaskedMobile(res.data.masked_mobile);
       setReversalExpiryTime(res.data.expiry_time);
@@ -874,6 +880,17 @@ const Redemption = () => {
           placeholder="Enter any remarks or notes..."
           className="text-base"
         />
+      </div>
+
+      <div className="flex items-center space-x-2 pt-1 pb-1">
+        <Checkbox
+          id="send-otp-secondary"
+          checked={sendOtpToSecondary}
+          onCheckedChange={(checked) => setSendOtpToSecondary(checked === true)}
+        />
+        <Label htmlFor="send-otp-secondary" className="text-sm font-normal cursor-pointer select-none">
+          Also send OTP to secondary mobile number
+        </Label>
       </div>
 
       <div className="space-y-3 pt-2">
@@ -1292,6 +1309,17 @@ const Redemption = () => {
         <p className="text-xs text-muted-foreground">
           Enter the bill number of the transaction you wish to reverse.
         </p>
+      </div>
+
+      <div className="flex items-center space-x-2 pt-1 pb-1">
+        <Checkbox
+          id="reversal-send-otp-secondary"
+          checked={reversalSendOtpToSecondary}
+          onCheckedChange={(checked) => setReversalSendOtpToSecondary(checked === true)}
+        />
+        <Label htmlFor="reversal-send-otp-secondary" className="text-sm font-normal cursor-pointer select-none">
+          Also send OTP to secondary mobile number
+        </Label>
       </div>
 
       <Button 

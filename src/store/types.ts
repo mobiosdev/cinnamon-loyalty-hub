@@ -33,6 +33,9 @@ export interface User {
   is_active: boolean;
   permissions: UserPermissions;
   outlet: Outlet | null;
+  is_customer?: boolean;
+  member_data?: any;
+  member_code?: string;
 }
 
 export interface AuthState {

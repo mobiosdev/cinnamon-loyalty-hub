@@ -5,6 +5,7 @@ export interface SendOtpPayload {
   notes?: string;
   user_id: number;
   bill_number: string;
+  send_to_secondary?: boolean;
 }
 
 export interface SendOtpResponse {

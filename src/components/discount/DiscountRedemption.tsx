@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { CreditCard, Send, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -21,6 +22,7 @@ const DiscountRedemption = () => {
   const [loading, setLoading] = useState(false);
   const [staffId, setStaffId] = useState<number | null>(null);
   const [expiryTime, setExpiryTime] = useState<string | null>(null);
+  const [sendOtpToSecondary, setSendOtpToSecondary] = useState(false);
 
   // Mock discount data
   const [discountData] = useState({
@@ -51,6 +53,7 @@ const DiscountRedemption = () => {
         notes: `Your OTP for bill #${billNumber}`,
         user_id: 1,
         bill_number: billNumber,
+        send_to_secondary: sendOtpToSecondary,
       });
 
       setStaffId(data.data.staff_id);
@@ -171,6 +174,17 @@ const DiscountRedemption = () => {
                     OTP will be sent via {contactType === "email" ? "Email" : "SMS"}
                   </p>
                 )}
+              </div>
+
+              <div className="flex items-center space-x-2 pt-1 pb-1">
+                <Checkbox
+                  id="discount-send-otp-secondary"
+                  checked={sendOtpToSecondary}
+                  onCheckedChange={(checked) => setSendOtpToSecondary(checked === true)}
+                />
+                <Label htmlFor="discount-send-otp-secondary" className="text-sm font-normal cursor-pointer select-none">
+                  Also send OTP to secondary mobile number
+                </Label>
               </div>
 
               <Button onClick={handleSendOTP} disabled={loading} size="lg" className="w-full">

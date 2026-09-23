@@ -85,6 +85,7 @@ const IndividualNotificationPanel = () => {
   const [smsSending, setSending] = useState(false);
   const [activeTab, setActiveTab] = useState("sms");
   const [smsMessage, setSmsMessage] = useState("");
+  const [sendToSecondary, setSendToSecondary] = useState(false);
   const whatsapp = useWhatsappNotification();
 
   // Offer Filtering State
@@ -358,7 +359,7 @@ const IndividualNotificationPanel = () => {
     if (sending) return;
     if (activeTab === "whatsapp") {
       const offerNames = offers.filter(o => selectedOfferIds.includes(o.id)).map(o => o.name).join(", ");
-      if (await whatsapp.send(recipientAnalysis.eligibleList, "Individual Custom", offerNames || undefined)) {
+      if (await whatsapp.send(recipientAnalysis.eligibleList, "Individual Custom", offerNames || undefined, sendToSecondary)) {
         setSelectedMembers([]);
         setSelectedOfferIds([]);
       }
@@ -410,6 +411,7 @@ const IndividualNotificationPanel = () => {
           message,
           type: "Individual Custom",
           offer_name: selectedOffersNames || undefined,
+          send_to_secondary: sendToSecondary,
         });
 
         if (!smsResponse.success && smsResponse.successful === 0) {
@@ -742,8 +744,20 @@ const IndividualNotificationPanel = () => {
         )}
       </div>
 
-      {/* Action Button */}
-      <div className="flex justify-end pt-2">
+      {/* Secondary Mobile Option & Action Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="individual-send-secondary"
+            checked={sendToSecondary}
+            onCheckedChange={(checked) => setSendToSecondary(checked === true)}
+            disabled={sending}
+          />
+          <Label htmlFor="individual-send-secondary" className="text-sm font-normal cursor-pointer select-none">
+            Also send to secondary mobile numbers
+          </Label>
+        </div>
+
         <Button
           onClick={handleSend}
           disabled={

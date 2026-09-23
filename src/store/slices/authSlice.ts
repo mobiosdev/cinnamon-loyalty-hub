@@ -220,6 +220,20 @@ const authSlice = createSlice({
         localStorage.setItem('user', JSON.stringify(state.user));
       }
     },
+    setCustomerAuth: (state, action: PayloadAction<{ access_token: string; refresh_token?: string; user: User }>) => {
+      state.user = action.payload.user;
+      state.isAuthenticated = true;
+      state.isLoading = false;
+      state.error = null;
+      state.otpStep = false;
+      state.pendingUsername = null;
+      state.maskedMobile = null;
+      localStorage.setItem('token', action.payload.access_token);
+      if (action.payload.refresh_token) {
+        localStorage.setItem('refresh_token', action.payload.refresh_token);
+      }
+      localStorage.setItem('user', JSON.stringify(action.payload.user));
+    },
   },
   extraReducers: (builder) => {
     // Step 1
@@ -277,6 +291,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, clearError, resetOtpStep, updateProfileSuccess } = authSlice.actions;
+export const { logout, clearError, resetOtpStep, updateProfileSuccess, setCustomerAuth } = authSlice.actions;
 export default authSlice.reducer;
 

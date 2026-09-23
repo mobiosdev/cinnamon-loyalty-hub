@@ -102,6 +102,17 @@ export const staffApi = {
     }
   },
 
+  async getMemberById(id: string): Promise<StaffMember | null> {
+    try {
+      return await apiManager.get<StaffMember>(`/members/${id}`);
+    } catch (error: any) {
+      if (error?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
   async sendCardEmail(id: string, email: string, cardUrl?: string): Promise<any> {
     return apiManager.post<any>(`/members/${id}/send-card`, { email, card_url: cardUrl });
   },
@@ -129,4 +140,32 @@ export const staffApi = {
       })
     });
   },
+
+  async verifyPasswordToken(token: string): Promise<any> {
+    return apiManager.get<any>(`/members/auth/verify-token?token=${encodeURIComponent(token)}`);
+  },
+
+  async setPassword(token: string, new_password: string): Promise<any> {
+    return apiManager.post<any>('/members/auth/set-password', { token, new_password });
+  },
+
+  async sendPasswordResetEmail(memberId: string): Promise<any> {
+    return apiManager.post<any>(`/members/${memberId}/send-password-reset-email`, {});
+  },
+
+  async customerLogin(email: string, password: string, send_to_secondary: boolean = false): Promise<any> {
+    return apiManager.post<any>('/members/auth/customer/login', {
+      email,
+      password,
+      send_to_secondary,
+    });
+  },
+
+  async verifyCustomerOtp(member_id: string, otp: string): Promise<any> {
+    return apiManager.post<any>('/members/auth/customer/login/verify', {
+      member_id,
+      otp,
+    });
+  },
 };
+

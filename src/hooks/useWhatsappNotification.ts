@@ -21,7 +21,7 @@ export function useWhatsappNotification() {
   const [sending, setSending] = useState(false);
   const busy = useRef(false);
 
-  const send = async (members: Recipient[], type: string, offerName?: string) => {
+  const send = async (members: Recipient[], type: string, offerName?: string, sendToSecondary?: boolean) => {
     if (busy.current || uploading) return false;
     if (!isWhatsappReady(draft)) {
       toast.error('Enter message content, a campaign name, and an uploaded filename when sending an image.');
@@ -52,6 +52,7 @@ export function useWhatsappNotification() {
         content: draft.content.trim(),
         type,
         offer_name: offerName,
+        send_to_secondary: sendToSecondary,
       });
 
       if (!response.success && response.successful === 0) {
@@ -59,7 +60,7 @@ export function useWhatsappNotification() {
       }
 
       toast.success(
-        `WhatsApp request accepted for ${response.successful} recipient number(s) (including secondary numbers).`
+        `WhatsApp request accepted for ${response.successful} recipient number(s)${sendToSecondary ? ' (including secondary numbers)' : ''}.`
       );
 
       const completed = (response.results || [])

@@ -67,6 +67,7 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
   const [loading, setLoading] = useState(false);
   const [smsSending, setSending] = useState(false);
   const [activeTab, setActiveTab] = useState("sms");
+  const [sendToSecondary, setSendToSecondary] = useState(false);
 
   // Recipient lists
   const [eligibleRecipients, setEligibleRecipients] = useState<MemberRecipient[]>([]);
@@ -291,7 +292,7 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
   const handleSend = async () => {
     if (sending) return;
     if (activeTab === "whatsapp") {
-      if (await whatsapp.send(eligibleRecipients, "Offer Reminder", offer.name)) onClose();
+      if (await whatsapp.send(eligibleRecipients, "Offer Reminder", offer.name, sendToSecondary)) onClose();
       return;
     }
 
@@ -338,6 +339,7 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
           message,
           type: "Offer Reminder",
           offer_name: offer.name,
+          send_to_secondary: sendToSecondary,
         });
 
         if (!smsResponse.success && smsResponse.successful === 0) {
@@ -557,18 +559,32 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
           </Tabs>
 
           {/* Action Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button variant="outline" onClick={onClose} disabled={sending}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSend}
-              disabled={sending || loading || eligibleRecipients.length === 0 || (activeTab === "whatsapp" && !whatsapp.ready)}
-              className="gap-2 px-6"
-            >
-              <Send className="h-4 w-4" />
-              {sending ? "Sending..." : `Send ${activeTab === "sms" ? "SMS" : "WhatsApp"}`}
-            </Button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="dialog-send-secondary"
+                checked={sendToSecondary}
+                onCheckedChange={(checked) => setSendToSecondary(checked === true)}
+                disabled={sending}
+              />
+              <Label htmlFor="dialog-send-secondary" className="text-sm font-normal cursor-pointer select-none">
+                Also send to secondary mobile numbers
+              </Label>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={onClose} disabled={sending}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSend}
+                disabled={sending || loading || eligibleRecipients.length === 0 || (activeTab === "whatsapp" && !whatsapp.ready)}
+                className="gap-2 px-6"
+              >
+                <Send className="h-4 w-4" />
+                {sending ? "Sending..." : `Send ${activeTab === "sms" ? "SMS" : "WhatsApp"}`}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
