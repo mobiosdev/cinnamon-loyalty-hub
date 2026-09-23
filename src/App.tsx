@@ -8,6 +8,7 @@ import { store } from "@/store";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import MemberLogin from "./pages/MemberLogin";
+import MemberPortal from "./pages/MemberPortal";
 import DigitalCard from "./pages/DigitalCard";
 import SetPassword from "./pages/SetPassword";
 import NotFound from "./pages/NotFound";
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/login-member" element={<MemberLogin />} />
+            <Route path="/member-portal" element={<MemberPortal />} />
             <Route path="/set-password" element={<SetPassword />} />
             <Route path="/card/:id" element={<DigitalCard />} />
             <Route path="/card" element={<NotFound />} />

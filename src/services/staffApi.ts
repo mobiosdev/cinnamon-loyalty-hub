@@ -30,6 +30,45 @@ export interface StaffMember {
   member_code?: string;
 }
 
+export interface PortalOffer {
+  id: string;
+  name: string;
+  description: string;
+  valid_from?: string;
+  valid_to?: string;
+  min_bill_value: number | null;
+  max_discount_amount: number | null;
+  is_recurrent: boolean;
+  usage_limit: number | null;
+  redemptions_count: number;
+  remaining_uses: number | null;
+  is_redeemed: boolean;
+}
+
+export interface PortalRedemption {
+  id: string;
+  type: 'discount' | 'offer';
+  title: string;
+  bill_number: string | null;
+  redeemed_at: string;
+  discount_type: string | null;
+  discount_value: number | null;
+  discount_amount: number | null;
+  status: string;
+}
+
+export interface MemberPortalData {
+  member: StaffMember & Record<string, any>;
+  privilege_discount: {
+    enabled: boolean;
+    percentage: number | null;
+    amount: number | null;
+    policy?: string;
+  };
+  offers: PortalOffer[];
+  history: PortalRedemption[];
+}
+
 interface PaginatedResponse<T> {
   data: T[];
   pagination: {
@@ -111,6 +150,10 @@ export const staffApi = {
       }
       throw error;
     }
+  },
+
+  async getMemberPortalData(memberId: string): Promise<MemberPortalData> {
+    return apiManager.get<MemberPortalData>(`/members/${memberId}/portal-data`);
   },
 
   async sendCardEmail(id: string, email: string, cardUrl?: string): Promise<any> {

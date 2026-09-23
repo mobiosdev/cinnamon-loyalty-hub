@@ -31,13 +31,14 @@ const MemberLogin = () => {
 
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const { isAuthenticated, error } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated, user, error } = useSelector((state: RootState) => state.auth);
+  const isMember = user?.role === "customer" || user?.is_customer === true;
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate("/");
+      navigate(isMember ? "/member-portal" : "/", { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, isMember, navigate]);
 
   useEffect(() => {
     if (error) {
@@ -111,7 +112,7 @@ const MemberLogin = () => {
           })
         );
         toast.success(`Welcome back, ${res.user.full_name}!`);
-        navigate("/");
+        navigate("/member-portal", { replace: true });
       }
     } catch (err: any) {
       const msg =
