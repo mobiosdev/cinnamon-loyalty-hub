@@ -10,6 +10,7 @@ export interface DiscountRedemption {
   discount_amount: number | null;
   redeemed_by: number;
   redeemed_at?: string;
+  send_to_secondary?: boolean;
 }
 
 export interface Transaction {

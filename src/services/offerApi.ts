@@ -119,6 +119,7 @@ export const offerApi = {
     customer_phone: string;
     bill_number: string;
     redeemed_by?: number;
+    send_to_secondary?: boolean;
   }): Promise<OfferRedemption[]> {
     return apiManager.post<OfferRedemption[]>('/offers/redeem-batch', payload);
   },
@@ -164,7 +165,7 @@ export const offerApi = {
     return apiManager.post<any>('/offers/reverse/request', { bill_number: billNumber, send_to_secondary: sendToSecondary });
   },
 
-  async confirmReversal(payload: { bill_number: string; otp: string; staff_id: number }): Promise<any> {
+  async confirmReversal(payload: { bill_number: string; otp: string; staff_id: number; send_to_secondary?: boolean }): Promise<any> {
     return apiManager.post<any>('/offers/reverse/confirm', payload);
   },
 };

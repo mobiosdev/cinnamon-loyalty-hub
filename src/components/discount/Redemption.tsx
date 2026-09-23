@@ -384,7 +384,8 @@ const Redemption = () => {
         discount_type: memberData.discount_amount > 0 ? 'fixed' : 'percentage',
         discount_value: memberData.discount_amount > 0 ? memberData.discount_amount : memberData.discount_percentage,
         discount_amount: null,
-        redeemed_by: 1
+        redeemed_by: 1,
+        send_to_secondary: sendOtpToSecondary,
       });
 
       // Fetch updated history
@@ -461,6 +462,7 @@ const Redemption = () => {
         customer_phone: phoneToSave,
         bill_number: billNumber,
         redeemed_by: 1, // TODO: Get from auth
+        send_to_secondary: sendOtpToSecondary,
       });
 
       logActivity({
@@ -588,7 +590,8 @@ const Redemption = () => {
       const res = await offerApi.confirmReversal({
         bill_number: reversalBillNumber.trim(),
         otp: "000000",
-        staff_id: 1
+        staff_id: 1,
+        send_to_secondary: reversalSendOtpToSecondary,
       });
 
       logActivity({
@@ -901,7 +904,7 @@ const Redemption = () => {
           onCheckedChange={(checked) => setSendOtpToSecondary(checked === true)}
         />
         <Label htmlFor="send-otp-secondary" className="text-sm font-normal cursor-pointer select-none">
-          Also send OTP to secondary mobile number
+          Also send OTP &amp; redemption SMS to secondary mobile number
         </Label>
       </div>
 
@@ -1362,7 +1365,7 @@ const Redemption = () => {
           onCheckedChange={(checked) => setReversalSendOtpToSecondary(checked === true)}
         />
         <Label htmlFor="reversal-send-otp-secondary" className="text-sm font-normal cursor-pointer select-none">
-          Also send OTP to secondary mobile number
+          Also send OTP &amp; reversal SMS to secondary mobile number
         </Label>
       </div>
 
