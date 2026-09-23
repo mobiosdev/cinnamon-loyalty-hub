@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useDispatch, useSelector } from "react-redux";
 import { setCustomerAuth, clearError } from "@/store/slices/authSlice";
@@ -15,7 +15,9 @@ import { staffApi } from "@/services/staffApi";
 const OTP_LENGTH = 6;
 
 const MemberLogin = () => {
-  const [email, setEmail] = useState("");
+  const location = useLocation();
+  const handoffEmail = (location.state as { email?: string } | null)?.email || "";
+  const [email, setEmail] = useState(handoffEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [sendToSecondary, setSendToSecondary] = useState(false);
@@ -33,12 +35,16 @@ const MemberLogin = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { isAuthenticated, user, error } = useSelector((state: RootState) => state.auth);
   const isMember = user?.role === "customer" || user?.is_customer === true;
+  // A staff session in this browser should not hijack the member login; show the form instead
+  const hasStaffSession = isAuthenticated && !isMember;
+  // Coming from the set-password link for a different member: let them sign in as that member
+  const isOtherMember = !!handoffEmail && handoffEmail.toLowerCase() !== (user?.email || "").toLowerCase();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate(isMember ? "/member-portal" : "/", { replace: true });
+    if (isAuthenticated && isMember && !isOtherMember) {
+      navigate("/member-portal", { replace: true });
     }
-  }, [isAuthenticated, isMember, navigate]);
+  }, [isAuthenticated, isMember, isOtherMember, navigate]);
 
   useEffect(() => {
     if (error) {
@@ -222,6 +228,14 @@ const MemberLogin = () => {
             {!otpStep ? (
               // Step 1: Member Email + Password Form
               <form onSubmit={handleStep1} className="space-y-5">
+                {hasStaffSession && (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+                    You are currently signed in as staff
+                    {user?.full_name ? <> (<span className="font-semibold">{user.full_name}</span>)</> : null}.
+                    Signing in as a member will end that session in this browser.
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label htmlFor="member-email" className="text-sm font-medium">Member Email</Label>
                   <div className="relative">

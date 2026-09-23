@@ -153,7 +153,7 @@ const SetPassword = () => {
                   </p>
                 </div>
                 <Button
-                  onClick={() => navigate("/login-member")}
+                  onClick={() => navigate("/login-member", { replace: true, state: { email: memberInfo?.email } })}
                   className="w-full h-11 font-semibold flex items-center justify-center gap-2"
                 >
                   Proceed to Member Login
@@ -173,7 +173,7 @@ const SetPassword = () => {
                 </div>
                 <Button
                   variant="outline"
-                  onClick={() => navigate("/login")}
+                  onClick={() => navigate("/login-member", { replace: true })}
                   className="w-full h-11 font-semibold"
                 >
                   Return to Login
@@ -261,7 +261,7 @@ const SetPassword = () => {
                 <div className="text-center pt-1">
                   <button
                     type="button"
-                    onClick={() => navigate("/login-member")}
+                    onClick={() => navigate("/login-member", { state: { email: memberInfo?.email } })}
                     className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
                   >
                     Already have a password? Sign In to Member Portal

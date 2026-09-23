@@ -43,6 +43,7 @@ export interface PortalOffer {
   redemptions_count: number;
   remaining_uses: number | null;
   is_redeemed: boolean;
+  redemptions: { id: string; redeemed_at: string; bill_number: string | null }[];
 }
 
 export interface PortalRedemption {

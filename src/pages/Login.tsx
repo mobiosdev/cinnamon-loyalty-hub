@@ -35,16 +35,18 @@ const Login = () => {
 
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const { isLoading, error, isAuthenticated, otpStep, maskedMobile, pendingUsername } = useSelector(
+  const { isLoading, error, isAuthenticated, otpStep, maskedMobile, pendingUsername, user } = useSelector(
     (state: RootState) => state.auth
   );
+  // A member session in this browser should not block staff from signing in here
+  const isStaffSession = isAuthenticated && !(user?.role === "customer" || user?.is_customer === true);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isStaffSession) {
       toast.success("Login successful! Welcome back.");
       navigate("/");
     }
-  }, [isAuthenticated, navigate]);
+  }, [isStaffSession, navigate]);
 
   useEffect(() => {
     if (error) {

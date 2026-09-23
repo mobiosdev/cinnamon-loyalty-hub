@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { AppDispatch, RootState } from "@/store";
 import { logout } from "@/store/slices/authSlice";
 import { logActivity } from "@/utils/auditLogger";
@@ -35,13 +35,69 @@ const formatDate = (value?: string | null, pattern = "dd MMM yyyy") => {
 const formatLkr = (value: number | null | undefined) =>
   value === null || value === undefined ? "—" : `LKR ${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
-const usageText = (offer: PortalOffer) => {
-  if (offer.usage_limit === null) {
-    return `Unlimited during validity${offer.redemptions_count ? ` · ${offer.redemptions_count} used` : ""}`;
+// Mirrors the staff Redemption screen so members see the same status the counter sees
+type OfferStatus = "Active" | "Upcoming" | "Used" | "Expired";
+
+const getBenefitDates = (offer: PortalOffer) => {
+  const now = Date.now();
+  const start = offer.valid_from ? startOfDay(parseISO(offer.valid_from)).getTime() : -Infinity;
+  const end = offer.valid_to ? endOfDay(parseISO(offer.valid_to)).getTime() : Infinity;
+  return { start, isUpcoming: start > now, isExpired: end < now };
+};
+
+const getOfferStatus = (offer: PortalOffer): OfferStatus => {
+  const { isUpcoming, isExpired } = getBenefitDates(offer);
+  if (isExpired) return "Expired";
+  if (offer.is_redeemed) return "Used";
+  if (isUpcoming) return "Upcoming";
+  return "Active";
+};
+
+const recurrenceText = (offer: PortalOffer) => {
+  const used = offer.redemptions_count || 0;
+  if (offer.is_recurrent) {
+    return offer.usage_limit !== null
+      ? `Recurrent (${used} used, ${Math.max(0, offer.usage_limit - used)} available)`
+      : `Recurrent (Unlimited - ${used} used)`;
   }
-  if (offer.is_redeemed) return "Fully redeemed";
-  const left = offer.remaining_uses ?? 0;
-  return `${left} use${left === 1 ? "" : "s"} remaining`;
+  return `One-time (${used} used, ${offer.is_redeemed ? 0 : 1} available)`;
+};
+
+const validityText = (offer: PortalOffer) => {
+  if (offer.valid_from && offer.valid_to) return `Validity: ${formatDate(offer.valid_from)} - ${formatDate(offer.valid_to)}`;
+  if (offer.valid_to) return `Expires: ${formatDate(offer.valid_to)}`;
+  if (offer.valid_from) return `Valid From: ${formatDate(offer.valid_from)}`;
+  return "Validity: Unlimited / No Expiry";
+};
+
+const statusStyles: Record<OfferStatus, { card: string; title: string; badge: string }> = {
+  Active: {
+    card: "border-green-200 dark:border-green-900/30 bg-green-500/5 dark:bg-green-950/10",
+    title: "text-green-700 dark:text-green-400",
+    badge: "bg-green-600 text-white hover:bg-green-700",
+  },
+  Used: {
+    card: "border-red-200 dark:border-red-900/30 bg-red-500/5 dark:bg-red-950/10 opacity-90",
+    title: "text-red-700 dark:text-red-400 line-through",
+    badge: "bg-red-600 text-white hover:bg-red-700",
+  },
+  Upcoming: {
+    card: "border-border bg-muted/30",
+    title: "text-muted-foreground",
+    badge: "bg-muted text-muted-foreground hover:bg-muted",
+  },
+  Expired: {
+    card: "border-border bg-muted/30",
+    title: "text-muted-foreground",
+    badge: "bg-muted text-muted-foreground hover:bg-muted",
+  },
+};
+
+const statusHint: Record<OfferStatus, string> = {
+  Active: "Ready to redeem",
+  Upcoming: "Not yet active",
+  Used: "Redeemed",
+  Expired: "Expired",
 };
 
 const MemberPortal = () => {
@@ -66,8 +122,9 @@ const MemberPortal = () => {
     setError(null);
     try {
       setData(await staffApi.getMemberPortalData(user.id));
-    } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || "Unable to load your member portal.");
+    } catch (err) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      setError(e?.response?.data?.message || e?.message || "Unable to load your member portal.");
     } finally {
       setLoading(false);
     }
@@ -102,7 +159,17 @@ const MemberPortal = () => {
   const discount = data?.privilege_discount;
   const offers = data?.offers || [];
   const history = data?.history || [];
-  const availableCount = offers.filter((o) => !o.is_redeemed).length;
+  // Current = active + upcoming (active first, upcoming by start date); past = used or expired
+  const pastOffers = offers.filter((o) => ["Used", "Expired"].includes(getOfferStatus(o)));
+  const currentOffers = offers
+    .filter((o) => !pastOffers.includes(o))
+    .sort((a, b) => {
+      const first = getBenefitDates(a);
+      const second = getBenefitDates(b);
+      return Number(first.isUpcoming) - Number(second.isUpcoming)
+        || (first.isUpcoming && second.isUpcoming ? first.start - second.start : 0);
+    });
+  const availableCount = currentOffers.filter((o) => getOfferStatus(o) === "Active").length;
 
   const discountLabel = discount
     ? discount.percentage && discount.percentage > 0
@@ -195,12 +262,12 @@ const MemberPortal = () => {
             </div>
 
             <div className="flex flex-row items-center justify-between gap-4 sm:flex-col sm:items-end">
-              {discountLabel && discount?.enabled && (
+              {/* {discountLabel && discount?.enabled && (
                 <div className="text-left sm:text-right">
                   <p className="text-[10px] uppercase tracking-widest text-white/60">Privilege Discount</p>
                   <p className="text-3xl font-bold text-[#f0c040] leading-none">{discountLabel}</p>
                 </div>
-              )}
+              )} */}
               <Button
                 onClick={() => setIsCardOpen(true)}
                 className="bg-gradient-to-r from-[#d4a012] via-[#f0c040] to-[#e8a808] text-[#1a0533] font-bold hover:brightness-110"
@@ -244,7 +311,7 @@ const MemberPortal = () => {
               </div>
             ) : (
               <>
-                {discount?.enabled && discountLabel && (
+                {/* {discount?.enabled && discountLabel && (
                   <Card className="border-primary/30 bg-primary/5">
                     <CardContent className="py-4 flex items-center gap-4">
                       <div className="h-11 w-11 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
@@ -258,47 +325,34 @@ const MemberPortal = () => {
                       </div>
                     </CardContent>
                   </Card>
-                )}
+                )} */}
 
-                {offers.length === 0 ? (
-                  <EmptyState
-                    icon={<Gift className="h-10 w-10" />}
-                    title="No active offers right now"
-                    description="New offers assigned to you will appear here."
-                  />
-                ) : (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {offers.map((offer) => (
-                      <Card key={offer.id} className={offer.is_redeemed ? "opacity-60" : "hover:shadow-md transition-shadow"}>
-                        <CardContent className="p-5 space-y-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <h3 className="font-semibold leading-snug">{offer.name}</h3>
-                            <Badge variant={offer.is_redeemed ? "secondary" : "default"} className="shrink-0">
-                              {offer.is_redeemed ? "Redeemed" : "Available"}
-                            </Badge>
-                          </div>
-                          {offer.description && (
-                            <p className="text-sm text-muted-foreground whitespace-pre-line">{offer.description}</p>
-                          )}
-                          <div className="text-xs text-muted-foreground space-y-1">
-                            <p className="flex items-center gap-1.5">
-                              <CalendarDays className="h-3.5 w-3.5" />
-                              {offer.valid_from ? `${formatDate(offer.valid_from)} – ` : "Until "}
-                              {formatDate(offer.valid_to)}
-                            </p>
-                            {offer.min_bill_value !== null && offer.min_bill_value > 0 && (
-                              <p>• Min. bill: {formatLkr(offer.min_bill_value)}</p>
-                            )}
-                            {offer.max_discount_amount !== null && offer.max_discount_amount > 0 && (
-                              <p>• Max. discount: {formatLkr(offer.max_discount_amount)}</p>
-                            )}
-                          </div>
-                          <p className="text-xs font-medium text-primary">{usageText(offer)}</p>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
+                <Tabs defaultValue="available">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="available">Available Benefits ({currentOffers.length})</TabsTrigger>
+                    <TabsTrigger value="past">Past Benefits ({pastOffers.length})</TabsTrigger>
+                  </TabsList>
+                  {(["available", "past"] as const).map((benefitsTab) => {
+                    const list = benefitsTab === "available" ? currentOffers : pastOffers;
+                    return (
+                      <TabsContent key={benefitsTab} value={benefitsTab} className="space-y-3 mt-4">
+                        {list.length === 0 ? (
+                          <EmptyState
+                            icon={<Gift className="h-10 w-10" />}
+                            title={benefitsTab === "available" ? "No offers available right now" : "No past benefits"}
+                            description={
+                              benefitsTab === "available"
+                                ? "New offers assigned to you will appear here."
+                                : "Offers you have fully used or that have expired will appear here."
+                            }
+                          />
+                        ) : (
+                          list.map((offer) => <OfferCard key={offer.id} offer={offer} />)
+                        )}
+                      </TabsContent>
+                    );
+                  })}
+                </Tabs>
               </>
             )}
           </TabsContent>
@@ -374,6 +428,74 @@ const MemberPortal = () => {
         }
       />
     </div>
+  );
+};
+
+const OfferCard = ({ offer }: { offer: PortalOffer }) => {
+  const status = getOfferStatus(offer);
+  const styles = statusStyles[status];
+  const hasMinBill = offer.min_bill_value !== null && offer.min_bill_value > 0;
+  const hasMaxDiscount = offer.max_discount_amount !== null && offer.max_discount_amount > 0;
+
+  return (
+    <Card className={`border transition-colors ${styles.card}`}>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex gap-3 flex-1 min-w-0">
+            <div className="rounded-full bg-secondary/10 p-2 h-fit shrink-0">
+              <Gift className="h-5 w-5 text-secondary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className={`font-semibold text-sm ${styles.title}`}>{offer.name}</h4>
+                <Badge className={`text-[10px] py-0 px-1.5 font-semibold ${styles.badge}`}>{status}</Badge>
+              </div>
+              {offer.description && (
+                <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{offer.description}</p>
+              )}
+              <div className="flex flex-col gap-1 mt-2 text-[11px] text-muted-foreground">
+                <p className="font-medium text-foreground/80">{recurrenceText(offer)}</p>
+                <p>{validityText(offer)}</p>
+                {(hasMinBill || hasMaxDiscount) && (
+                  <p className="space-x-2">
+                    {hasMinBill && <span>Min Bill: {formatLkr(offer.min_bill_value)}</span>}
+                    {hasMinBill && hasMaxDiscount && <span>•</span>}
+                    {hasMaxDiscount && <span>Max Discount: {formatLkr(offer.max_discount_amount)}</span>}
+                  </p>
+                )}
+              </div>
+
+              {offer.redemptions?.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-dashed border-border/60">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                    Redemption History
+                  </p>
+                  <div className="space-y-1">
+                    {offer.redemptions.map((r) => (
+                      <div key={r.id} className="flex justify-between items-center gap-2 text-[10px] text-muted-foreground bg-muted/30 p-1.5 rounded">
+                        <span>Redeemed: {formatDate(r.redeemed_at)}</span>
+                        {r.bill_number && <span className="font-mono">Bill: #{r.bill_number}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <span
+            className={`hidden sm:inline-flex shrink-0 items-center rounded-md border px-3 py-1.5 text-xs font-semibold ${
+              status === "Active"
+                ? "border-green-300 text-green-700 dark:text-green-400"
+                : status === "Used"
+                  ? "border-red-300 text-red-600 dark:text-red-400"
+                  : "border-border text-muted-foreground"
+            }`}
+          >
+            {statusHint[status]}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

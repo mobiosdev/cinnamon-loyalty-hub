@@ -38,22 +38,47 @@ const processQueue = (error: any, token: string | null = null) => {
   failedQueue = [];
 };
 
+const isMemberSession = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    return user?.role === 'customer' || user?.is_customer === true;
+  } catch {
+    return false;
+  }
+};
+
+// Clear the stored session and send the user to the login page matching their account type
+const endSession = () => {
+  const loginPath = isMemberSession() ? '/login-member' : '/login';
+  localStorage.removeItem('token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user');
+  if (window.location.pathname !== loginPath) {
+    window.location.href = loginPath;
+  }
+};
+
 // Response interceptor for unified error handling and token refresh
 axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
     const url = originalRequest?.url || '';
-    const isPublicAuthUrl = 
-      url.includes('/users/login') || 
-      url.includes('/users/refresh') || 
+    // A 401 from these endpoints means bad credentials/OTP, not an expired session
+    const isPublicAuthUrl =
+      url.includes('/users/login') ||
+      url.includes('/users/refresh') ||
       url.includes('/users/reset-password') ||
+      url.includes('/members/auth/') ||
       url.includes('/members/card/') ||
       url.includes('/audit/logs');
 
-    if (
-      error.response?.status === 401 && 
-      !originalRequest._retry && 
+    // Member tokens cannot be renewed via /users/refresh (it only knows staff users)
+    if (error.response?.status === 401 && !isPublicAuthUrl && isMemberSession()) {
+      endSession();
+    } else if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
       !isPublicAuthUrl
     ) {
       if (isRefreshing) {
@@ -91,22 +116,13 @@ axiosInstance.interceptors.response.use(
         } catch (refreshError) {
           processQueue(refreshError, null);
           isRefreshing = false;
-
-          localStorage.removeItem('token');
-          localStorage.removeItem('refresh_token');
-          localStorage.removeItem('user');
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login';
-          }
+          endSession();
 
           return Promise.reject(refreshError);
         }
       } else {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
+        isRefreshing = false;
+        endSession();
       }
     }
 
