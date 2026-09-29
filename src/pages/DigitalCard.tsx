@@ -22,7 +22,7 @@ import {
   Hotel
 } from "lucide-react";
 import { toast } from "sonner";
-import cinnamonLogo from "@/assets/cinnamon-logo.png";
+import toyotaLogo from "@/assets/toyota/toyota-logo.png";
 import { staffApi } from "@/services/staffApi";
 
 interface PublicCardData {
@@ -130,8 +130,8 @@ export default function DigitalCard() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `${categoryName} Membership Card - Cinnamon Grand Colombo`,
-          text: `Cinnamon Grand Colombo Digital Pass for ${memberName}\nMembership No: ${memberCode}\nExpiry Date: ${expiryDate}`,
+          title: `${categoryName} Membership Card - Toyota Lanka`,
+          text: `Toyota Lanka Digital Pass for ${memberName}\nMembership No: ${memberCode}\nExpiry Date: ${expiryDate}`,
           url: window.location.href,
         });
         toast.success("Shared successfully!");
@@ -158,7 +158,7 @@ export default function DigitalCard() {
       });
 
       const link = document.createElement("a");
-      link.download = `${memberCode}_Cinnamon_Grand_Card.png`;
+      link.download = `${memberCode}_Toyota_Lanka_Card.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
       toast.success("Membership card downloaded successfully!");
@@ -213,12 +213,12 @@ export default function DigitalCard() {
           <div className="space-y-3">
             <a 
               href="/"
-              className="inline-flex items-center justify-center w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#d4a012] via-[#f0c040] to-[#e8a808] text-[#1a0533] font-bold text-sm tracking-wide uppercase transition hover:brightness-110 shadow-lg shadow-[#f0c040]/20"
+              className="inline-flex items-center justify-center w-full py-3 px-4 rounded-xl bg-[#d71920] text-white font-bold text-sm tracking-wide uppercase transition hover:bg-[#b51218] shadow-lg shadow-[#d71920]/20"
             >
               Return to Portal
             </a>
             <p className="text-xs text-white/40 pt-2">
-              Cinnamon Grand Colombo • Concierge: +94 11 249 7200
+              Toyota Lanka • Support: +94 11 293 9000
             </p>
           </div>
         </div>
@@ -227,10 +227,10 @@ export default function DigitalCard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0d0219] text-[#fbf8f3] flex flex-col items-center py-6 px-4 sm:px-6 relative overflow-x-hidden selection:bg-[#f0c040] selection:text-[#1a0533]">
+    <div className="min-h-screen bg-[#f5f6f7] text-[#1d2429] flex flex-col items-center py-6 px-4 sm:px-6 relative overflow-x-hidden selection:bg-[#d71920] selection:text-white">
       {/* Dynamic ambient backdrop lights */}
-      <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-gradient-to-b from-[#6b21a8]/30 via-[#3b0764]/20 to-transparent rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-[500px] -right-32 w-80 h-80 bg-[#d4a012]/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-gradient-to-b from-[#d71920]/10 via-[#7f171c]/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-[500px] -right-32 w-80 h-80 bg-[#f0c040]/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Main container */}
       <div className="relative z-10 w-full max-w-lg flex flex-col items-center">
@@ -244,7 +244,7 @@ export default function DigitalCard() {
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-serif tracking-wider text-white font-medium">
-            Cinnamon Grand Colombo
+            Toyota Lanka Land Cruiser Loyalty
           </h1>
           <p className="text-xs uppercase tracking-[3px] text-white/60 mt-1">
             Loyalty & Privileges
@@ -269,8 +269,8 @@ export default function DigitalCard() {
           ref={cardRef}
           className="w-full aspect-[1.586/1] rounded-2xl relative overflow-hidden shadow-2xl border border-[#f0c040]/40 transition-all duration-300 select-none group"
           style={{
-            background: 'linear-gradient(135deg, #16042b 0%, #2f1254 45%, #1d0738 100%)',
-            boxShadow: '0 20px 40px -15px rgba(212, 160, 18, 0.25), 0 0 25px rgba(74, 20, 140, 0.4)',
+            background: 'linear-gradient(135deg, #141719 0%, #30363a 45%, #171a1c 100%)',
+            boxShadow: '0 20px 40px -15px rgba(215, 25, 32, 0.25), 0 0 25px rgba(0, 0, 0, 0.25)',
           }}
         >
           {/* Card luxury aesthetic layers */}
@@ -301,14 +301,14 @@ export default function DigitalCard() {
               <div className="flex items-center gap-3">
                 <div className="bg-white/95 rounded-lg p-1.5 shadow-md flex items-center justify-center">
                   <img 
-                    src={cinnamonLogo} 
-                    alt="Cinnamon Grand Colombo" 
+                    src={toyotaLogo}
+                    alt="Toyota Lanka"
                     className="h-8 sm:h-9 w-auto object-contain"
                   />
                 </div>
                 <div>
                   <p className="text-[#f0c040] font-serif text-sm sm:text-base font-semibold tracking-wide">
-                    Cinnamon Grand
+                    Toyota Lanka
                   </p>
                   <p className="text-white/60 text-[9px] uppercase tracking-[2px]">
                     Colombo • Sri Lanka
@@ -460,7 +460,7 @@ export default function DigitalCard() {
                       )}
                     </div>
                     {offer.discount_percentage && (
-                      <span className="shrink-0 px-2.5 py-1 rounded-lg bg-gradient-to-br from-[#d4a012] to-[#f0c040] text-[#1a0533] font-bold text-xs tracking-wider shadow">
+                      <span className="shrink-0 px-2.5 py-1 rounded-lg bg-[#d71920] text-white font-bold text-xs tracking-wider shadow">
                         {offer.discount_percentage}% OFF
                       </span>
                     )}
@@ -476,7 +476,7 @@ export default function DigitalCard() {
           ) : (
             <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center backdrop-blur-md">
               <p className="text-xs text-white/70">
-                Member entitlements include special corporate & dining privileges at Cinnamon Grand Colombo.
+                Member entitlements include exclusive ownership and service privileges through Toyota Lanka.
               </p>
             </div>
           )}
@@ -488,7 +488,7 @@ export default function DigitalCard() {
         <section className="w-full mt-6 p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[#f0c040] flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-[#f0c040]" />
-            How to Redeem at Hotel Outlets
+            How to Redeem at Toyota Lanka Partner Outlets
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
             <div className="flex sm:flex-col items-center sm:items-start gap-3 sm:gap-1.5 p-2 rounded-lg bg-white/5">
@@ -510,18 +510,18 @@ export default function DigitalCard() {
         <footer className="w-full mt-6 p-4 rounded-2xl bg-gradient-to-b from-white/5 to-transparent border border-white/10 text-center space-y-2 backdrop-blur-md">
           <div className="flex items-center justify-center gap-1.5 text-xs text-[#f0c040] font-medium">
             <Hotel className="w-4 h-4" />
-            <span>Cinnamon Grand Colombo</span>
+            <span>Toyota Lanka</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-white/60">
             <span className="flex items-center gap-1">
-              <MapPin className="w-3 h-3 text-[#f0c040]" /> 77 Galle Road, Colombo 03
+              <MapPin className="w-3 h-3 text-[#f0c040]" /> 337 Negombo Road, Wattala
             </span>
             <span className="flex items-center gap-1">
-              <Phone className="w-3 h-3 text-[#f0c040]" /> +94 11 249 7200
+              <Phone className="w-3 h-3 text-[#f0c040]" /> +94 11 293 9000
             </span>
           </div>
           <p className="text-[10px] text-white/40 pt-2 border-t border-white/5">
-            © {new Date().getFullYear()} Cinnamon Hotels & Resorts. All rights reserved.
+            © {new Date().getFullYear()} Toyota Lanka (Private) Limited. All rights reserved.
           </p>
         </footer>
 
@@ -540,7 +540,7 @@ export default function DigitalCard() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between w-full mb-3">
-              <span className="text-xs font-bold uppercase tracking-widest text-[#1a0533]">
+              <span className="text-xs font-bold uppercase tracking-widest text-[#1d2429]">
                 {categoryName} Membership
               </span>
               <button 
@@ -560,7 +560,7 @@ export default function DigitalCard() {
               />
             </div>
 
-            <p className="text-xl font-mono font-bold text-[#1a0533] mt-4 tracking-wider">
+            <p className="text-xl font-mono font-bold text-[#1d2429] mt-4 tracking-wider">
               {memberCode}
             </p>
             <p className="text-sm font-semibold text-gray-700 uppercase mt-0.5">
@@ -572,7 +572,7 @@ export default function DigitalCard() {
 
             <button
               onClick={() => setQrFullscreen(false)}
-              className="mt-6 w-full py-3 rounded-xl bg-[#1a0533] hover:bg-[#2d1058] text-[#f0c040] font-bold text-sm tracking-wide uppercase transition"
+              className="mt-6 w-full py-3 rounded-xl bg-[#d71920] hover:bg-[#b51218] text-white font-bold text-sm tracking-wide uppercase transition"
             >
               Done / Close
             </button>

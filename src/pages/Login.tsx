@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useDispatch, useSelector } from "react-redux";
 import { loginStep1, loginStep2, clearError, resetOtpStep } from "@/store/slices/authSlice";
 import { AppDispatch, RootState } from "@/store";
-import cinnamonLogo from "@/assets/cinnamon-logo.png";
+import toyotaLogo from "@/assets/toyota/toyota-logo.png";
 import { Mail, Smartphone, ArrowLeft, Eye, EyeOff, Shield, Key } from "lucide-react";
 
 const OTP_LENGTH = 6;
@@ -204,8 +204,8 @@ const Login = () => {
           <CardHeader className="space-y-4 pb-2">
             <div className="flex justify-center">
               <img
-                src={cinnamonLogo}
-                alt="Cinnamon Logo"
+                src={toyotaLogo}
+                alt="Toyota Lanka logo"
                 className="h-14 w-auto"
               />
             </div>
@@ -236,7 +236,7 @@ const Login = () => {
                 <>
                   <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
                   <CardDescription>
-                    Sign in to Cinnamon Loyalty Hub
+                    Sign in to Toyota Lanka Loyalty Hub
                   </CardDescription>
                 </>
               ) : (

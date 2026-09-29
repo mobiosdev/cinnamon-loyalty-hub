@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useDispatch, useSelector } from "react-redux";
 import { setCustomerAuth, clearError } from "@/store/slices/authSlice";
 import { AppDispatch, RootState } from "@/store";
-import cinnamonLogo from "@/assets/cinnamon-logo.png";
+import toyotaLogo from "@/assets/toyota/toyota-logo.png";
 import { Mail, Smartphone, ArrowLeft, Eye, EyeOff, Shield, UserCheck, ShieldCheck, ArrowRight } from "lucide-react";
 import { staffApi } from "@/services/staffApi";
 
@@ -184,8 +184,8 @@ const MemberLogin = () => {
           <CardHeader className="space-y-4 pb-2">
             <div className="flex justify-center">
               <img
-                src={cinnamonLogo}
-                alt="Cinnamon Grand Colombo"
+                src={toyotaLogo}
+                alt="Toyota Lanka"
                 className="h-14 w-auto"
               />
             </div>
@@ -199,7 +199,7 @@ const MemberLogin = () => {
                   </div>
                   <CardTitle className="text-2xl font-bold font-serif">Member Login</CardTitle>
                   <CardDescription>
-                    Sign in to access your Cinnamon Grand loyalty privileges
+                    Sign in to access your Toyota Lanka loyalty privileges
                   </CardDescription>
                 </>
               ) : (
@@ -316,6 +316,14 @@ const MemberLogin = () => {
                   <p className="text-xs text-muted-foreground">
                     First time logging in? Check your email for the password creation link.
                   </p>
+                  <div>
+                    <Link
+                      to="/apply"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                    >
+                      New Land Cruiser owner? Apply for membership
+                    </Link>
+                  </div>
                   <div>
                     <Link
                       to="/login"

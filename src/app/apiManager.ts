@@ -69,6 +69,7 @@ axiosInstance.interceptors.response.use(
       url.includes('/users/login') ||
       url.includes('/users/refresh') ||
       url.includes('/users/reset-password') ||
+      url.includes('/members/registration/') ||
       url.includes('/members/auth/') ||
       url.includes('/members/card/') ||
       url.includes('/audit/logs');
@@ -151,6 +152,11 @@ export const apiManager = {
 
   async put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
     const response = await axiosInstance.put<T>(url, data, config);
+    return response.data;
+  },
+
+  async patch<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    const response = await axiosInstance.patch<T>(url, data, config);
     return response.data;
   },
 

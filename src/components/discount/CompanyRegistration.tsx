@@ -438,7 +438,7 @@ const CompanyRegistration = () => {
       ["Title", "First Name", "Last Name", "Mobile", "Secondary Mobile", "Date of Birth", "Email", "Designation", "Address", "Company Name", "Company Address", "Company Phone", "Company Email", "Company Manager", "Renewal Date", "Category"]
     ];
     const sampleData = [
-      ["Mr", "John", "Doe", "0771234567", "0719876543", "1990-05-15", "john.doe@example.com", "Manager", "123 Galle Road, Colombo", "Cinnamon Hotels", "77 Galle Road, Colombo 03", "0112345678", "info@cinnamon.com", "Mr. Manager", "2027-06-24", categories[0]?.name || "Enter an existing category name"]
+      ["Mr", "John", "Doe", "0771234567", "0719876543", "1990-05-15", "john.doe@example.com", "Manager", "123 Galle Road, Colombo", "Toyota Lanka", "337 Negombo Road, Wattala", "0112939000", "info@toyota.lk", "Programme Manager", "2027-06-24", categories[0]?.name || "Enter an existing category name"]
     ];
     
     const worksheet = XLSX.utils.aoa_to_sheet([...headers, ...sampleData]);
@@ -618,7 +618,7 @@ const CompanyRegistration = () => {
     });
 
     const fileContent = [
-      `CINNAMON LOYALTY - BULK MEMBER IMPORT ERROR LOG`,
+      `TOYOTA LANKA LOYALTY - BULK MEMBER IMPORT ERROR LOG`,
       `Date: ${new Date().toLocaleString()}`,
       `Total Attempted: ${uploadResult.success + uploadResult.failed}`,
       `Successful: ${uploadResult.success}`,

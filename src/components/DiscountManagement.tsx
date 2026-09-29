@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Button } from "@/components/ui/button";
 import { Building2, CreditCard, FileText, BarChart3, Settings, ChevronDown, Gift, Users, Shield, MessageSquare, UserCog, LogOut, User, Sparkles, CheckCircle2, Phone, Mail, Download } from "lucide-react";
 import CompanyRegistration from "./discount/CompanyRegistration";
+import ApplicationReview from "./discount/ApplicationReview";
 import Redemption from "./discount/Redemption";
 import TransactionTracking from "./discount/TransactionTracking";
 import ReportsAnalytics from "./discount/ReportsAnalytics";
@@ -19,7 +20,7 @@ import SendNotifications from "./discount/SendNotifications";
 import UserManagement from "./discount/UserManagement";
 import ProfileDialog from "./discount/ProfileDialog";
 import { MembershipCard } from "./discount/MembershipCard";
-import cinnamonLogo from "@/assets/cinnamon-logo.png";
+import toyotaLogo from "@/assets/toyota/toyota-logo.png";
 import { staffApi } from "@/services/staffApi";
 
 const DiscountManagement = () => {
@@ -68,6 +69,7 @@ const DiscountManagement = () => {
     if (!permissions) return false;
     switch (tab) {
       case "registration": return permissions.registration;
+      case "applications": return permissions.registration;
       case "redemption": return permissions.redemption;
       case "transactions": return permissions.transactions;
       case "reports": return permissions.reports;
@@ -75,7 +77,7 @@ const DiscountManagement = () => {
       case "categories": return permissions.settings_categories;
       case "notifications": return permissions.settings_notifications;
       case "audit": return permissions.settings_audit;
-      case "usermanagement": return false;
+      case "usermanagement": return isSuperAdmin;
       default: return false;
     }
   };
@@ -106,7 +108,7 @@ const DiscountManagement = () => {
     window.location.href = isMember ? "/login-member" : "/login";
   };
 
-  const settingsActive = ["offers", "categories", "audit", "notifications", "usermanagement"].includes(activeTab);
+  const settingsActive = ["offers", "categories", "audit", "notifications"].includes(activeTab);
 
   return (
     <div className="min-h-screen bg-background">
@@ -118,16 +120,16 @@ const DiscountManagement = () => {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                   <img
-                    src={cinnamonLogo}
-                    alt="Cinnamon Grand Colombo"
+                    src={toyotaLogo}
+                    alt="Toyota Lanka"
                     className="h-10 sm:h-12 w-auto object-contain shrink-0"
                   />
                   <div className="min-w-0 border-l border-border pl-3 sm:pl-4">
                     <h1 className="text-lg sm:text-2xl font-serif font-semibold text-foreground leading-tight">
-                      Discount Management
+                      Toyota Lanka Loyalty
                     </h1>
                     <p className="text-xs sm:text-sm text-muted-foreground leading-tight">
-                      Corporate Benefits &amp; Member Discount System
+                      Land Cruiser Owner Benefits &amp; Membership
                     </p>
                   </div>
                 </div>
@@ -165,7 +167,7 @@ const DiscountManagement = () => {
             <div className="flex flex-col gap-2 bg-muted p-1 rounded-lg sm:flex-row sm:items-center">
               <TabsList
                 className="flex-1 grid w-full bg-transparent p-0 h-auto overflow-x-auto sm:overflow-visible"
-                style={{ gridTemplateColumns: `repeat(${[isSuperAdmin || permissions?.registration, isSuperAdmin || permissions?.redemption, isSuperAdmin || permissions?.transactions, isSuperAdmin || permissions?.reports].filter(Boolean).length}, minmax(0, 1fr))` }}
+                style={{ gridTemplateColumns: `repeat(${[isSuperAdmin || permissions?.registration, isSuperAdmin || permissions?.redemption, isSuperAdmin || permissions?.transactions, isSuperAdmin || permissions?.reports, isSuperAdmin].filter(Boolean).length}, minmax(0, 1fr))` }}
               >
                 {(isSuperAdmin || permissions?.registration) && (
                   <TabsTrigger
@@ -174,6 +176,15 @@ const DiscountManagement = () => {
                   >
                     <Building2 className="mr-2 h-4 w-4" />
                     <span className="truncate">Registration</span>
+                  </TabsTrigger>
+                )}
+                {(isSuperAdmin || permissions?.registration) && (
+                  <TabsTrigger
+                    value="applications"
+                    className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  >
+                    <Users className="mr-2 h-4 w-4" />
+                    <span className="truncate">Applications</span>
                   </TabsTrigger>
                 )}
                 {(isSuperAdmin || permissions?.redemption) && (
@@ -201,6 +212,15 @@ const DiscountManagement = () => {
                   >
                     <BarChart3 className="mr-2 h-4 w-4" />
                     <span className="truncate">Reports</span>
+                  </TabsTrigger>
+                )}
+                {isSuperAdmin && (
+                  <TabsTrigger
+                    value="usermanagement"
+                    className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  >
+                    <UserCog className="mr-2 h-4 w-4" />
+                    <span className="truncate">User Management</span>
                   </TabsTrigger>
                 )}
               </TabsList>
@@ -242,15 +262,6 @@ const DiscountManagement = () => {
                         Audit Trail
                       </DropdownMenuItem>
                     )}
-                    {isSuperAdmin && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setActiveTab("usermanagement")} className="cursor-pointer font-medium">
-                          <UserCog className="mr-2 h-4 w-4" />
-                          User Management
-                        </DropdownMenuItem>
-                      </>
-                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
@@ -261,6 +272,10 @@ const DiscountManagement = () => {
         <main className="container mx-auto px-4 sm:px-6 pt-2 pb-4 sm:pb-8">
           <TabsContent value="registration" className="mt-0 space-y-4">
             {canAccess("registration") ? <CompanyRegistration /> : <AccessDenied />}
+          </TabsContent>
+
+          <TabsContent value="applications" className="mt-0 space-y-4">
+            {canAccess("applications") ? <ApplicationReview /> : <AccessDenied />}
           </TabsContent>
 
           <TabsContent value="redemption" className="mt-0 space-y-4">

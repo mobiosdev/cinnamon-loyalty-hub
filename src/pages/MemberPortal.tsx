@@ -24,7 +24,7 @@ import {
   User, ChevronDown, LogOut, CreditCard, Gift, History, Phone, Mail, Building2,
   Sparkles, CalendarDays, Receipt, Percent, RefreshCw,
 } from "lucide-react";
-import cinnamonLogo from "@/assets/cinnamon-logo.png";
+import toyotaLogo from "@/assets/toyota/toyota-logo.png";
 
 const formatDate = (value?: string | null, pattern = "dd MMM yyyy") => {
   if (!value) return "—";
@@ -185,7 +185,7 @@ const MemberPortal = () => {
       <header className="sticky top-0 z-30 border-b border-border bg-card">
         <div className="container mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <img src={cinnamonLogo} alt="Cinnamon Grand Colombo" className="h-10 sm:h-12 w-auto object-contain shrink-0" />
+            <img src={toyotaLogo} alt="Toyota Lanka" className="h-10 sm:h-12 w-auto object-contain shrink-0" />
             <div className="min-w-0 border-l border-border pl-3">
               <h1 className="text-base sm:text-xl font-serif font-semibold leading-tight truncate">
                 Welcome, {member?.first_name || fullName}
@@ -227,14 +227,14 @@ const MemberPortal = () => {
         {/* Membership card */}
         <div
           className="relative overflow-hidden rounded-2xl p-5 sm:p-7 text-white shadow-xl"
-          style={{ background: "linear-gradient(135deg, #1a0533 0%, #2d1058 50%, #4a1f7f 100%)" }}
+          style={{ background: "linear-gradient(135deg, #141719 0%, #30363a 50%, #171a1c 100%)" }}
         >
           <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-[#f0c040]/10 blur-2xl pointer-events-none" />
           <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-3 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-[#f0c040] font-semibold">
-                  Cinnamon Grand · Privilege Card
+                  Toyota Lanka · Privilege Card
                 </span>
                 {member?.is_active === false && (
                   <Badge variant="destructive" className="text-[10px]">Inactive</Badge>
@@ -270,7 +270,7 @@ const MemberPortal = () => {
               )} */}
               <Button
                 onClick={() => setIsCardOpen(true)}
-                className="bg-gradient-to-r from-[#d4a012] via-[#f0c040] to-[#e8a808] text-[#1a0533] font-bold hover:brightness-110"
+                className="bg-[#d71920] text-white font-bold hover:bg-[#b51218]"
               >
                 <CreditCard className="mr-2 h-4 w-4" />
                 View &amp; Download Card

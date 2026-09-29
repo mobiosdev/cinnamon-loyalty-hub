@@ -11,6 +11,7 @@ import MemberLogin from "./pages/MemberLogin";
 import MemberPortal from "./pages/MemberPortal";
 import DigitalCard from "./pages/DigitalCard";
 import SetPassword from "./pages/SetPassword";
+import OwnerRegistration from "./pages/OwnerRegistration";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/login-member" element={<MemberLogin />} />
+            <Route path="/apply" element={<OwnerRegistration />} />
             <Route path="/member-portal" element={<MemberPortal />} />
             <Route path="/set-password" element={<SetPassword />} />
             <Route path="/card/:id" element={<DigitalCard />} />

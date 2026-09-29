@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Download, CreditCard, Share2, Mail, Loader2, CheckCircle2, Send, Shield } from "lucide-react";
 import { toast } from "sonner";
-import cinnamonLogo from "@/assets/cinnamon-logo.png";
+import toyotaLogo from "@/assets/toyota/toyota-logo.png";
 import { staffApi } from "@/services/staffApi";
 import { auditApi } from "@/services/auditApi";
 import { validateAndNormalizeSriLankanMobile } from "@/utils/phoneUtils";
@@ -111,7 +111,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
             
             try {
               await navigator.share({
-                title: `${categoryName} Membership Card - Cinnamon Grand`,
+                title: `${categoryName} Membership Card - Toyota Lanka`,
                 text: `Membership Card for ${memberName}\nMembership No: ${memberCode}\nExpiry: ${expiryDate}`,
                 files: [file],
               });
@@ -120,7 +120,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
               if (shareErr.name !== 'AbortError') {
                 try {
                   await navigator.share({
-                    title: `${categoryName} Membership Card - Cinnamon Grand`,
+                    title: `${categoryName} Membership Card - Toyota Lanka`,
                     text: `Membership Card for ${memberName}\nMembership No: ${memberCode}\nExpiry: ${expiryDate}`,
                   });
                   toast.success("Shared successfully!");
@@ -132,14 +132,14 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
           }, 'image/png');
         }
       } else {
-        const cardText = `🏨 Cinnamon Grand Colombo\n${categoryName} Membership\n\n👤 ${memberName}\n🔢 Membership No: ${memberCode}\n📅 Expiry: ${expiryDate}`;
+        const cardText = `Toyota Lanka Land Cruiser Loyalty\n${categoryName} Membership\n\nMember: ${memberName}\nMembership No: ${memberCode}\nExpiry: ${expiryDate}`;
         await navigator.clipboard.writeText(cardText);
         toast.success("Card details copied to clipboard!");
       }
     } catch (error) {
       console.error("Share failed:", error);
       try {
-        const cardText = `Cinnamon Grand Colombo - ${categoryName} Membership\nName: ${memberName}\nMembership No: ${memberCode}\nExpiry: ${expiryDate}`;
+        const cardText = `Toyota Lanka - ${categoryName} Membership\nName: ${memberName}\nMembership No: ${memberCode}\nExpiry: ${expiryDate}`;
         await navigator.clipboard.writeText(cardText);
         toast.success("Card details copied to clipboard!");
       } catch {
@@ -283,7 +283,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
               position: 'relative',
               overflow: 'hidden',
               fontFamily: "'Playfair Display', 'Georgia', serif",
-              boxShadow: '0 20px 60px rgba(61, 26, 110, 0.4), 0 8px 24px rgba(0,0,0,0.2)',
+              boxShadow: '0 20px 60px rgba(215, 25, 32, 0.25), 0 8px 24px rgba(0,0,0,0.2)',
             }}
           >
             {/* Background with gradient */}
@@ -291,7 +291,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
               style={{
                 position: 'absolute',
                 inset: 0,
-                background: 'linear-gradient(135deg, #1a0533 0%, #2d1058 25%, #3d1a6e 50%, #4a1f7f 75%, #2d1058 100%)',
+                background: 'linear-gradient(135deg, #141719 0%, #30363a 25%, #3d4448 50%, #24292c 75%, #171a1c 100%)',
               }}
             />
 
@@ -333,7 +333,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
                 width: '180px',
                 height: '180px',
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, #3d1a6e 0%, #2d1058 100%)',
+                background: 'linear-gradient(135deg, #3d4448 0%, #24292c 100%)',
               }}
             />
 
@@ -360,7 +360,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
                 width: '70px',
                 height: '70px',
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, #3d1a6e 0%, #4a1f7f 100%)',
+                background: 'linear-gradient(135deg, #3d4448 0%, #24292c 100%)',
               }}
             />
 
@@ -402,8 +402,8 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
                   boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
                 }}>
                   <img 
-                    src={cinnamonLogo} 
-                    alt="Cinnamon Grand Colombo" 
+                    src={toyotaLogo}
+                    alt="Toyota Lanka"
                     style={{ 
                       height: '36px', 
                       width: 'auto',

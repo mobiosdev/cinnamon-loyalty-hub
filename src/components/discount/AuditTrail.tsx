@@ -288,8 +288,8 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
 
                     {/* Section Info */}
                     {log.details?.section && (
-                      <div className="mt-2 p-2 bg-purple-500/10 border border-purple-500/20 rounded">
-                        <p className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 uppercase mb-1">Section</p>
+                      <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded">
+                        <p className="text-[10px] font-semibold text-red-600 dark:text-red-400 uppercase mb-1">Section</p>
                         <p className="text-xs font-medium">{log.details.section}</p>
                       </div>
                     )}

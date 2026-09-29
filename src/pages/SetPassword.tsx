@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import cinnamonLogo from "@/assets/cinnamon-logo.png";
+import toyotaLogo from "@/assets/toyota/toyota-logo.png";
 import { staffApi } from "@/services/staffApi";
 import { Shield, Eye, EyeOff, CheckCircle2, AlertCircle, ArrowRight, UserCheck } from "lucide-react";
 
@@ -55,7 +55,7 @@ const SetPassword = () => {
         setErrorMessage(
           err.response?.data?.message ||
           err.message ||
-          "This password setup link is invalid or has expired. Please contact Cinnamon Grand."
+          "This password setup link is invalid or has expired. Please contact Toyota Lanka support."
         );
       } finally {
         setIsVerifying(false);
@@ -107,8 +107,8 @@ const SetPassword = () => {
           <CardHeader className="space-y-4 pb-2">
             <div className="flex justify-center">
               <img
-                src={cinnamonLogo}
-                alt="Cinnamon Grand Logo"
+                src={toyotaLogo}
+                alt="Toyota Lanka logo"
                 className="h-14 w-auto"
               />
             </div>
@@ -147,7 +147,7 @@ const SetPassword = () => {
                   <CheckCircle2 className="w-10 h-10" />
                 </div>
                 <div className="space-y-2">
-                  <h3 className="font-semibold text-lg">Welcome to Cinnamon Grand</h3>
+                  <h3 className="font-semibold text-lg">Welcome to Toyota Lanka</h3>
                   <p className="text-sm text-muted-foreground">
                     Your password has been successfully saved. You can now log in using your email and password.
                   </p>
@@ -168,7 +168,7 @@ const SetPassword = () => {
                 <div className="space-y-2">
                   <p className="text-sm text-destructive font-medium">{errorMessage}</p>
                   <p className="text-xs text-muted-foreground">
-                    If your link has expired, you can request a new password link from Cinnamon Grand staff or the login screen.
+                    If your link has expired, you can request a new password link from Toyota Lanka staff or the login screen.
                   </p>
                 </div>
                 <Button
