@@ -163,16 +163,14 @@ const DiscountManagement = () => {
               </div>
             </div>
           </header>
-          <div className="container mx-auto px-4 sm:px-6 py-4">
-            <div className="flex flex-col gap-2 bg-muted p-1 rounded-lg sm:flex-row sm:items-center">
-              <TabsList
-                className="flex-1 grid w-full bg-transparent p-0 h-auto overflow-x-auto sm:overflow-visible"
-                style={{ gridTemplateColumns: `repeat(${[isSuperAdmin || permissions?.registration, isSuperAdmin || permissions?.redemption, isSuperAdmin || permissions?.transactions, isSuperAdmin || permissions?.reports, isSuperAdmin].filter(Boolean).length}, minmax(0, 1fr))` }}
-              >
+          <div className="container mx-auto px-4 py-3 sm:px-6">
+            <div className="overflow-x-auto rounded-lg bg-muted">
+              <div className="flex min-w-max items-center gap-1 p-1">
+              <TabsList className="flex h-auto w-auto flex-none flex-nowrap justify-start gap-1 bg-transparent p-0">
                 {(isSuperAdmin || permissions?.registration) && (
                   <TabsTrigger
                     value="registration"
-                    className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                    className="shrink-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                   >
                     <Building2 className="mr-2 h-4 w-4" />
                     <span className="truncate">Registration</span>
@@ -181,7 +179,7 @@ const DiscountManagement = () => {
                 {(isSuperAdmin || permissions?.registration) && (
                   <TabsTrigger
                     value="applications"
-                    className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                    className="shrink-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                   >
                     <Users className="mr-2 h-4 w-4" />
                     <span className="truncate">Applications</span>
@@ -190,7 +188,7 @@ const DiscountManagement = () => {
                 {(isSuperAdmin || permissions?.redemption) && (
                   <TabsTrigger
                     value="redemption"
-                    className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                    className="shrink-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                   >
                     <CreditCard className="mr-2 h-4 w-4" />
                     <span className="truncate">Redemption</span>
@@ -199,7 +197,7 @@ const DiscountManagement = () => {
                 {(isSuperAdmin || permissions?.transactions) && (
                   <TabsTrigger
                     value="transactions"
-                    className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                    className="shrink-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                   >
                     <FileText className="mr-2 h-4 w-4" />
                     <span className="truncate">Transactions</span>
@@ -208,7 +206,7 @@ const DiscountManagement = () => {
                 {(isSuperAdmin || permissions?.reports) && (
                   <TabsTrigger
                     value="reports"
-                    className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                    className="shrink-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                   >
                     <BarChart3 className="mr-2 h-4 w-4" />
                     <span className="truncate">Reports</span>
@@ -217,7 +215,7 @@ const DiscountManagement = () => {
                 {isSuperAdmin && (
                   <TabsTrigger
                     value="usermanagement"
-                    className="min-w-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                    className="shrink-0 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                   >
                     <UserCog className="mr-2 h-4 w-4" />
                     <span className="truncate">User Management</span>
@@ -230,7 +228,7 @@ const DiscountManagement = () => {
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant={settingsActive ? "default" : "ghost"}
-                      className="w-full justify-between gap-2 sm:w-auto sm:justify-start"
+                      className="shrink-0 justify-between gap-2"
                     >
                       <Settings className="h-4 w-4" />
                       Settings
@@ -265,6 +263,7 @@ const DiscountManagement = () => {
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
+              </div>
             </div>
           </div>
         </div>
