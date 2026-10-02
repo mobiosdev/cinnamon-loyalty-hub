@@ -12,7 +12,7 @@ import toyotaLogo from "@/assets/toyota/toyota-logo.png";
 import { Mail, Smartphone, ArrowLeft, Eye, EyeOff, Shield, Key } from "lucide-react";
 
 const OTP_LENGTH = 6;
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7257/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7258/api';
 
 const Login = () => {
   // Login State

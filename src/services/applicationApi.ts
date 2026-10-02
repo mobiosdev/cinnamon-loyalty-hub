@@ -1,6 +1,6 @@
 import { apiManager } from '@/app/apiManager';
 
-export type ApplicationStatus = 'pending' | 'verified' | 'rejected';
+export type ApplicationStatus = 'pending' | 'processing' | 'verified' | 'rejected';
 
 export interface OwnerApplication {
   id: string;
@@ -9,9 +9,11 @@ export interface OwnerApplication {
   mobile: string;
   email?: string | null;
   address?: string | null;
+  district?: string | null;
   member_code?: string | null;
   vehicle_model?: string | null;
   vehicle_year?: string | null;
+  vehicle_number?: string | null;
   vehicle_images?: (string | { url?: string; path?: string })[];
   verification_status: ApplicationStatus;
   is_verified: boolean;
@@ -19,6 +21,7 @@ export interface OwnerApplication {
   admin_note?: string | null;
   registered_date?: string | null;
   created_at: string;
+  category_id?: number | null;
   category_name?: string | null;
 }
 
@@ -35,13 +38,15 @@ export interface RegistrationStatusResponse {
   member_id?: string;
   vehicle_model?: string;
   vehicle_year?: string;
+  vehicle_number?: string;
+  district?: string;
   vehicle_images?: (string | { url?: string; path?: string })[];
   admin_note?: string | null;
   reason?: string;
   has_password?: boolean;
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7257/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7258/api';
 
 export const getUploadUrl = (value: string | { url?: string; path?: string }) => {
   const path = typeof value === 'string' ? value.trim() : (value.url || value.path || '').trim();
@@ -66,6 +71,7 @@ export const applicationApi = {
   async submit(application: FormData): Promise<{ reference: string; status: ApplicationStatus }> {
     return apiManager.post('/members/registration/submit', application, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
     });
   },
 
@@ -82,7 +88,12 @@ export const applicationApi = {
     return apiManager.get(`/members/verifications?${query.toString()}`);
   },
 
-  async updateStatus(id: string, status: Exclude<ApplicationStatus, 'pending'>, note: string): Promise<{ success: boolean; message: string; member: OwnerApplication }> {
-    return apiManager.put(`/members/${id}/verification-status`, { status, note });
+  async updateStatus(
+    id: string,
+    status: ApplicationStatus,
+    note?: string,
+    categoryId?: number
+  ): Promise<{ success: boolean; message: string; member: OwnerApplication }> {
+    return apiManager.put(`/members/${id}/verification-status`, { status, note, category_id: categoryId });
   },
 };

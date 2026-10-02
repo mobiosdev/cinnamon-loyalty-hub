@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { APP_MESSAGES } from '@/constants/appMessages';
 
 // Load base URL from Vite environment variables.
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7257/api';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7258/api';
 
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: BASE_URL,

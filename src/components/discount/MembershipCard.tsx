@@ -59,10 +59,12 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
     if (!cardElement) return null;
     const { default: html2canvas } = await import('html2canvas');
     return html2canvas(cardElement, {
-      scale: 2,
+      scale: 4, // 4x resolution (1680x1040) for ultra-sharp Retina / HD card downloads
       backgroundColor: null,
       useCORS: true,
+      allowTaint: true,
       logging: false,
+      imageTimeout: 15000,
     });
   };
 
@@ -72,14 +74,14 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
       if (!canvas) return;
 
       const link = document.createElement('a');
-      link.download = `${memberCode}_membership_card.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.download = `${memberCode}_Toyota_Lanka_Card.png`;
+      link.href = canvas.toDataURL('image/png', 1.0);
       link.click();
-      toast.success("Membership card downloaded successfully!");
+      toast.success("Membership card downloaded in high resolution!");
     } catch (error) {
       console.error("Failed to download membership card:", error);
       try {
-        const qrDownloadUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(memberCode)}`;
+        const qrDownloadUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=10&data=${encodeURIComponent(memberCode)}`;
         const response = await fetch(qrDownloadUrl);
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -90,7 +92,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
-        toast.success("QR Code downloaded (card download requires html2canvas)");
+        toast.success("QR Code downloaded in high resolution");
       } catch (fallbackError) {
         toast.error("Failed to download. Please try again.");
       }
@@ -176,7 +178,18 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
       const cardToken = await ensureCardToken(member.id, member.card_token);
       const cardUrl = `${window.location.origin}/card/${cardToken}`;
 
-      const response = await staffApi.sendCardEmail(member.id, targetEmail, cardUrl);
+      // Capture high-res snapshot of the card to attach to email
+      let cardImage: string | undefined;
+      try {
+        const canvas = await getCardCanvas();
+        if (canvas) {
+          cardImage = canvas.toDataURL('image/png', 1.0);
+        }
+      } catch (imgErr) {
+        console.warn('Could not generate card snapshot for email:', imgErr);
+      }
+
+      const response = await staffApi.sendCardEmail(member.id, targetEmail, cardUrl, cardImage);
 
       if (response && response.success) {
         setEmailSent(true);
@@ -215,7 +228,18 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
       const cardToken = await ensureCardToken(member.id, member.card_token);
       const cardUrl = `${window.location.origin}/card/${cardToken}`;
 
-      const res = await staffApi.dispatchCard(member.id, cardUrl);
+      // Capture high-res snapshot of the card to attach to email
+      let cardImage: string | undefined;
+      try {
+        const canvas = await getCardCanvas();
+        if (canvas) {
+          cardImage = canvas.toDataURL('image/png', 1.0);
+        }
+      } catch (imgErr) {
+        console.warn('Could not generate card snapshot for dispatch:', imgErr);
+      }
+
+      const res = await staffApi.dispatchCard(member.id, cardUrl, cardImage);
       if (res && res.success) {
         const emailCount = res.emails?.filter((e: any) => e.success)?.length || 0;
         const smsCount = res.mobiles?.filter((m: any) => m.success)?.length || 0;
@@ -492,7 +516,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
                     </span>
                   ) : (
                     <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(memberCode)}`}
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=8&data=${encodeURIComponent(memberCode)}`}
                       alt="QR Code"
                       style={{ width: '60px', height: '60px' }}
                       crossOrigin="anonymous"

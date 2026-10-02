@@ -28,6 +28,13 @@ export interface StaffMember {
   discount_enabled?: boolean;
   selected_offers?: string[];
   member_code?: string;
+  district?: string;
+  vehicle_model?: string;
+  vehicle_year?: number;
+  vehicle_number?: string;
+  vehicle_images?: string[];
+  verification_status?: string;
+  is_verified?: boolean;
 }
 
 export interface PortalOffer {
@@ -157,12 +164,12 @@ export const staffApi = {
     return apiManager.get<MemberPortalData>(`/members/${memberId}/portal-data`);
   },
 
-  async sendCardEmail(id: string, email: string, cardUrl?: string): Promise<any> {
-    return apiManager.post<any>(`/members/${id}/send-card`, { email, card_url: cardUrl });
+  async sendCardEmail(id: string, email: string, cardUrl?: string, cardImage?: string): Promise<any> {
+    return apiManager.post<any>(`/members/${id}/send-card`, { email, card_url: cardUrl, card_image: cardImage });
   },
 
-  async dispatchCard(id: string, cardUrl?: string): Promise<any> {
-    return apiManager.post<any>(`/members/${id}/dispatch-card`, { card_url: cardUrl });
+  async dispatchCard(id: string, cardUrl?: string, cardImage?: string): Promise<any> {
+    return apiManager.post<any>(`/members/${id}/dispatch-card`, { card_url: cardUrl, card_image: cardImage });
   },
 
   async getPublicCard(idOrCode: string): Promise<any> {
@@ -178,7 +185,7 @@ export const staffApi = {
   },
 
   async bulkImport(membersList: any[], uploadCategoryId?: number, companyId?: string): Promise<Response> {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7257/api';
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7258/api';
     return fetch(`${apiBase}/members/bulk-import`, {
       method: 'POST',
       headers: {

@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { User, AuthState } from '../types';
 
-const API_BASE = () => import.meta.env.VITE_API_BASE_URL || 'http://localhost:7257/api';
+const API_BASE = () => import.meta.env.VITE_API_BASE_URL || 'http://localhost:7258/api';
 
 interface Step1Credentials {
   email: string;

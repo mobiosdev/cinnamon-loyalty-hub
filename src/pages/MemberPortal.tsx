@@ -8,11 +8,21 @@ import { logActivity } from "@/utils/auditLogger";
 import { staffApi, MemberPortalData, PortalOffer } from "@/services/staffApi";
 import { MembershipCard } from "@/components/discount/MembershipCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,8 +32,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   User, ChevronDown, LogOut, CreditCard, Gift, History, Phone, Mail, Building2,
-  Sparkles, CalendarDays, Receipt, Percent, RefreshCw,
+  Sparkles, CalendarDays, Receipt, RefreshCw, Car, MapPin, Edit3, Save, Loader2, CheckCircle2
 } from "lucide-react";
+import { toast } from "sonner";
+import { DistrictSelect } from "@/components/common/DistrictSelect";
+import { VehicleModelSelect } from "@/components/common/VehicleModelSelect";
 import toyotaLogo from "@/assets/toyota/toyota-logo.png";
 
 const formatDate = (value?: string | null, pattern = "dd MMM yyyy") => {
@@ -110,6 +123,22 @@ const MemberPortal = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCardOpen, setIsCardOpen] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("offers");
+
+  // Profile editable form state
+  const [profileForm, setProfileForm] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    mobile: "",
+    address: "",
+    district: "",
+    vehicle_model: "",
+    vehicle_year: "",
+    vehicle_number: "",
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) navigate("/login-member", { replace: true });
@@ -121,7 +150,21 @@ const MemberPortal = () => {
     setLoading(true);
     setError(null);
     try {
-      setData(await staffApi.getMemberPortalData(user.id));
+      const portalData = await staffApi.getMemberPortalData(user.id);
+      setData(portalData);
+      if (portalData.member) {
+        setProfileForm({
+          first_name: portalData.member.first_name || "",
+          last_name: portalData.member.last_name || "",
+          email: portalData.member.email || "",
+          mobile: portalData.member.mobile || "",
+          address: portalData.member.address || "",
+          district: portalData.member.district || "",
+          vehicle_model: portalData.member.vehicle_model || "",
+          vehicle_year: portalData.member.vehicle_year ? String(portalData.member.vehicle_year) : "",
+          vehicle_number: portalData.member.vehicle_number || "",
+        });
+      }
     } catch (err) {
       const e = err as { response?: { data?: { message?: string } }; message?: string };
       setError(e?.response?.data?.message || e?.message || "Unable to load your member portal.");
@@ -149,6 +192,39 @@ const MemberPortal = () => {
     navigate("/login-member", { replace: true });
   };
 
+  const handleSaveProfile = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const memberId = data?.member?.id || user?.id;
+    if (!memberId) return;
+
+    if (!profileForm.first_name.trim()) {
+      toast.error("First name is required");
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      await staffApi.updateStaff(memberId, {
+        first_name: profileForm.first_name.trim(),
+        last_name: profileForm.last_name.trim(),
+        email: profileForm.email.trim() || undefined,
+        address: profileForm.address.trim() || undefined,
+        district: profileForm.district || undefined,
+        vehicle_model: profileForm.vehicle_model || undefined,
+        vehicle_year: profileForm.vehicle_year ? parseInt(profileForm.vehicle_year) : undefined,
+        vehicle_number: profileForm.vehicle_number.trim() || undefined,
+      });
+
+      toast.success("Profile & vehicle details updated successfully!");
+      setIsEditProfileOpen(false);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to update profile details");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   if (!isAuthenticated || !isMember) return null;
 
   const member = data?.member || user?.member_data || null;
@@ -156,7 +232,6 @@ const MemberPortal = () => {
     ? `${member.title || ""} ${member.first_name || ""} ${member.last_name || ""}`.trim()
     : user?.full_name || "Member";
   const memberCode = member?.member_code || user?.member_code || "";
-  const discount = data?.privilege_discount;
   const offers = data?.offers || [];
   const history = data?.history || [];
   // Current = active + upcoming (active first, upcoming by start date); past = used or expired
@@ -171,13 +246,115 @@ const MemberPortal = () => {
     });
   const availableCount = currentOffers.filter((o) => getOfferStatus(o) === "Active").length;
 
-  const discountLabel = discount
-    ? discount.percentage && discount.percentage > 0
-      ? `${discount.percentage}%`
-      : discount.amount && discount.amount > 0
-        ? formatLkr(discount.amount)
-        : null
-    : null;
+  const hasIncompleteDetails = member && (!member.district || !member.vehicle_model || !member.vehicle_number);
+
+  const renderProfileFormFields = () => (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="pf_first_name">First Name *</Label>
+          <Input
+            id="pf_first_name"
+            value={profileForm.first_name}
+            onChange={(e) => setProfileForm({ ...profileForm, first_name: e.target.value })}
+            placeholder="First name"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="pf_last_name">Last Name</Label>
+          <Input
+            id="pf_last_name"
+            value={profileForm.last_name}
+            onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })}
+            placeholder="Last name"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="pf_email">Email</Label>
+          <Input
+            id="pf_email"
+            type="email"
+            value={profileForm.email}
+            onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+            placeholder="email@example.com"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="pf_mobile">Mobile Number</Label>
+          <Input
+            id="pf_mobile"
+            value={profileForm.mobile}
+            disabled
+            className="bg-muted text-muted-foreground cursor-not-allowed"
+          />
+          <p className="text-[11px] text-muted-foreground">Mobile number is linked to your membership ID.</p>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="pf_address">Address</Label>
+        <Input
+          id="pf_address"
+          value={profileForm.address}
+          onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
+          placeholder="Residential or business address"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>District (Sri Lanka)</Label>
+        <DistrictSelect
+          value={profileForm.district}
+          onChange={(val) => setProfileForm({ ...profileForm, district: val })}
+          placeholder="Select your district"
+        />
+      </div>
+
+      <div className="pt-2 border-t border-border">
+        <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
+          <Car className="h-4 w-4 text-primary" />
+          Land Cruiser &amp; Vehicle Details
+        </h4>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Vehicle Model</Label>
+            <VehicleModelSelect
+              value={profileForm.vehicle_model}
+              onChange={(val) => setProfileForm({ ...profileForm, vehicle_model: val })}
+              placeholder="Select or enter vehicle model"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="pf_vehicle_year">Manufacture / Registration Year</Label>
+              <Input
+                id="pf_vehicle_year"
+                type="number"
+                value={profileForm.vehicle_year}
+                onChange={(e) => setProfileForm({ ...profileForm, vehicle_year: e.target.value })}
+                placeholder="e.g. 2022"
+                min={1950}
+                max={new Date().getFullYear() + 1}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pf_vehicle_number">Vehicle Registration / Plate Number</Label>
+              <Input
+                id="pf_vehicle_number"
+                value={profileForm.vehicle_number}
+                onChange={(e) => setProfileForm({ ...profileForm, vehicle_number: e.target.value })}
+                placeholder="e.g. WP CAA-1234 or WP LC-8080"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -206,12 +383,16 @@ const MemberPortal = () => {
                 <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuContent align="end" className="w-56">
               <div className="px-3 py-2 text-xs text-muted-foreground truncate">{user?.email || memberCode}</div>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setIsCardOpen(true)} className="cursor-pointer">
                 <CreditCard className="mr-2 h-4 w-4" />
                 My Membership Card
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsEditProfileOpen(true)} className="cursor-pointer">
+                <Edit3 className="mr-2 h-4 w-4" />
+                Edit Profile &amp; Vehicle
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
@@ -224,7 +405,7 @@ const MemberPortal = () => {
       </header>
 
       <main className="container mx-auto px-4 sm:px-6 py-6 space-y-6 max-w-5xl">
-        {/* Membership card */}
+        {/* Membership card banner */}
         <div
           className="relative overflow-hidden rounded-2xl p-5 sm:p-7 text-white shadow-xl"
           style={{ background: "linear-gradient(135deg, #141719 0%, #30363a 50%, #171a1c 100%)" }}
@@ -255,22 +436,33 @@ const MemberPortal = () => {
                 {member?.email && (
                   <span className="flex items-center gap-2 min-w-0"><Mail className="h-3.5 w-3.5 text-[#f0c040] shrink-0" /><span className="truncate">{member.email}</span></span>
                 )}
+                {member?.district && (
+                  <span className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-[#f0c040]" />District: {member.district}</span>
+                )}
+                {member?.vehicle_model && (
+                  <span className="flex items-center gap-2"><Car className="h-3.5 w-3.5 text-[#f0c040]" />Vehicle: {member.vehicle_model} {member.vehicle_year ? `(${member.vehicle_year})` : ""}</span>
+                )}
+                {member?.vehicle_number && (
+                  <span className="flex items-center gap-2"><CreditCard className="h-3.5 w-3.5 text-[#f0c040]" />Plate: {member.vehicle_number}</span>
+                )}
                 {member?.renew_date && (
                   <span className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5 text-[#f0c040]" />Valid until {formatDate(member.renew_date)}</span>
                 )}
               </div>
             </div>
 
-            <div className="flex flex-row items-center justify-between gap-4 sm:flex-col sm:items-end">
-              {/* {discountLabel && discount?.enabled && (
-                <div className="text-left sm:text-right">
-                  <p className="text-[10px] uppercase tracking-widest text-white/60">Privilege Discount</p>
-                  <p className="text-3xl font-bold text-[#f0c040] leading-none">{discountLabel}</p>
-                </div>
-              )} */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+              <Button
+                onClick={() => setIsEditProfileOpen(true)}
+                variant="outline"
+                className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs sm:text-sm font-medium"
+              >
+                <Edit3 className="mr-2 h-4 w-4 text-[#f0c040]" />
+                Edit Profile &amp; Vehicle
+              </Button>
               <Button
                 onClick={() => setIsCardOpen(true)}
-                className="bg-[#d71920] text-white font-bold hover:bg-[#b51218]"
+                className="bg-[#d71920] text-white font-bold hover:bg-[#b51218] text-xs sm:text-sm"
               >
                 <CreditCard className="mr-2 h-4 w-4" />
                 View &amp; Download Card
@@ -278,6 +470,28 @@ const MemberPortal = () => {
             </div>
           </div>
         </div>
+
+        {/* Friendly banner to fill vehicle details if incomplete */}
+        {hasIncompleteDetails && (
+          <Card className="border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/20">
+            <CardContent className="py-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <Car className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <p className="text-xs sm:text-sm text-foreground">
+                  <strong>Complete your member profile:</strong> Please update your district and Land Cruiser vehicle details to receive verified club benefits.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white text-xs shrink-0 self-start sm:self-auto"
+                onClick={() => setIsEditProfileOpen(true)}
+              >
+                <Edit3 className="mr-1.5 h-3.5 w-3.5" />
+                Complete Details
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {error && (
           <Card className="border-destructive/40">
@@ -291,8 +505,8 @@ const MemberPortal = () => {
           </Card>
         )}
 
-        <Tabs defaultValue="offers">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="offers" className="text-xs sm:text-sm">
               <Gift className="mr-2 h-4 w-4" />
               Offers &amp; Privileges{!loading && ` (${availableCount})`}
@@ -300,6 +514,10 @@ const MemberPortal = () => {
             <TabsTrigger value="history" className="text-xs sm:text-sm">
               <History className="mr-2 h-4 w-4" />
               Redeemed History{!loading && ` (${history.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="profile" className="text-xs sm:text-sm">
+              <User className="mr-2 h-4 w-4" />
+              My Details &amp; Vehicle
             </TabsTrigger>
           </TabsList>
 
@@ -310,50 +528,32 @@ const MemberPortal = () => {
                 {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
               </div>
             ) : (
-              <>
-                {/* {discount?.enabled && discountLabel && (
-                  <Card className="border-primary/30 bg-primary/5">
-                    <CardContent className="py-4 flex items-center gap-4">
-                      <div className="h-11 w-11 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-                        <Percent className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold">{discountLabel} privilege discount</p>
-                        <p className="text-sm text-muted-foreground">
-                          Present your membership card at any participating outlet to enjoy your discount on every bill.
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )} */}
-
-                <Tabs defaultValue="available">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="available">Available Benefits ({currentOffers.length})</TabsTrigger>
-                    <TabsTrigger value="past">Past Benefits ({pastOffers.length})</TabsTrigger>
-                  </TabsList>
-                  {(["available", "past"] as const).map((benefitsTab) => {
-                    const list = benefitsTab === "available" ? currentOffers : pastOffers;
-                    return (
-                      <TabsContent key={benefitsTab} value={benefitsTab} className="space-y-3 mt-4">
-                        {list.length === 0 ? (
-                          <EmptyState
-                            icon={<Gift className="h-10 w-10" />}
-                            title={benefitsTab === "available" ? "No offers available right now" : "No past benefits"}
-                            description={
-                              benefitsTab === "available"
-                                ? "New offers assigned to you will appear here."
-                                : "Offers you have fully used or that have expired will appear here."
-                            }
-                          />
-                        ) : (
-                          list.map((offer) => <OfferCard key={offer.id} offer={offer} />)
-                        )}
-                      </TabsContent>
-                    );
-                  })}
-                </Tabs>
-              </>
+              <Tabs defaultValue="available">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="available">Available Benefits ({currentOffers.length})</TabsTrigger>
+                  <TabsTrigger value="past">Past Benefits ({pastOffers.length})</TabsTrigger>
+                </TabsList>
+                {(["available", "past"] as const).map((benefitsTab) => {
+                  const list = benefitsTab === "available" ? currentOffers : pastOffers;
+                  return (
+                    <TabsContent key={benefitsTab} value={benefitsTab} className="space-y-3 mt-4">
+                      {list.length === 0 ? (
+                        <EmptyState
+                          icon={<Gift className="h-10 w-10" />}
+                          title={benefitsTab === "available" ? "No offers available right now" : "No past benefits"}
+                          description={
+                            benefitsTab === "available"
+                              ? "New offers assigned to you will appear here."
+                              : "Offers you have fully used or that have expired will appear here."
+                          }
+                        />
+                      ) : (
+                        list.map((offer) => <OfferCard key={offer.id} offer={offer} />)
+                      )}
+                    </TabsContent>
+                  );
+                })}
+              </Tabs>
             )}
           </TabsContent>
 
@@ -407,9 +607,100 @@ const MemberPortal = () => {
               </Card>
             )}
           </TabsContent>
+
+          {/* Profile & Vehicle Details tab */}
+          <TabsContent value="profile" className="mt-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">My Details &amp; Land Cruiser Information</CardTitle>
+                    <CardDescription>
+                      Review and update your personal contact and vehicle details.
+                    </CardDescription>
+                  </div>
+                  {member?.is_verified && (
+                    <Badge variant="outline" className="border-green-500/50 text-green-600 bg-green-50/50 dark:bg-green-950/20 gap-1.5 py-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Verified Member
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {renderProfileFormFields()}
+                <div className="flex justify-end pt-4 border-t border-border">
+                  <Button
+                    onClick={() => handleSaveProfile()}
+                    disabled={savingProfile}
+                    className="bg-[#d71920] hover:bg-[#b51218] text-white min-w-[140px]"
+                  >
+                    {savingProfile ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        Save Changes
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </main>
 
+      {/* Edit Profile & Vehicle Dialog */}
+      <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" />
+              Update Profile &amp; Vehicle Details
+            </DialogTitle>
+            <DialogDescription>
+              Keep your contact details, district, and Toyota Land Cruiser details up to date.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2">
+            {renderProfileFormFields()}
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsEditProfileOpen(false)}
+              disabled={savingProfile}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => handleSaveProfile()}
+              disabled={savingProfile}
+              className="bg-[#d71920] hover:bg-[#b51218] text-white min-w-[130px]"
+            >
+              {savingProfile ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Membership Card Modal */}
       <MembershipCard
         open={isCardOpen}
         onOpenChange={setIsCardOpen}

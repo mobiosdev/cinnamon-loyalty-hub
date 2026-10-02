@@ -102,7 +102,7 @@ export default function DigitalCard() {
     : "Perpetual";
   const isActive = member?.is_active !== false;
 
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(memberCode)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=8&data=${encodeURIComponent(memberCode)}`;
 
   const handleCopyCode = async () => {
     try {
@@ -151,17 +151,19 @@ export default function DigitalCard() {
     try {
       const { default: html2canvas } = await import("html2canvas");
       const canvas = await html2canvas(cardRef.current, {
-        scale: 3,
+        scale: 4, // 4x high resolution for crisp Retina / Print quality
         useCORS: true,
+        allowTaint: true,
         backgroundColor: null,
         logging: false,
+        imageTimeout: 15000,
       });
 
       const link = document.createElement("a");
       link.download = `${memberCode}_Toyota_Lanka_Card.png`;
-      link.href = canvas.toDataURL("image/png");
+      link.href = canvas.toDataURL("image/png", 1.0);
       link.click();
-      toast.success("Membership card downloaded successfully!");
+      toast.success("Membership card downloaded in high resolution!");
     } catch (err) {
       console.error("Card download failed:", err);
       // Fallback: download QR directly

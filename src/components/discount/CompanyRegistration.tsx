@@ -23,6 +23,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { logCompanyActivity, logMemberActivity } from "@/utils/auditLogger";
 import { validateAndNormalizeSriLankanMobile, validateAndNormalizeSriLankanPhone, splitPhoneNumber } from "@/utils/phoneUtils";
 import { COUNTRIES } from "@/utils/countries";
+import { DistrictSelect } from "@/components/common/DistrictSelect";
+import { VehicleModelSelect } from "@/components/common/VehicleModelSelect";
 
 const optionalValue = (value?: string) => {
   const trimmed = value?.trim();
@@ -51,6 +53,10 @@ interface StaffMember {
   email: string;
   secondary_email?: string;
   address: string;
+  district?: string;
+  vehicle_model?: string;
+  vehicle_year?: string;
+  vehicle_number?: string;
   dateOfBirth?: string;
   designation: string;
   registeredDate: string;
@@ -102,6 +108,10 @@ const CompanyRegistration = () => {
     email: '',
     secondary_email: '',
     address: '',
+    district: '',
+    vehicle_model: 'Toyota Land Cruiser 300 Series (LC300)',
+    vehicle_year: '',
+    vehicle_number: '',
     dateOfBirth: '',
     designation: '',
     registeredDate: new Date().toISOString().split('T')[0],
@@ -270,8 +280,8 @@ const CompanyRegistration = () => {
   };
 
   const handleSubmitCompany = async () => {
-    if (!companyFormData.name || !companyFormData.address) {
-      toast.error("Please fill all required company fields (Name and Address)");
+    if (!companyFormData.name?.trim()) {
+      toast.info("Company information is optional. Enter a company name if you wish to save company details.");
       return;
     }
 
@@ -290,7 +300,7 @@ const CompanyRegistration = () => {
       const companyData = {
         company_code: companyCode,
         name: companyFormData.name,
-        address: companyFormData.address,
+        address: companyFormData.address || undefined,
         phone: companyFormData.phone || undefined,
         email: companyFormData.email || undefined,
         manager_name: companyFormData.manager_name || undefined,
@@ -303,7 +313,7 @@ const CompanyRegistration = () => {
         const savedCompany: any = await companyApi.updateCompany(selectedCompany.id, {
           company_code: companyCode,
           name: companyFormData.name,
-          address: companyFormData.address,
+          address: companyFormData.address || undefined,
           phone: companyFormData.phone || undefined,
           email: companyFormData.email || undefined,
           manager_name: companyFormData.manager_name || undefined,
@@ -345,6 +355,10 @@ const CompanyRegistration = () => {
       email: staff.email,
       secondary_email: staff.secondary_email || '',
       address: staff.address,
+      district: staff.district || '',
+      vehicle_model: staff.vehicle_model || 'Toyota Land Cruiser 300 Series (LC300)',
+      vehicle_year: staff.vehicle_year || '',
+      vehicle_number: staff.vehicle_number || '',
       dateOfBirth: staff.date_of_birth?.split('T')[0] || '',
       designation: staff.designation,
       registeredDate: staff.registered_date?.split('T')[0] || '',
@@ -764,6 +778,8 @@ const CompanyRegistration = () => {
       }
 
       // Step 2: Save or update member with company ID
+      const defaultCatId = memberFormData.category_id || categories.find(c => c.name.toLowerCase() === 'member')?.id || categories[0]?.id;
+
       if (memberFormData.id) {
         // Update existing member
         let normalizedSecMobile: string | null = null;
@@ -781,16 +797,20 @@ const CompanyRegistration = () => {
           email: memberFormData.email,
           secondary_email: memberFormData.secondary_email || undefined,
           address: memberFormData.address,
+          district: memberFormData.district || null,
+          vehicle_model: memberFormData.vehicle_model || 'Toyota Land Cruiser 300 Series (LC300)',
+          vehicle_year: memberFormData.vehicle_year || null,
+          vehicle_number: memberFormData.vehicle_number || null,
           date_of_birth: memberFormData.dateOfBirth || null,
           designation: memberFormData.designation,
-          category_id: memberFormData.category_id,
+          category_id: defaultCatId,
           discount_enabled: discountEnabled,
           discount_policy: memberFormData.discountPolicy,
           discount_amount: parseFloat(memberFormData.discountAmount || '0'),
           discount_percentage: parseFloat(memberFormData.discountPercentage || '10'),
           is_active: true,
-          registered_date: memberFormData.registeredDate || null,
-          renew_date: memberFormData.renewDate || null,
+          registered_date: memberFormData.registeredDate || new Date().toISOString().split('T')[0],
+          renew_date: memberFormData.renewDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
           selected_offers: selectedOfferIds,
         };
 
@@ -807,7 +827,7 @@ const CompanyRegistration = () => {
           memberFormData.id,
           {
             company: companyName,
-            category: categories.find(c => c.id === memberFormData.category_id)?.name,
+            category: categories.find(c => c.id === defaultCatId)?.name,
             discount_policy: memberFormData.discountPolicy
           }
         );
@@ -831,15 +851,19 @@ const CompanyRegistration = () => {
           email: memberFormData.email || '',
           secondary_email: memberFormData.secondary_email || undefined,
           address: memberFormData.address || '',
+          district: memberFormData.district || null,
+          vehicle_model: memberFormData.vehicle_model || 'Toyota Land Cruiser 300 Series (LC300)',
+          vehicle_year: memberFormData.vehicle_year || null,
+          vehicle_number: memberFormData.vehicle_number || null,
           date_of_birth: memberFormData.dateOfBirth || null,
           designation: memberFormData.designation || '',
           registered_date: memberFormData.registeredDate || new Date().toISOString().split('T')[0],
-          renew_date: memberFormData.renewDate || new Date().toISOString().split('T')[0],
+          renew_date: memberFormData.renewDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
           discount_amount: parseFloat(memberFormData.discountAmount || '0'),
           discount_percentage: parseFloat(memberFormData.discountPercentage || '10'),
           discount_policy: memberFormData.discountPolicy || 'percentage',
           is_active: true,
-          category_id: memberFormData.category_id,
+          category_id: defaultCatId,
           discount_enabled: discountEnabled,
           selected_offers: selectedOfferIds,
         };
@@ -1117,6 +1141,45 @@ const CompanyRegistration = () => {
                          placeholder="Member address"
                        />
                      </div>
+
+                      <div className="space-y-2">
+                        <Label>District (Sri Lanka)</Label>
+                        <DistrictSelect
+                          value={memberFormData.district || ''}
+                          onChange={(val) => setMemberFormData({ ...memberFormData, district: val })}
+                          placeholder="Select district"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Vehicle Model</Label>
+                        <VehicleModelSelect
+                          value={memberFormData.vehicle_model || ''}
+                          onChange={(val) => setMemberFormData({ ...memberFormData, vehicle_model: val })}
+                          placeholder="Select or enter vehicle model"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Vehicle Year</Label>
+                        <Input
+                          type="number"
+                          value={memberFormData.vehicle_year || ''}
+                          onChange={(e) => setMemberFormData({ ...memberFormData, vehicle_year: e.target.value ? parseInt(e.target.value) : undefined })}
+                          placeholder="e.g. 2022"
+                          min={1950}
+                          max={new Date().getFullYear() + 1}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Vehicle Registration Number (Plate)</Label>
+                        <Input
+                          value={memberFormData.vehicle_number || ''}
+                          onChange={(e) => setMemberFormData({ ...memberFormData, vehicle_number: e.target.value })}
+                          placeholder="e.g. WP CAA-1234 or WP LC-8080"
+                        />
+                      </div>
                    </CardContent>
                  </Card>
 
@@ -1125,7 +1188,7 @@ const CompanyRegistration = () => {
                    <CardHeader className="pb-3">
                      <div className="flex items-center gap-2">
                        <Building2 className="h-4 w-4 text-primary" />
-                       <CardTitle className="text-base font-semibold">Company Information</CardTitle>
+                       <CardTitle className="text-base font-semibold">Company Information <span className="text-xs text-muted-foreground font-normal">(Optional)</span></CardTitle>
                      </div>
                    </CardHeader>
                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1267,201 +1330,9 @@ const CompanyRegistration = () => {
                    </CardContent>
                  </Card>
 
-                 {/* Other Information Card */}
-                 <Card className="border border-border/60 shadow-sm bg-card/30">
-                   <CardHeader className="pb-3">
-                     <div className="flex items-center gap-2">
-                       <FileText className="h-4 w-4 text-primary" />
-                       <CardTitle className="text-base font-semibold">Membership & Other Information</CardTitle>
-                     </div>
-                   </CardHeader>
-                   <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                     <div className="space-y-2">
-                       <Label>Member Category *</Label>
-                       <Select 
-                         value={memberFormData.category_id?.toString() || ''} 
-                         onValueChange={(value) => {
-                           setMemberFormData({...memberFormData, category_id: value ? parseInt(value) : undefined});
-                           setSelectedOfferIds([]); // Reset selected offers when category changes
-                         }}
-                       >
-                         <SelectTrigger>
-                            <SelectValue placeholder="Select category " />
-                         </SelectTrigger>
-                         <SelectContent>
-                           {categories.map((cat) => (
-                             <SelectItem key={cat.id} value={cat.id.toString()}>
-                               {cat.name}
-                             </SelectItem>
-                           ))}
-                         </SelectContent>
-                       </Select>
-                     </div>
-                     
-                     <div className="space-y-2">
-                       <Label>Registration Date *</Label>
-                       <Input 
-                         type="date"
-                         value={memberFormData.registeredDate || ''} 
-                         onChange={(e) => setMemberFormData({...memberFormData, registeredDate: e.target.value})}
-                       />
-                     </div>
-                     
-                     <div className="space-y-2">
-                       <Label>Renewal Date *</Label>
-                       <Input 
-                         type="date"
-                         value={memberFormData.renewDate || ''} 
-                         onChange={(e) => setMemberFormData({...memberFormData, renewDate: e.target.value})}
-                       />
-                     </div>
+            </div>
 
-                     <div className="space-y-2">
-                       <Label htmlFor="managerName">Manager Name</Label>
-                       <Input
-                         id="managerName"
-                         value={companyFormData.manager_name}
-                         onChange={(e) => setCompanyFormData({...companyFormData, manager_name: e.target.value})}
-                         placeholder="Enter manager name"
-                       />
-                     </div>
-
-                     
-                   </CardContent>
-                 </Card>
-               </div>
-
-                {/* Member Category Benefits Subsection */}
-                {memberFormData.category_id && (
-                  <div className="mt-4 p-3 bg-muted/30 rounded-lg border border-border space-y-3">
-                    <div className="flex items-center gap-2 pb-2 border-b border-border/50">
-                      <div className="h-2 w-2 rounded-full bg-primary"></div>
-                      <h4 className="font-semibold text-sm">Offers for {categories.find(c => c.id === memberFormData.category_id)?.name || 'Selected Category'}</h4>
-                    </div>
-                    
-                    {/* Discount Policy Benefit - Commented out per request to hide and bypass manual configuration/validation
-                    <div className="space-y-3 p-2.5 bg-background rounded border border-border/50">
-                      <div className="flex items-start gap-3">
-                        <Checkbox 
-                          id="discount-benefit"
-                          checked={discountEnabled}
-                          onCheckedChange={(checked) => setDiscountEnabled(checked as boolean)}
-                          className="mt-0.5"
-                        />
-                        <div className="flex-1">
-                          <Label htmlFor="discount-benefit" className="text-sm font-medium cursor-pointer">
-                            Discount Policy *
-                          </Label>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Enable discount redemption for this member
-                          </p>
-                        </div>
-                      </div>
-                      
-                      {discountEnabled && (
-                        <div className="ml-7 grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-border/30">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Discount Policy Type *</Label>
-                            <Select 
-                              value={memberFormData.discountPolicy || ''} 
-                              onValueChange={(value) => setMemberFormData({...memberFormData, discountPolicy: value, discountAmount: ''})}
-                            >
-                              <SelectTrigger className="h-9">
-                                <SelectValue placeholder="Select policy type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="percentage">Percentage (%)</SelectItem>
-                                <SelectItem value="fixed">Fixed Amount (LKR)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Discount Amount *</Label>
-                            <div className="relative">
-                              <Input 
-                                type="number"
-                                min="0"
-                                max={memberFormData.discountPolicy === 'percentage' ? 100 : undefined}
-                                step={memberFormData.discountPolicy === 'percentage' ? '0.01' : '1'}
-                                className="h-9 pr-12"
-                                value={memberFormData.discountAmount || ''} 
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  // Enforce max 100 for percentage
-                                  if (memberFormData.discountPolicy === 'percentage' && parseFloat(value) > 100) {
-                                    setMemberFormData({...memberFormData, discountAmount: '100'});
-                                  } else {
-                                    setMemberFormData({...memberFormData, discountAmount: value});
-                                  }
-                                }}
-                                placeholder={memberFormData.discountPolicy === 'percentage' ? '10' : '1000'}
-                              />
-                              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
-                                {memberFormData.discountPolicy === 'percentage' ? '%' : 'LKR'}
-                              </div>
-                            </div>
-                            <p className="text-[10px] text-muted-foreground">
-                              {memberFormData.discountPolicy === 'percentage' ? 'Enter value 0-100' : 'Enter amount in Sri Lankan Rupees'}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    */}
-                    
-                    {/* Category Offers */}
-                    {categoryOffers.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground">Physical Offers (Automatically assigned):</p>
-                        <div className="space-y-1.5">
-                          {categoryOffers.map((offer) => (
-                            <div key={offer.id} className="flex items-start gap-2.5 p-2.5 bg-background rounded border border-border/50 transition-colors">
-                              <span className="text-primary font-bold mt-0.5">•</span>
-                              <div className="flex-1 min-w-0">
-                                <span className="text-sm font-medium">
-                                  {offer.name}
-                                </span>
-                                {offer.description && (
-                                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{offer.description}</p>
-                                )}
-                                <p className="text-[10px] text-muted-foreground mt-1">
-                                  {offer.valid_from || offer.valid_to ? (
-                                    <>
-                                      Valid: {offer.valid_from ? new Date(offer.valid_from).toLocaleDateString() : 'No Start Date'} - {offer.valid_to ? new Date(offer.valid_to).toLocaleDateString() : 'No Expiry'}
-                                    </>
-                                  ) : (
-                                    <>Valid: Unlimited / No Expiry</>
-                                  )}
-                                </p>
-                                {(offer.min_bill_value || offer.max_discount_amount) && (
-                                  <div className="mt-1.5 p-1.5 bg-accent/50 rounded text-[10px] space-y-0.5">
-                                    <p className="font-medium text-foreground">Discount Policy:</p>
-                                    {offer.min_bill_value && (
-                                      <p className="text-muted-foreground">• Min. Bill: Rs. {offer.min_bill_value.toLocaleString()}</p>
-                                    )}
-                                    {offer.max_discount_amount && (
-                                      <p className="text-muted-foreground">• Max. Discount: Rs. {offer.max_discount_amount.toLocaleString()}</p>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {categoryOffers.length === 0 && (
-                      <p className="text-xs text-muted-foreground italic p-2.5 bg-background rounded border border-border/50">
-                        No physical offers available for this category yet.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            
-            <div className="flex justify-end gap-2 mt-6">
+<div className="flex justify-end gap-2 mt-6">
               <Button 
                 type="button" 
                 variant="outline" 
@@ -1483,7 +1354,8 @@ const CompanyRegistration = () => {
                 )}
               </Button>
             </div>
-          </form>
+              </div>
+            </form>
           </CardContent>
         </Card>
         </TabsContent>
