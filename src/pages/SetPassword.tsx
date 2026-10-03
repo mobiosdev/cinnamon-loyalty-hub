@@ -108,8 +108,8 @@ const SetPassword = () => {
             <div className="flex justify-center">
               <img
                 src={cinnamonLogo}
-                alt="Cinnamon Grand Logo"
-                className="h-14 w-auto"
+                alt="Cinnamon Grand Colombo"
+                className="h-14 w-auto rounded-xl object-contain shadow-md"
               />
             </div>
 

@@ -185,7 +185,7 @@ const MemberPortal = () => {
       <header className="sticky top-0 z-30 border-b border-border bg-card">
         <div className="container mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <img src={cinnamonLogo} alt="Cinnamon Grand Colombo" className="h-10 sm:h-12 w-auto object-contain shrink-0" />
+            <img src={cinnamonLogo} alt="Cinnamon Grand Colombo" className="h-9 sm:h-11 w-auto rounded-lg object-contain shadow-sm shrink-0" />
             <div className="min-w-0 border-l border-border pl-3">
               <h1 className="text-base sm:text-xl font-serif font-semibold leading-tight truncate">
                 Welcome, {member?.first_name || fullName}

@@ -391,26 +391,17 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
             >
               {/* Top: Logo */}
               <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                {/* Logo area */}
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  gap: '2px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  borderRadius: '8px',
-                  padding: '6px 12px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                }}>
-                  <img 
-                    src={cinnamonLogo} 
-                    alt="Cinnamon Grand Colombo" 
-                    style={{ 
-                      height: '36px', 
-                      width: 'auto',
-                      objectFit: 'contain',
-                    }} 
-                  />
-                </div>
+                <img 
+                  src={cinnamonLogo} 
+                  alt="Cinnamon Grand Colombo" 
+                  style={{ 
+                    height: '48px', 
+                    width: 'auto',
+                    borderRadius: '8px',
+                    objectFit: 'contain',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
+                  }} 
+                />
               </div>
 
               {/* Middle: Membership Type */}

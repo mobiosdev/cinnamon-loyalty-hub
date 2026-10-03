@@ -205,8 +205,8 @@ const Login = () => {
             <div className="flex justify-center">
               <img
                 src={cinnamonLogo}
-                alt="Cinnamon Logo"
-                className="h-14 w-auto"
+                alt="Cinnamon Grand Colombo"
+                className="h-14 w-auto rounded-xl object-contain shadow-md"
               />
             </div>
             <div className="text-center space-y-1">

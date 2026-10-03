@@ -265,101 +265,229 @@ export default function DigitalCard() {
         {/* ============================================================ */}
         {/* DIGITAL MEMBERSHIP CARD (Rendered element for export/view) */}
         {/* ============================================================ */}
-        <div 
-          ref={cardRef}
-          className="w-full aspect-[1.586/1] rounded-2xl relative overflow-hidden shadow-2xl border border-[#f0c040]/40 transition-all duration-300 select-none group"
-          style={{
-            background: 'linear-gradient(135deg, #16042b 0%, #2f1254 45%, #1d0738 100%)',
-            boxShadow: '0 20px 40px -15px rgba(212, 160, 18, 0.25), 0 0 25px rgba(74, 20, 140, 0.4)',
-          }}
-        >
-          {/* Card luxury aesthetic layers */}
+        <div className="w-full flex justify-center">
           <div 
-            className="absolute -top-12 -right-12 w-48 h-48 rounded-full pointer-events-none"
+            ref={cardRef}
+            className="membership-card select-none"
             style={{
-              background: 'radial-gradient(circle, rgba(240, 192, 64, 0.35) 0%, rgba(212, 160, 18, 0.1) 60%, transparent 80%)',
+              width: '420px',
+              height: '260px',
+              maxWidth: '100%',
+              borderRadius: '16px',
+              position: 'relative',
+              overflow: 'hidden',
+              fontFamily: "'Playfair Display', 'Georgia', serif",
+              boxShadow: '0 20px 60px rgba(61, 26, 110, 0.4), 0 8px 24px rgba(0,0,0,0.2)',
             }}
-          />
-          <div 
-            className="absolute -bottom-16 -left-16 w-52 h-52 rounded-full pointer-events-none"
-            style={{
-              background: 'radial-gradient(circle, rgba(147, 51, 234, 0.3) 0%, transparent 70%)',
-            }}
-          />
-          {/* Golden accent curved rings */}
-          <div 
-            className="absolute top-0 right-0 w-36 h-36 border-r-2 border-t-2 border-[#f0c040]/30 rounded-tr-2xl pointer-events-none" 
-          />
-          <div 
-            className="absolute bottom-0 right-12 w-28 h-28 rounded-full border border-[#f0c040]/20 pointer-events-none" 
-          />
+          >
+            {/* Background with gradient */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'linear-gradient(135deg, #1a0533 0%, #2d1058 25%, #3d1a6e 50%, #4a1f7f 75%, #2d1058 100%)',
+              }}
+            />
 
-          {/* Card inner content */}
-          <div className="relative z-10 h-full p-5 sm:p-6 flex flex-col justify-between">
-            {/* Top row: Brand & Status */}
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/95 rounded-lg p-1.5 shadow-md flex items-center justify-center">
-                  <img 
-                    src={cinnamonLogo} 
-                    alt="Cinnamon Grand Colombo" 
-                    className="h-8 sm:h-9 w-auto object-contain"
-                  />
-                </div>
-                <div>
-                  <p className="text-[#f0c040] font-serif text-sm sm:text-base font-semibold tracking-wide">
-                    Cinnamon Grand
-                  </p>
-                  <p className="text-white/60 text-[9px] uppercase tracking-[2px]">
-                    Colombo • Sri Lanka
-                  </p>
-                </div>
-              </div>
+            {/* Diagonal texture pattern */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundImage: `repeating-linear-gradient(
+                  45deg,
+                  transparent,
+                  transparent 8px,
+                  rgba(255,255,255,0.02) 8px,
+                  rgba(255,255,255,0.02) 16px
+                )`,
+              }}
+            />
 
-              {/* Category Badge */}
-              <div className="px-3 py-1 rounded-full bg-gradient-to-r from-[#d4a012]/30 to-[#f0c040]/20 border border-[#f0c040]/50 backdrop-blur-md">
-                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#f0c040]">
-                  {categoryName}
-                </span>
-              </div>
-            </div>
+            {/* Gold decorative arc - bottom left */}
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '-60px',
+                left: '-40px',
+                width: '220px',
+                height: '220px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #d4a012 0%, #f0c040 40%, #e8a808 70%, #c89010 100%)',
+                opacity: 0.9,
+              }}
+            />
 
-            {/* Middle: Membership Tier Banner */}
-            <div className="my-auto py-1">
-              <p className="text-[11px] uppercase tracking-[3px] text-white/50 font-medium">
-                {member.company_name ? `${member.company_name} • ` : ""}Membership Privilege
-              </p>
-              <h2 className="text-xl sm:text-2xl font-serif tracking-widest text-white uppercase font-normal drop-shadow">
-                {categoryName} CARD
-              </h2>
-            </div>
+            {/* Second gold arc - bottom left (smaller) */}
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '-80px',
+                left: '20px',
+                width: '180px',
+                height: '180px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #3d1a6e 0%, #2d1058 100%)',
+              }}
+            />
 
-            {/* Bottom Row: Member details & QR code */}
-            <div className="flex items-end justify-between gap-2 pt-2 border-t border-white/10">
-              <div className="space-y-1 min-w-0 flex-1">
-                <p className="text-sm sm:text-base font-bold text-[#f7e7ce] tracking-wide uppercase truncate">
-                  {memberName}
-                </p>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-[10px] sm:text-[11px] text-white/70 font-mono">
-                  <span>NO: <strong className="text-white font-semibold">{memberCode}</strong></span>
-                  <span>EXP: <strong className="text-white font-semibold">{expiryDate}</strong></span>
-                </div>
-              </div>
+            {/* Gold decorative arc - top right */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '-30px',
+                right: '-30px',
+                width: '130px',
+                height: '130px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #d4a012 0%, #f0c040 50%, #e8a808 100%)',
+                opacity: 0.85,
+              }}
+            />
 
-              {/* QR Code thumbnail */}
-              <button
-                type="button"
-                onClick={() => setQrFullscreen(true)}
-                className="shrink-0 bg-white p-1.5 rounded-lg shadow-lg border border-[#f0c040]/40 transition hover:scale-105 active:scale-95 group/qr"
-                title="Tap to enlarge QR code for scanning"
-              >
+            {/* Smaller accent circle top right */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '30px',
+                right: '-20px',
+                width: '70px',
+                height: '70px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #3d1a6e 0%, #4a1f7f 100%)',
+              }}
+            />
+
+            {/* Gold accent line - bottom right */}
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '-20px',
+                right: '-20px',
+                width: '160px',
+                height: '160px',
+                borderRadius: '50%',
+                border: '3px solid rgba(212, 160, 18, 0.4)',
+                background: 'transparent',
+              }}
+            />
+
+            {/* Content Layer */}
+            <div
+              style={{
+                position: 'relative',
+                zIndex: 10,
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                padding: '20px 24px',
+              }}
+            >
+              {/* Top: Logo */}
+              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                 <img 
-                  src={qrUrl}
-                  alt={`QR for ${memberCode}`} 
-                  className="w-12 h-12 sm:w-14 sm:h-14 object-contain"
-                  crossOrigin="anonymous"
+                  src={cinnamonLogo} 
+                  alt="Cinnamon Grand Colombo" 
+                  style={{ 
+                    height: '48px', 
+                    width: 'auto',
+                    borderRadius: '8px',
+                    objectFit: 'contain',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
+                  }} 
                 />
-              </button>
+              </div>
+
+              {/* Middle: Membership Type */}
+              <div style={{ marginTop: '14px', flex: 1 }}>
+                <p
+                  style={{
+                    fontSize: '20px',
+                    fontWeight: 400,
+                    color: '#ffffff',
+                    letterSpacing: '4px',
+                    textTransform: 'uppercase',
+                    fontFamily: "'Playfair Display', 'Georgia', serif",
+                    textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  {categoryName.toUpperCase()} MEMBERSHIP
+                </p>
+              </div>
+
+              {/* Bottom: Member Details + QR Code */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
+                <div>
+                  <p
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: '#f0e6d3',
+                      letterSpacing: '1px',
+                      textTransform: 'uppercase',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    {memberName}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: '10px',
+                      color: 'rgba(240, 230, 211, 0.8)',
+                      letterSpacing: '1.5px',
+                      textTransform: 'uppercase',
+                      fontFamily: "'Inter', sans-serif",
+                      fontWeight: 600,
+                    }}
+                  >
+                    MEMBERSHIP NO: {memberCode}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: '10px',
+                      color: 'rgba(240, 230, 211, 0.8)',
+                      letterSpacing: '1.5px',
+                      textTransform: 'uppercase',
+                      fontFamily: "'Inter', sans-serif",
+                      fontWeight: 600,
+                    }}
+                  >
+                    EXPIRY DATE: {expiryDate}
+                  </p>
+                </div>
+
+                {/* QR Code thumbnail */}
+                <div
+                  onClick={() => setQrFullscreen(true)}
+                  style={{
+                    backgroundColor: !isActive ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.95)',
+                    borderRadius: '8px',
+                    padding: '4px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '68px',
+                    height: '68px',
+                    cursor: 'pointer',
+                    border: !isActive ? '1.5px solid #ef4444' : 'none',
+                  }}
+                  title="Click to view QR code"
+                >
+                  {!isActive ? (
+                    <span className="text-[10px] font-bold text-red-500 text-center uppercase tracking-tight leading-none px-1">
+                      Inactive Card
+                    </span>
+                  ) : (
+                    <img 
+                      src={qrUrl}
+                      alt={`QR for ${memberCode}`} 
+                      style={{ width: '60px', height: '60px', objectFit: 'contain' }}
+                      crossOrigin="anonymous"
+                    />
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -426,7 +554,7 @@ export default function DigitalCard() {
         {/* ============================================================ */}
         {/* EXCLUSIVE PRIVILEGES & OFFERS SECTION */}
         {/* ============================================================ */}
-        <section className="w-full mt-6 space-y-3">
+        {/* <section className="w-full mt-6 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Gift className="w-4 h-4 text-[#f0c040]" />
@@ -480,7 +608,7 @@ export default function DigitalCard() {
               </p>
             </div>
           )}
-        </section>
+        </section> */}
 
         {/* ============================================================ */}
         {/* HOW TO REDEEM INSTRUCTIONS */}

@@ -120,7 +120,7 @@ const DiscountManagement = () => {
                   <img
                     src={cinnamonLogo}
                     alt="Cinnamon Grand Colombo"
-                    className="h-10 sm:h-12 w-auto object-contain shrink-0"
+                    className="h-9 sm:h-11 w-auto rounded-lg object-contain shadow-sm shrink-0"
                   />
                   <div className="min-w-0 border-l border-border pl-3 sm:pl-4">
                     <h1 className="text-lg sm:text-2xl font-serif font-semibold text-foreground leading-tight">

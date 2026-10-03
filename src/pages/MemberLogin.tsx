@@ -186,7 +186,7 @@ const MemberLogin = () => {
               <img
                 src={cinnamonLogo}
                 alt="Cinnamon Grand Colombo"
-                className="h-14 w-auto"
+                className="h-14 w-auto rounded-xl object-contain shadow-md"
               />
             </div>
 
