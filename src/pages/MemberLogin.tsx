@@ -31,6 +31,18 @@ const MemberLogin = () => {
   const [loading, setLoading] = useState(false);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  // Forgot Password State
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1); // 1: Email request, 2: OTP + New Password
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
+  const [forgotMaskedMobile, setForgotMaskedMobile] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
+  const [showForgotConfirmPassword, setShowForgotConfirmPassword] = useState(false);
+
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   const { isAuthenticated, user, error } = useSelector((state: RootState) => state.auth);
@@ -171,6 +183,78 @@ const MemberLogin = () => {
     }
   };
 
+  // FORGOT PASSWORD HANDLERS
+  const handleForgotRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      toast.error("Please enter your registered member email address");
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      const res = await staffApi.customerForgotPasswordRequest(forgotEmail.trim());
+      setForgotMaskedMobile(res.masked_mobile);
+      setForgotStep(2);
+      toast.success("Verification code sent to your registered mobile number");
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || "Failed to send reset code";
+      toast.error(msg);
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleForgotReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotOtp.trim() || forgotOtp.length < 6) {
+      toast.error("Please enter the 6-digit verification code");
+      return;
+    }
+    if (!forgotNewPassword.trim() || forgotNewPassword.length < 6) {
+      toast.error("Password must be at least 6 characters long");
+      return;
+    }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      const res = await staffApi.customerForgotPasswordReset(
+        forgotEmail.trim(),
+        forgotOtp.trim(),
+        forgotNewPassword
+      );
+      toast.success(res.message || "Password reset successful! You can now sign in.");
+      // Return to Member Login screen with email autofilled
+      setForgotMode(false);
+      setForgotStep(1);
+      setForgotOtp("");
+      setForgotNewPassword("");
+      setForgotConfirmPassword("");
+      setEmail(forgotEmail);
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || "Password reset failed";
+      toast.error(msg);
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleForgotResend = async () => {
+    try {
+      setForgotLoading(true);
+      await staffApi.customerForgotPasswordRequest(forgotEmail.trim());
+      toast.info("A new verification code has been dispatched to your mobile.");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to resend code");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
       {/* Background decoration */}
@@ -191,7 +275,33 @@ const MemberLogin = () => {
             </div>
 
             <div className="text-center space-y-1">
-              {!otpStep ? (
+              {forgotMode ? (
+                forgotStep === 1 ? (
+                  <>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-1">
+                      <UserCheck className="w-3.5 h-3.5" />
+                      Member Portal
+                    </div>
+                    <CardTitle className="text-2xl font-bold font-serif">Reset Password</CardTitle>
+                    <CardDescription>
+                      Enter your registered member email to request a reset code
+                    </CardDescription>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-center mb-2">
+                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Smartphone className="w-6 h-6 text-primary" />
+                      </div>
+                    </div>
+                    <CardTitle className="text-2xl font-bold font-serif">Verify Reset Code</CardTitle>
+                    <CardDescription>
+                      We sent a password reset OTP to{" "}
+                      <span className="font-semibold text-foreground font-mono">{forgotMaskedMobile}</span>
+                    </CardDescription>
+                  </>
+                )
+              ) : !otpStep ? (
                 <>
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-1">
                     <UserCheck className="w-3.5 h-3.5" />
@@ -225,7 +335,159 @@ const MemberLogin = () => {
           </CardHeader>
 
           <CardContent className="pt-4">
-            {!otpStep ? (
+            {forgotMode ? (
+              // FORGOT PASSWORD FLOW
+              forgotStep === 1 ? (
+                // Forgot Step 1: Request OTP
+                <form onSubmit={handleForgotRequest} className="space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-email" className="text-sm font-medium">Member Email Address</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="forgot-email"
+                        type="email"
+                        placeholder="Enter your registered member email"
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                        autoComplete="email"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full h-11 font-semibold"
+                    disabled={forgotLoading}
+                  >
+                    {forgotLoading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                        Sending Reset Code...
+                      </span>
+                    ) : (
+                      "Send Reset Code"
+                    )}
+                  </Button>
+
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setForgotMode(false)}
+                      className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                      Back to Member Login
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                // Forgot Step 2: OTP + New Password
+                <form onSubmit={handleForgotReset} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-otp" className="text-sm font-medium">6-Digit Verification Code</Label>
+                    <div className="relative">
+                      <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="forgot-otp"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="\d*"
+                        maxLength={6}
+                        placeholder="e.g. 123456"
+                        value={forgotOtp}
+                        onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, ""))}
+                        className="pl-10 text-center text-lg font-bold tracking-widest"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-new-password" className="text-sm font-medium">New Password</Label>
+                    <div className="relative">
+                      <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="forgot-new-password"
+                        type={showForgotNewPassword ? "text" : "password"}
+                        placeholder="Enter at least 6 characters"
+                        value={forgotNewPassword}
+                        onChange={(e) => setForgotNewPassword(e.target.value)}
+                        className="pl-10 pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showForgotNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-confirm-password" className="text-sm font-medium">Confirm New Password</Label>
+                    <div className="relative">
+                      <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="forgot-confirm-password"
+                        type={showForgotConfirmPassword ? "text" : "password"}
+                        placeholder="Confirm your new password"
+                        value={forgotConfirmPassword}
+                        onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                        className="pl-10 pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotConfirmPassword(!showForgotConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showForgotConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full h-11 font-semibold"
+                    disabled={forgotLoading}
+                  >
+                    {forgotLoading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                        Resetting Password...
+                      </span>
+                    ) : (
+                      "Reset Password & Sign In"
+                    )}
+                  </Button>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setForgotStep(1)}
+                      className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleForgotResend}
+                      disabled={forgotLoading}
+                      className="text-sm text-primary hover:underline disabled:opacity-50 transition-colors"
+                    >
+                      Resend code
+                    </button>
+                  </div>
+                </form>
+              )
+            ) : !otpStep ? (
               // Step 1: Member Email + Password Form
               <form onSubmit={handleStep1} className="space-y-5">
                 {hasStaffSession && (
@@ -254,7 +516,20 @@ const MemberLogin = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="member-password" className="text-sm font-medium">Password</Label>
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="member-password" className="text-sm font-medium">Password</Label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotMode(true);
+                        setForgotStep(1);
+                        setForgotEmail(email);
+                      }}
+                      className="text-xs text-primary hover:underline font-medium"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
                   <div className="relative">
                     <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -399,12 +674,12 @@ const MemberLogin = () => {
         <div className="flex justify-center gap-2 mt-4">
           <div
             className={`h-1.5 w-8 rounded-full transition-colors ${
-              !otpStep ? "bg-primary" : "bg-primary/30"
+              (!otpStep && !forgotMode) || (forgotMode && forgotStep === 1) ? "bg-primary" : "bg-primary/30"
             }`}
           />
           <div
             className={`h-1.5 w-8 rounded-full transition-colors ${
-              otpStep ? "bg-primary" : "bg-muted"
+              otpStep || (forgotMode && forgotStep === 2) ? "bg-primary" : "bg-muted"
             }`}
           />
         </div>

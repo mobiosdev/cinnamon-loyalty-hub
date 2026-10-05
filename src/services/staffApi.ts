@@ -219,5 +219,19 @@ export const staffApi = {
       otp,
     });
   },
+
+  async customerForgotPasswordRequest(email: string): Promise<any> {
+    return apiManager.post<any>('/members/auth/customer/reset-password/request', {
+      email,
+    });
+  },
+
+  async customerForgotPasswordReset(email: string, otp: string, newPassword: string): Promise<any> {
+    return apiManager.post<any>('/members/auth/customer/reset-password/verify', {
+      email,
+      otp,
+      newPassword,
+    });
+  },
 };
 
