@@ -446,8 +446,8 @@ const CustomerCategoryManagement = () => {
                   <TableRow>
                     <TableHead>Offer Name</TableHead>
                     <TableHead>Description</TableHead>
-                    <TableHead>Type & Limit</TableHead>
-                    <TableHead>Valid Period</TableHead>
+                    <TableHead className="min-w-[180px] whitespace-nowrap">Type & Limit</TableHead>
+                    <TableHead className="whitespace-nowrap">Valid Period</TableHead>
                     <TableHead className="text-right">Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -456,20 +456,20 @@ const CustomerCategoryManagement = () => {
                     <TableRow key={offer.id}>
                       <TableCell className="font-medium">{offer.name}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{offer.description}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
+                      <TableCell className="min-w-[180px] align-middle py-3">
+                        <div className="flex flex-col gap-1.5">
                           {viewingCategory && (
                             (() => {
                               const settings = offer.category_recurrence?.[viewingCategory.id];
                               if (settings) {
                                 return (
-                                  <div className="flex items-center gap-1.5 text-xs">
+                                  <div className="flex items-center gap-2 text-xs py-0.5">
                                     {settings.is_recurrent ? (
-                                      <Badge variant="outline" className="h-5 py-0 border-primary text-primary bg-primary/5 text-[10px]">
+                                      <Badge variant="outline" className="h-auto min-h-[22px] py-0.5 px-2.5 text-[10px] font-medium leading-none whitespace-nowrap border-primary/50 text-primary bg-primary/5 shrink-0 rounded-full inline-flex items-center">
                                         Recurrent ({settings.hasUsageLimit && settings.usage_limit ? `Limit: ${settings.usage_limit}` : "Unlimited"})
                                       </Badge>
                                     ) : (
-                                      <Badge variant="outline" className="h-5 py-0 text-muted-foreground text-[10px]">
+                                      <Badge variant="outline" className="h-auto min-h-[22px] py-0.5 px-2.5 text-[10px] font-medium leading-none whitespace-nowrap text-muted-foreground bg-muted/40 border-muted-foreground/30 shrink-0 rounded-full inline-flex items-center">
                                         Single Use
                                       </Badge>
                                     )}
@@ -477,13 +477,13 @@ const CustomerCategoryManagement = () => {
                                 );
                               }
                               return (
-                                <div className="flex items-center gap-1.5 text-xs">
+                                <div className="flex items-center gap-2 text-xs py-0.5">
                                   {offer.is_recurrent ? (
-                                    <Badge variant="outline" className="h-5 py-0 border-primary text-primary bg-primary/5 text-[10px]">
+                                    <Badge variant="outline" className="h-auto min-h-[22px] py-0.5 px-2.5 text-[10px] font-medium leading-none whitespace-nowrap border-primary/50 text-primary bg-primary/5 shrink-0 rounded-full inline-flex items-center">
                                       Recurrent ({offer.usage_limit ? `Limit: ${offer.usage_limit}` : "Unlimited"})
                                     </Badge>
                                   ) : (
-                                    <Badge variant="outline" className="h-5 py-0 text-muted-foreground text-[10px]">
+                                    <Badge variant="outline" className="h-auto min-h-[22px] py-0.5 px-2.5 text-[10px] font-medium leading-none whitespace-nowrap text-muted-foreground bg-muted/40 border-muted-foreground/30 shrink-0 rounded-full inline-flex items-center">
                                       Single Use
                                     </Badge>
                                   )}
