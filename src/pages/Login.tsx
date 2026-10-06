@@ -6,8 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useDispatch, useSelector } from "react-redux";
-import { loginStep1, loginStep2, clearError, resetOtpStep } from "@/store/slices/authSlice";
+import { loginStep1, loginStep2, loginWithAzure, clearError, resetOtpStep } from "@/store/slices/authSlice";
 import { AppDispatch, RootState } from "@/store";
+import { msalInstance, msalInitPromise, loginRequest } from "@/config/msalConfig";
 import cinnamonLogo from "@/assets/cinnamon-logo.png";
 import { Mail, Smartphone, ArrowLeft, Eye, EyeOff, Shield, Key } from "lucide-react";
 
@@ -61,6 +62,93 @@ const Login = () => {
       setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
     }
   }, [otpStep]);
+
+  const [azureLoading, setAzureLoading] = useState(false);
+
+  // Check for MSAL redirect result on mount
+  useEffect(() => {
+    let isMounted = true;
+    const processRedirect = async () => {
+      try {
+        await msalInitPromise;
+        const response = await msalInstance.handleRedirectPromise();
+        if (response?.idToken && isMounted) {
+          setAzureLoading(true);
+          // Clean the auth hash/query from the URL
+          window.history.replaceState(null, "", window.location.pathname);
+          const result = await dispatch(loginWithAzure(response.idToken)).unwrap();
+          if (result && 'otpRequired' in result && result.otpRequired) {
+            toast.info("Two-factor authentication required for Superadmin.");
+          }
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          // If the cached state was lost due to refresh or browser context, clean the hash silently
+          if (
+            err.errorCode === "no_token_request_cache_error" ||
+            err.message?.includes("no_token_request_cache_error")
+          ) {
+            console.warn("[MSAL] Stale auth code in URL with missing cache. Cleared hash.");
+            window.history.replaceState(null, "", window.location.pathname);
+            return;
+          }
+          console.error("[MSAL Redirect Error]:", err);
+          toast.error(err.message || "Failed to process Microsoft login redirect.");
+        }
+      } finally {
+        if (isMounted) {
+          setAzureLoading(false);
+        }
+      }
+    };
+    processRedirect();
+    return () => {
+      isMounted = false;
+    };
+  }, [dispatch]);
+
+  const handleMicrosoftLogin = async () => {
+    if (azureLoading || isLoading) return;
+
+    const clientId = import.meta.env.VITE_AZURE_CLIENT_ID;
+    const tenantId = import.meta.env.VITE_AZURE_TENANT_ID;
+
+    if (!clientId || !tenantId) {
+      toast.error("Microsoft Sign-In is not configured yet. Please set VITE_AZURE_CLIENT_ID and VITE_AZURE_TENANT_ID in .env.");
+      return;
+    }
+
+    setAzureLoading(true);
+    try {
+      await msalInitPromise;
+
+      // Clean lingering hash if previous redirect had stalled
+      if (window.location.hash.includes("code=") || window.location.hash.includes("error=")) {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+
+      // Use redirect flow (not popup) — browsers convert popups to new tabs,
+      // which breaks MSAL's cross-window communication.
+      // The redirect response is handled by handleRedirectPromise() in the
+      // useEffect above when Microsoft redirects back to /login.
+      await msalInstance.loginRedirect(loginRequest);
+    } catch (err: any) {
+      if (
+        err.errorCode === "user_cancelled" ||
+        err.name === "UserCancelledError" ||
+        err.message?.includes("user_cancelled")
+      ) {
+        toast.info("Microsoft sign-in was cancelled.");
+      } else if (err.errorCode === "interaction_in_progress") {
+        toast.warning("A Microsoft sign-in is already in progress. Please wait a moment or refresh the page.");
+      } else {
+        toast.error(err.message || "Microsoft authentication failed.");
+      }
+      setAzureLoading(false);
+    }
+    // NOTE: no finally — loginRedirect navigates away from the page,
+    // so setAzureLoading(false) would flash before the redirect.
+  };
 
   const handleStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -379,8 +467,9 @@ const Login = () => {
                 </form>
               )
             ) : !otpStep ? (
-              // Step 1: Email + Password
-              <form onSubmit={handleStep1} className="space-y-5">
+              <>
+                {/* Step 1: Email + Password */}
+                <form onSubmit={handleStep1} className="space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-sm font-medium">Email</Label>
                   <div className="relative">
@@ -439,10 +528,47 @@ const Login = () => {
                       <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
                       Sending OTP...
                     </span>
-                  ) : "Continue"}
+                  ) : (
+                    "Continue"
+                  )}
                 </Button>
               </form>
-            ) : (
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground font-medium">Or continue with</span>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-11 font-semibold flex items-center justify-center gap-3 border-border hover:bg-muted/60 transition-colors shadow-sm"
+                onClick={handleMicrosoftLogin}
+                disabled={isLoading || azureLoading}
+              >
+                {azureLoading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                    Connecting to Microsoft...
+                  </span>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 21 21">
+                      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                    </svg>
+                    <span>Sign in with Microsoft</span>
+                  </>
+                )}
+              </Button>
+            </>
+          ) : (
               // Step 2: OTP Input
               <form id="otp-form" onSubmit={handleStep2} className="space-y-6">
                 <div className="space-y-3">

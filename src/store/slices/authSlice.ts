@@ -86,6 +86,51 @@ export const loginStep1 = createAsyncThunk(
   },
 );
 
+// Microsoft Azure Entra ID SSO login
+export const loginWithAzure = createAsyncThunk(
+  'auth/loginWithAzure',
+  async (idToken: string, { rejectWithValue }) => {
+    try {
+      const response = await fetch(`${API_BASE()}/users/azure/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        const errMsg = err.message || 'Microsoft authentication failed';
+        logActivity({
+          activityType: 'user_authentication',
+          entityType: 'user',
+          action: 'login',
+          performedBy: 'azure_sso_attempt',
+          details: { event: 'login_failure', mode: 'azure_sso', reason: errMsg }
+        });
+        throw new Error(errMsg);
+      }
+      const data = await response.json();
+      if (data.otpRequired === false && data.user) {
+        localStorage.setItem('token', data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem('refresh_token', data.refresh_token);
+        }
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        logActivity({
+          activityType: 'user_authentication',
+          entityType: 'user',
+          action: 'login',
+          performedBy: data.user.username,
+          details: { event: 'login_success', mode: 'azure_sso' }
+        });
+      }
+      return data as Step1Response;
+    } catch (error: any) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Microsoft login failed');
+    }
+  },
+);
+
 // Step 2: verify OTP → returns full user
 export const loginStep2 = createAsyncThunk(
   'auth/loginStep2',
@@ -265,6 +310,38 @@ const authSlice = createSlice({
         }
       })
       .addCase(loginStep1.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      });
+
+    // Azure SSO
+    builder
+      .addCase(loginWithAzure.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(loginWithAzure.fulfilled, (state, action) => {
+        state.isLoading = false;
+        const payload = action.payload as Step1Response;
+        if (payload.otpRequired) {
+          // Superadmin — show OTP step
+          state.otpStep = true;
+          state.maskedMobile = payload.masked_mobile;
+          state.pendingUsername = payload.username;
+        } else {
+          // Regular user — directly authenticated
+          const directPayload = payload as Step1DirectResponse;
+          state.user = directPayload.user;
+          state.isAuthenticated = true;
+          state.otpStep = false;
+          localStorage.setItem('token', directPayload.access_token);
+          if (directPayload.refresh_token) {
+            localStorage.setItem('refresh_token', directPayload.refresh_token);
+          }
+          localStorage.setItem('user', JSON.stringify(directPayload.user));
+        }
+      })
+      .addCase(loginWithAzure.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       });
