@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Download, CreditCard, Share2, Mail, Loader2, CheckCircle2, Send, Shield } from "lucide-react";
 import { toast } from "sonner";
 import cinnamonLogo from "@/assets/cinnamon-logo.png";
@@ -42,6 +43,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
   const [emailAddress, setEmailAddress] = useState("");
   const [showEmailInput, setShowEmailInput] = useState(false);
   const [sendingCard, setSendingCard] = useState(false);
+  const [sendToSecondary, setSendToSecondary] = useState(false);
 
   if (!member) return null;
 
@@ -215,7 +217,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
       const cardToken = await ensureCardToken(member.id, member.card_token);
       const cardUrl = `${window.location.origin}/card/${cardToken}`;
 
-      const res = await staffApi.dispatchCard(member.id, cardUrl);
+      const res = await staffApi.dispatchCard(member.id, cardUrl, sendToSecondary);
       if (res && res.success) {
         const emailCount = res.emails?.filter((e: any) => e.success)?.length || 0;
         const smsCount = res.mobiles?.filter((m: any) => m.success)?.length || 0;
@@ -502,6 +504,18 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
             This member account is deactivated. Card actions are disabled.
           </div>
         )}
+
+        <div className="w-full max-w-[420px] flex items-center space-x-2 py-1 mb-1">
+          <Checkbox
+            id="card-send-secondary"
+            checked={sendToSecondary}
+            onCheckedChange={(checked) => setSendToSecondary(checked === true)}
+            disabled={sendingCard || isDeactivated}
+          />
+          <Label htmlFor="card-send-secondary" className="text-xs sm:text-sm font-normal cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors">
+            Also send to secondary mobile numbers and email
+          </Label>
+        </div>
 
         <div className="w-full max-w-[420px] grid grid-cols-2 gap-2">
           <Button

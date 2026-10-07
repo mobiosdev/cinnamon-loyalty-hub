@@ -161,8 +161,8 @@ export const staffApi = {
     return apiManager.post<any>(`/members/${id}/send-card`, { email, card_url: cardUrl });
   },
 
-  async dispatchCard(id: string, cardUrl?: string): Promise<any> {
-    return apiManager.post<any>(`/members/${id}/dispatch-card`, { card_url: cardUrl });
+  async dispatchCard(id: string, cardUrl?: string, send_to_secondary?: boolean): Promise<any> {
+    return apiManager.post<any>(`/members/${id}/dispatch-card`, { card_url: cardUrl, send_to_secondary });
   },
 
   async getPublicCard(idOrCode: string): Promise<any> {
