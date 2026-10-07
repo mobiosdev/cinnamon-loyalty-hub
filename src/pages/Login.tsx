@@ -64,15 +64,18 @@ const Login = () => {
   }, [otpStep]);
 
   const [azureLoading, setAzureLoading] = useState(false);
+  const redirectHandledRef = useRef(false);
 
   // Check for MSAL redirect result on mount
   useEffect(() => {
     let isMounted = true;
     const processRedirect = async () => {
+      if (redirectHandledRef.current) return;
       try {
         await msalInitPromise;
         const response = await msalInstance.handleRedirectPromise();
-        if (response?.idToken && isMounted) {
+        if (response?.idToken && isMounted && !redirectHandledRef.current) {
+          redirectHandledRef.current = true;
           setAzureLoading(true);
           // Clean the auth hash/query from the URL
           window.history.replaceState(null, "", window.location.pathname);

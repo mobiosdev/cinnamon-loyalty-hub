@@ -9,7 +9,7 @@ const securityHeaders = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(self), clipboard-write=(self), geolocation=(), microphone=(), payment=(), usb=()',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://api.qrserver.com https://lovable.dev; connect-src 'self' https://cinnamon-uat.text-ware.com https://message.text-ware.com http://localhost:* ws: wss:; frame-ancestors 'none'; object-src 'none';",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://api.qrserver.com https://lovable.dev; connect-src 'self' https://login.microsoftonline.com https://cinnamon-uat.text-ware.com https://message.text-ware.com http://localhost:* ws: wss:; frame-ancestors 'none'; object-src 'none';",
   'X-Frame-Options': 'DENY',
 };
 
