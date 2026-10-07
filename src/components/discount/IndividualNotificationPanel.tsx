@@ -754,7 +754,7 @@ const IndividualNotificationPanel = () => {
             disabled={sending}
           />
           <Label htmlFor="individual-send-secondary" className="text-sm font-normal cursor-pointer select-none">
-            Send to secondary mobile numbers
+            Send to secondary mobile number
           </Label>
         </div>
 

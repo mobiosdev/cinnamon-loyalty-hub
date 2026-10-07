@@ -904,7 +904,7 @@ const Redemption = () => {
           onCheckedChange={(checked) => setSendOtpToSecondary(checked === true)}
         />
         <Label htmlFor="send-otp-secondary" className="text-sm font-normal cursor-pointer select-none">
-          Also send OTP &amp; redemption SMS to secondary mobile number
+          Send OTP &amp; redemption SMS to secondary mobile number
         </Label>
       </div>
 
@@ -1365,7 +1365,7 @@ const Redemption = () => {
           onCheckedChange={(checked) => setReversalSendOtpToSecondary(checked === true)}
         />
         <Label htmlFor="reversal-send-otp-secondary" className="text-sm font-normal cursor-pointer select-none">
-          Also send OTP &amp; reversal SMS to secondary mobile number
+          Send OTP &amp; reversal SMS to secondary mobile number
         </Label>
       </div>
 

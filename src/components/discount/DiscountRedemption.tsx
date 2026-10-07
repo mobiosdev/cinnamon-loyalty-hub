@@ -183,7 +183,7 @@ const DiscountRedemption = () => {
                   onCheckedChange={(checked) => setSendOtpToSecondary(checked === true)}
                 />
                 <Label htmlFor="discount-send-otp-secondary" className="text-sm font-normal cursor-pointer select-none">
-                  Also send OTP to secondary mobile number
+                  Send OTP to secondary mobile number
                 </Label>
               </div>
 
