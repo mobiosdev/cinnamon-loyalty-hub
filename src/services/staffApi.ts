@@ -194,7 +194,7 @@ export const staffApi = {
   },
 
   async verifyPasswordToken(token: string): Promise<any> {
-    return apiManager.get<any>(`/members/auth/verify-token?token=${encodeURIComponent(token)}`);
+    return apiManager.post<any>('/members/auth/verify-token', { token });
   },
 
   async setPassword(token: string, new_password: string): Promise<any> {
