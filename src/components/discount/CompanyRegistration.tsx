@@ -1477,7 +1477,7 @@ const CompanyRegistration = () => {
                   disabled={loading}
                 />
                 <Label htmlFor="register-send-to-secondary" className="text-sm font-normal cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors">
-                  Also send to secondary mobile numbers and email
+                  Send to secondary mobile number and email
                 </Label>
               </div>
 

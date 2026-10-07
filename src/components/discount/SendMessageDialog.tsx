@@ -568,7 +568,7 @@ export const SendMessageDialog = ({ offer, isOpen, onClose }: SendMessageDialogP
                 disabled={sending}
               />
               <Label htmlFor="dialog-send-secondary" className="text-sm font-normal cursor-pointer select-none">
-                Also send to secondary mobile numbers
+                Send to secondary mobile number
               </Label>
             </div>
 

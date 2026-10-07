@@ -565,7 +565,7 @@ const MemberLogin = () => {
                     htmlFor="member-send-secondary"
                     className="text-xs text-muted-foreground leading-snug cursor-pointer select-none"
                   >
-                    Also send OTP to secondary mobile number (if registered)
+                    Send OTP to secondary mobile number (if registered)
                   </Label>
                 </div>
 
