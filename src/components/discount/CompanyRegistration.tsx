@@ -115,6 +115,7 @@ const CompanyRegistration = () => {
   const [categoryOffers, setCategoryOffers] = useState<any[]>([]);
   const [discountEnabled, setDiscountEnabled] = useState(true);
   const [selectedOfferIds, setSelectedOfferIds] = useState<string[]>([]);
+  const [sendToSecondary, setSendToSecondary] = useState(false);
 
   // Bulk Upload states
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
@@ -267,6 +268,7 @@ const CompanyRegistration = () => {
     });
     setDiscountEnabled(true);
     setSelectedOfferIds([]);
+    setSendToSecondary(false);
   };
 
   const handleSubmitCompany = async () => {
@@ -842,6 +844,7 @@ const CompanyRegistration = () => {
           category_id: memberFormData.category_id,
           discount_enabled: discountEnabled,
           selected_offers: selectedOfferIds,
+          send_to_secondary: sendToSecondary,
         };
 
         const result = await staffApi.registerStaff(staffData);
@@ -858,12 +861,16 @@ const CompanyRegistration = () => {
           }
         );
         
-        // Automatically dispatch membership card to all emails and all mobile numbers
+        // Automatically dispatch membership card
         if (result?.id) {
           const cardUrl = `${window.location.origin}/card/${result.id}`;
           try {
-            await staffApi.dispatchCard(result.id, cardUrl);
-            toast.success("Member registered! Welcome message & digital card sent to all emails and mobile numbers.");
+            await staffApi.dispatchCard(result.id, cardUrl, sendToSecondary);
+            if (sendToSecondary) {
+              toast.success("Member registered! Welcome message & digital card sent to primary and secondary contacts.");
+            } else {
+              toast.success("Member registered! Welcome message & digital card sent to primary contact.");
+            }
           } catch (dispatchErr) {
             console.warn("Card auto-dispatch warning:", dispatchErr);
             toast.success("Member registered successfully!");
@@ -1461,27 +1468,41 @@ const CompanyRegistration = () => {
                 )}
               </div>
             
-            <div className="flex justify-end gap-2 mt-6">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => {
-                  handleClearCompany();
-                }}
-                disabled={loading}
-              >
-                Clear Form
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  memberFormData.id ? 'Update Member' : 'Register Member'
-                )}
-              </Button>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6 pt-4 border-t border-border/50">
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="register-send-to-secondary"
+                  checked={sendToSecondary}
+                  onCheckedChange={(checked) => setSendToSecondary(checked === true)}
+                  disabled={loading}
+                />
+                <Label htmlFor="register-send-to-secondary" className="text-sm font-normal cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors">
+                  Send to secondary mobile numbers and email
+                </Label>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    handleClearCompany();
+                  }}
+                  disabled={loading}
+                >
+                  Clear Form
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    memberFormData.id ? 'Update Member' : 'Register Member'
+                  )}
+                </Button>
+              </div>
             </div>
           </form>
           </CardContent>
