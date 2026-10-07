@@ -513,7 +513,7 @@ export function MembershipCard({ open, onOpenChange, member }: MembershipCardPro
             disabled={sendingCard || isDeactivated}
           />
           <Label htmlFor="card-send-secondary" className="text-xs sm:text-sm font-normal cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors">
-            Also send to secondary mobile numbers and email
+            Send to secondary mobile numbers and email
           </Label>
         </div>
 
