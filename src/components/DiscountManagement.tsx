@@ -92,7 +92,7 @@ const DiscountManagement = () => {
     if (canAccess(tab)) setActiveTab(tab);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (user?.username) {
       logActivity({
         activityType: 'user_authentication',
@@ -102,6 +102,7 @@ const DiscountManagement = () => {
         details: { event: 'logout' }
       });
     }
+    await staffApi.logout().catch(() => {});
     dispatch(logout());
     window.location.href = isMember ? "/login-member" : "/login";
   };

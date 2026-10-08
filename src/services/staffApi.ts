@@ -233,5 +233,30 @@ export const staffApi = {
       newPassword,
     });
   },
+
+  async revealMemberPhone(memberId: string): Promise<{ success: boolean; member_id: string; mobile: string; secondary_mobile: string | null }> {
+    return apiManager.post(`/members/${memberId}/reveal-phone`, {});
+  },
+
+  async updateMarketingPreferences(memberId: string, preferences: {
+    consent_marketing_sms?: boolean;
+    consent_marketing_whatsapp?: boolean;
+    consent_marketing_email?: boolean;
+  }): Promise<any> {
+    return apiManager.put(`/members/${memberId}/marketing-preferences`, preferences);
+  },
+
+  async logout(): Promise<void> {
+    try {
+      await apiManager.post('/users/logout', {});
+    } catch {
+      // ignore
+    }
+    try {
+      await apiManager.post('/members/auth/logout', {});
+    } catch {
+      // ignore
+    }
+  },
 };
 

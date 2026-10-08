@@ -135,7 +135,7 @@ const MemberPortal = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, isMember, user?.id]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (user?.username) {
       logActivity({
         activityType: "user_authentication",
@@ -145,6 +145,7 @@ const MemberPortal = () => {
         details: { event: "logout" },
       });
     }
+    await staffApi.logout().catch(() => {});
     dispatch(logout());
     navigate("/login-member", { replace: true });
   };

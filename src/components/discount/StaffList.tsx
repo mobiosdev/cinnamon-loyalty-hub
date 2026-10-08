@@ -12,7 +12,6 @@ import { staffApi } from "@/services/staffApi";
 import { offerApi, parseOfferDescription } from "@/services/offerApi";
 import { companyApi } from "@/services/companyApi";
 import { categoryApi } from "@/services/categoryApi";
-import { auditApi } from "@/services/auditApi";
 import { redemptionApi } from "@/services/redemptionApi";
 import { toast } from "sonner";
 import { maskPhoneNumber, formatPhoneForDisplay, validateAndNormalizeSriLankanMobile, validateAndNormalizeSriLankanPhone, splitPhoneNumber } from "@/utils/phoneUtils";
@@ -40,7 +39,7 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [revealedPhones, setRevealedPhones] = useState<Set<string>>(new Set());
+  const [revealedPhones, setRevealedPhones] = useState<Record<string, string>>({});
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [qrMember, setQrMember] = useState<any>(null);
   const [cardDialogOpen, setCardDialogOpen] = useState(false);
@@ -168,30 +167,27 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
   };
 
   const handlePhoneClick = async (memberId: string, phone: string) => {
-    if (revealedPhones.has(memberId)) {
+    if (revealedPhones[memberId]) {
       // If already revealed, hide it
       setRevealedPhones(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(memberId);
-        return newSet;
+        const next = { ...prev };
+        delete next[memberId];
+        return next;
       });
     } else {
-      // Reveal and log to database
+      // Call backend to reveal phone number (verifies permission and creates audit log)
       try {
-        // Get viewer information (in production, this would come from authenticated user)
-        const viewerName = "Admin User"; // TODO: Replace with actual authenticated user name
-        
-        await auditApi.logPhoneView(memberId, viewerName);
-
-        setRevealedPhones(prev => {
-          const newSet = new Set(prev);
-          newSet.add(memberId);
-          return newSet;
-        });
-        toast.success(`Phone number revealed - View logged for ${viewerName}`);
-      } catch (error) {
-        console.error("Error logging phone view:", error);
-        toast.error("Failed to log phone view");
+        const res = await staffApi.revealMemberPhone(memberId);
+        if (res && res.mobile) {
+          setRevealedPhones(prev => ({
+            ...prev,
+            [memberId]: res.mobile,
+          }));
+          toast.success("Phone number revealed — Access logged");
+        }
+      } catch (error: any) {
+        console.error("Error revealing phone number:", error);
+        toast.error(error?.response?.data?.message || "Failed to reveal phone number");
       }
     }
   };
@@ -874,10 +870,10 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                       className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer font-mono"
                       title="Click to reveal/hide phone number"
                     >
-                      {revealedPhones.has(member.id) ? (
+                      {revealedPhones[member.id] ? (
                         <>
                           <Eye className="h-4 w-4" />
-                          {formatPhoneForDisplay(member.mobile)}
+                          {formatPhoneForDisplay(revealedPhones[member.id])}
                         </>
                       ) : (
                         <>
@@ -1152,10 +1148,10 @@ export function StaffList({ isReload, selectedCompanyId, onEdit, onDelete }: Sta
                         className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer font-mono text-sm font-semibold mt-1"
                         title="Click to reveal/hide phone number"
                       >
-                        {revealedPhones.has(selectedMember.id) ? (
+                        {revealedPhones[selectedMember.id] ? (
                           <>
                             <Eye className="h-3.5 w-3.5" />
-                            {formatPhoneForDisplay(selectedMember.mobile)}
+                            {formatPhoneForDisplay(revealedPhones[selectedMember.id])}
                           </>
                         ) : (
                           <>
