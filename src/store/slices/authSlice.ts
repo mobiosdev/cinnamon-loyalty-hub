@@ -37,6 +37,7 @@ export const loginStep1 = createAsyncThunk(
     try {
       const response = await fetch(`${API_BASE()}/users/login`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
       });
@@ -93,6 +94,7 @@ export const loginStep2 = createAsyncThunk(
     try {
       const response = await fetch(`${API_BASE()}/users/login/verify`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
       });

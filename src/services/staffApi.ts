@@ -181,6 +181,7 @@ export const staffApi = {
     const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7257/api';
     return fetch(`${apiBase}/members/bulk-import`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -232,6 +233,10 @@ export const staffApi = {
       otp,
       newPassword,
     });
+  },
+
+  async resendCustomerOtp(): Promise<any> {
+    return apiManager.post<any>('/members/auth/customer/otp/resend', {});
   },
 };
 

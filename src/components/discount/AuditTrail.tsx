@@ -6,12 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Eye, Activity, Shield, Users, FileText, Gift, Building2, ChevronLeft, ChevronRight, Clock, User as UserIcon, Info, ChevronDown } from "lucide-react";
+import { Loader2, Search, Eye, Activity, Shield, Users, FileText, Gift, Building2, ChevronLeft, ChevronRight, Clock, User as UserIcon, Info, ChevronDown, Server } from "lucide-react";
 import { toast } from "sonner";
 import { auditApi } from "@/services/auditApi";
 import { format, formatDistanceToNow } from "date-fns";
 import { TablePagination } from "@/components/common/TablePagination";
 import { PaginationMeta } from "@/services/pagination";
+import { AssetInventory } from "./AssetInventory";
 
 const defaultPagination = (limit = 15): PaginationMeta => ({
   total: 0,
@@ -75,7 +76,7 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
   useEffect(() => {
     if (activeTab === "phone-views") {
       fetchPhoneViews();
-    } else {
+    } else if (activeTab === "user-activity") {
       fetchAuditLogs();
     }
   }, [activeTab, currentPage, pageSize, filterAction, filterEntityType, searchTerm]);
@@ -99,7 +100,7 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
     if (parentActiveTab === "audit") {
       if (activeTab === "phone-views") {
         fetchPhoneViews();
-      } else {
+      } else if (activeTab === "user-activity") {
         fetchAuditLogs();
       }
     }
@@ -362,7 +363,7 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
       {/* Main Audit Trail Card with Tabs */}
       <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); setCurrentPage(1); }} className="w-full">
         <Card>
-          <TabsList className="grid w-full grid-cols-2 h-auto p-0 bg-transparent border-b rounded-none">
+          <TabsList className="grid w-full grid-cols-3 h-auto p-0 bg-transparent border-b rounded-none">
             <TabsTrigger 
               value="user-activity" 
               className="rounded-none rounded-tl-lg data-[state=active]:bg-secondary data-[state=active]:text-secondary-foreground data-[state=active]:shadow-sm data-[state=inactive]:bg-muted/50 py-3 border-r border-b-0"
@@ -372,10 +373,17 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
             </TabsTrigger>
             <TabsTrigger 
               value="phone-views" 
-              className="rounded-none rounded-tr-lg data-[state=active]:bg-secondary data-[state=active]:text-secondary-foreground data-[state=active]:shadow-sm data-[state=inactive]:bg-muted/50 py-3 border-b-0"
+              className="rounded-none data-[state=active]:bg-secondary data-[state=active]:text-secondary-foreground data-[state=active]:shadow-sm data-[state=inactive]:bg-muted/50 py-3 border-r border-b-0"
             >
               <Eye className="h-4 w-4 mr-2" />
               Phone Views
+            </TabsTrigger>
+            <TabsTrigger 
+              value="asset-inventory" 
+              className="rounded-none rounded-tr-lg data-[state=active]:bg-secondary data-[state=active]:text-secondary-foreground data-[state=active]:shadow-sm data-[state=inactive]:bg-muted/50 py-3 border-b-0 font-medium"
+            >
+              <Server className="h-4 w-4 mr-2" />
+              Asset & Data Inventory (Q21)
             </TabsTrigger>
           </TabsList>
 
@@ -385,12 +393,18 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
                 <Shield className="h-5 w-5 text-primary" />
                 <div>
                   <CardTitle>
-                    {activeTab === 'phone-views' ? 'Phone Number Views' : 'User Activity Timeline'}
+                    {activeTab === 'phone-views' 
+                      ? 'Phone Number Views' 
+                      : (activeTab === 'asset-inventory' 
+                          ? 'Information Asset & Customer Data Inventory' 
+                          : 'User Activity Timeline')}
                   </CardTitle>
                   <CardDescription>
                     {activeTab === 'phone-views' 
                       ? 'Phone number access logs for security and compliance.' 
-                      : 'Complete timeline of all system activities with detailed user journey tracking.'
+                      : (activeTab === 'asset-inventory'
+                          ? 'Catalogue of platform digital assets, customer PII tracking, and Sri Lanka PDPA compliance.'
+                          : 'Complete timeline of all system activities with detailed user journey tracking.')
                     }
                   </CardDescription>
                 </div>
@@ -734,6 +748,10 @@ export function AuditTrail({ parentActiveTab, prefilledSearchTerm, clearPrefille
                 itemLabel="phone views"
               />
             </CardContent>
+          </TabsContent>
+
+          <TabsContent value="asset-inventory" className="p-4 sm:p-6">
+            <AssetInventory />
           </TabsContent>
         </Card>
       </Tabs>

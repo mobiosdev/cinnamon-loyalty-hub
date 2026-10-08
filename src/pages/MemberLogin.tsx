@@ -173,11 +173,16 @@ const MemberLogin = () => {
   const handleResend = async () => {
     try {
       setLoading(true);
-      await staffApi.customerLogin(email.trim(), password, sendToSecondary);
+      try {
+        await staffApi.resendCustomerOtp();
+      } catch {
+        // Fallback to customerLogin re-dispatch if session OTP needed re-init
+        await staffApi.customerLogin(email.trim(), password, sendToSecondary);
+      }
       setOtp(Array(OTP_LENGTH).fill(""));
       toast.info("A new verification code has been dispatched to your mobile.");
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to resend code");
+      toast.error(err.response?.data?.message || err.message || "Failed to resend code");
     } finally {
       setLoading(false);
     }
@@ -211,8 +216,18 @@ const MemberLogin = () => {
       toast.error("Please enter the 6-digit verification code");
       return;
     }
-    if (!forgotNewPassword.trim() || forgotNewPassword.length < 6) {
-      toast.error("Password must be at least 6 characters long");
+    const validateStrongPassword = (pwd: string) => {
+      if (pwd.length < 12) return "Password must be at least 12 characters long";
+      if (!/[A-Z]/.test(pwd)) return "Password must contain at least one uppercase letter (A-Z)";
+      if (!/[a-z]/.test(pwd)) return "Password must contain at least one lowercase letter (a-z)";
+      if (!/\d/.test(pwd)) return "Password must contain at least one number (0-9)";
+      if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pwd)) return "Password must contain at least one special character (!@#$%...)";
+      return null;
+    };
+
+    const policyError = validateStrongPassword(forgotNewPassword.trim());
+    if (policyError) {
+      toast.error(policyError);
       return;
     }
     if (forgotNewPassword !== forgotConfirmPassword) {

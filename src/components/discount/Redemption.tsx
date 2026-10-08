@@ -291,7 +291,7 @@ const Redemption = () => {
       const data = await transactionApi.sendOtp({
         mobile: finalMobileNumber,
         notes: `OTP for redeeming benefits on bill #${billNumber}`,
-        user_id: 1,
+        user_id: currentUser?.id ? Number(currentUser.id) || 1 : 1,
         bill_number: billNumber,
         send_to_secondary: sendOtpToSecondary,
       });
@@ -580,17 +580,32 @@ const Redemption = () => {
       toast.error("Please enter a bill number to reverse");
       return;
     }
+    if (reversalStep === "verify") {
+      if (!reversalOtp || reversalOtp.length !== 6) {
+        toast.error("Please enter the 6-digit OTP code");
+        return;
+      }
+      if (!reversalStaffId) {
+        toast.error("Invalid reversal session. Please request OTP again.");
+        return;
+      }
+    }
 
     setShowReverseConfirm(true);
   };
 
   const executeReversal = async () => {
+    if (!reversalStaffId || !reversalOtp || reversalOtp.length !== 6) {
+      toast.error("Please enter the 6-digit OTP sent to the customer");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await offerApi.confirmReversal({
         bill_number: reversalBillNumber.trim(),
-        otp: "000000",
-        staff_id: 1,
+        otp: reversalOtp.trim(),
+        staff_id: Number(reversalStaffId),
         send_to_secondary: reversalSendOtpToSecondary,
       });
 
@@ -1370,7 +1385,7 @@ const Redemption = () => {
       </div>
 
       <Button 
-        onClick={handleConfirmReversal} 
+        onClick={handleRequestReversal} 
         disabled={loading || !reversalBillNumber.trim()} 
         size="lg" 
         className="w-full bg-destructive hover:bg-destructive/90 text-white font-semibold"
@@ -1378,12 +1393,12 @@ const Redemption = () => {
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Reversing...
+            Sending Reversal OTP...
           </>
         ) : (
           <>
             <Send className="mr-2 h-4 w-4" />
-            Reverse Redemption
+            Send Reversal OTP
           </>
         )}
       </Button>
@@ -1423,7 +1438,7 @@ const Redemption = () => {
         <div className="space-y-2 pt-2">
           <Button 
             onClick={handleConfirmReversal} 
-            disabled={loading || reversalSecondsLeft <= 0} 
+            disabled={loading || reversalOtp.length !== 6 || reversalSecondsLeft <= 0} 
             size="lg" 
             className="w-full bg-destructive hover:bg-destructive/90 text-white font-semibold"
           >
@@ -1491,7 +1506,8 @@ const Redemption = () => {
 
             {canReverse && (
               <TabsContent value="reverse" className="space-y-4">
-                {renderReversalInputStep()}
+                {reversalStep === "input" && renderReversalInputStep()}
+                {reversalStep === "verify" && renderReversalVerifyStep()}
               </TabsContent>
             )}
           </Tabs>

@@ -65,11 +65,21 @@ const SetPassword = () => {
     checkToken();
   }, [token]);
 
+  const validateStrongPassword = (pwd: string) => {
+    if (pwd.length < 12) return "Password must be at least 12 characters long";
+    if (!/[A-Z]/.test(pwd)) return "Password must contain at least one uppercase letter (A-Z)";
+    if (!/[a-z]/.test(pwd)) return "Password must contain at least one lowercase letter (a-z)";
+    if (!/\d/.test(pwd)) return "Password must contain at least one number (0-9)";
+    if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pwd)) return "Password must contain at least one special character (!@#$%...)";
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!newPassword || newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters long");
+    const policyError = validateStrongPassword(newPassword);
+    if (policyError) {
+      toast.error(policyError);
       return;
     }
 
@@ -202,12 +212,12 @@ const SetPassword = () => {
                     <Input
                       id="new-password"
                       type={showPassword ? "text" : "password"}
-                      placeholder="Enter new password (min. 6 chars)"
+                      placeholder="Enter new password (min. 12 chars)"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       className="pl-10 pr-10"
                       required
-                      minLength={6}
+                      minLength={12}
                     />
                     <button
                       type="button"

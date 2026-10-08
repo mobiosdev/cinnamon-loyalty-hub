@@ -61,4 +61,36 @@ export const auditApi = {
   async logActivity(data: any): Promise<void> {
     return apiManager.post<void>('/audit/logs', data);
   },
+
+  async getAssetInventory(): Promise<AssetInventoryResponse> {
+    return apiManager.get<AssetInventoryResponse>('/audit/assets');
+  },
 };
+
+export interface AssetInventoryItem {
+  id: string;
+  name: string;
+  stack: string;
+  type: string;
+  dataHandled: string;
+  classification: 'Restricted' | 'Confidential' | 'Internal' | 'Public';
+  location: string;
+  securityControls: string;
+}
+
+export interface ComplianceMetrics {
+  total_members: number;
+  active_members: number;
+  total_redemptions: number;
+  total_audit_logs: number;
+  total_phone_views: number;
+  encryption_at_rest: string;
+  encryption_in_transit: string;
+  data_protection_standard: string;
+}
+
+export interface AssetInventoryResponse {
+  metrics: ComplianceMetrics;
+  assets: AssetInventoryItem[];
+}
+

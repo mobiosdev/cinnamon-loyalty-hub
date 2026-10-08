@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +16,9 @@ import { transactionApi } from "@/services/transactionApi";
 type RedemptionStep = "input" | "verify" | "success";
 
 const DiscountRedemption = () => {
+  const currentUser = useSelector((state: RootState) => state.auth.user);
+  const numericUserId = currentUser?.id ? Number(currentUser.id) || 1 : 1;
+
   const [step, setStep] = useState<RedemptionStep>("input");
   const [billNumber, setBillNumber] = useState("");
   const [contactInfo, setContactInfo] = useState("");
@@ -51,7 +56,7 @@ const DiscountRedemption = () => {
       const data = await transactionApi.sendOtp({
         mobile: mobileNumber,
         notes: `Your OTP for bill #${billNumber}`,
-        user_id: 1,
+        user_id: numericUserId,
         bill_number: billNumber,
         send_to_secondary: sendOtpToSecondary,
       });
@@ -92,7 +97,7 @@ const DiscountRedemption = () => {
       await transactionApi.processPendingDiscount({
         mobile: cleanMobile,
         notes: `Discount redemption for bill #${billNumber}`,
-        user_id: 1,
+        user_id: numericUserId,
         bill_number: billNumber,
       });
 
@@ -103,6 +108,7 @@ const DiscountRedemption = () => {
         entityId: billNumber,
         entityName: contactInfo,
         action: 'redeem',
+        performedBy: currentUser?.username || 'Staff',
         details: {
           bill_number: billNumber,
           discount_type: 'percentage',
