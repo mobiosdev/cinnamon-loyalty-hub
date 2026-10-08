@@ -216,18 +216,8 @@ const MemberLogin = () => {
       toast.error("Please enter the 6-digit verification code");
       return;
     }
-    const validateStrongPassword = (pwd: string) => {
-      if (pwd.length < 12) return "Password must be at least 12 characters long";
-      if (!/[A-Z]/.test(pwd)) return "Password must contain at least one uppercase letter (A-Z)";
-      if (!/[a-z]/.test(pwd)) return "Password must contain at least one lowercase letter (a-z)";
-      if (!/\d/.test(pwd)) return "Password must contain at least one number (0-9)";
-      if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pwd)) return "Password must contain at least one special character (!@#$%...)";
-      return null;
-    };
-
-    const policyError = validateStrongPassword(forgotNewPassword.trim());
-    if (policyError) {
-      toast.error(policyError);
+    if (!forgotNewPassword.trim()) {
+      toast.error("Please enter a new password");
       return;
     }
     if (forgotNewPassword !== forgotConfirmPassword) {
@@ -428,7 +418,7 @@ const MemberLogin = () => {
                       <Input
                         id="forgot-new-password"
                         type={showForgotNewPassword ? "text" : "password"}
-                        placeholder="Enter at least 6 characters"
+                        placeholder="Enter new password"
                         value={forgotNewPassword}
                         onChange={(e) => setForgotNewPassword(e.target.value)}
                         className="pl-10 pr-10"

@@ -132,6 +132,8 @@ export const loginStep2 = createAsyncThunk(
           settings_audit: false,
           redemption_reversal: false,
         },
+        must_change_password: !!userData.must_change_password,
+        password_changed_at: userData.password_changed_at || null,
         outlet: null,
       };
 
@@ -236,6 +238,12 @@ const authSlice = createSlice({
       }
       localStorage.setItem('user', JSON.stringify(action.payload.user));
     },
+    clearMustChangePassword: (state) => {
+      if (state.user) {
+        state.user.must_change_password = false;
+        localStorage.setItem('user', JSON.stringify(state.user));
+      }
+    },
   },
   extraReducers: (builder) => {
     // Step 1
@@ -293,6 +301,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, clearError, resetOtpStep, updateProfileSuccess, setCustomerAuth } = authSlice.actions;
+export const { logout, clearError, resetOtpStep, updateProfileSuccess, setCustomerAuth, clearMustChangePassword } = authSlice.actions;
 export default authSlice.reducer;
 

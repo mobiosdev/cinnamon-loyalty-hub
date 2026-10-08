@@ -36,6 +36,8 @@ export interface User {
   is_customer?: boolean;
   member_data?: any;
   member_code?: string;
+  must_change_password?: boolean;
+  password_changed_at?: string | null;
 }
 
 export interface AuthState {
