@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   User, ChevronDown, LogOut, CreditCard, Gift, History, Phone, Mail, Building2,
-  Sparkles, CalendarDays, Receipt, Percent, RefreshCw,
+  Sparkles, CalendarDays, Receipt, Percent, RefreshCw, Clock,
 } from "lucide-react";
 import cinnamonLogo from "@/assets/cinnamon-logo.png";
 
@@ -328,11 +328,36 @@ const MemberPortal = () => {
                   </Card>
                 )} */}
 
-                <Tabs defaultValue="available">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="available">Available Benefits ({currentOffers.length})</TabsTrigger>
-                    <TabsTrigger value="past">Past Benefits ({pastOffers.length})</TabsTrigger>
-                  </TabsList>
+                <div className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5 space-y-4 shadow-sm">
+                  <Tabs defaultValue="available" className="w-full space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/50">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-amber-500" />
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Filter Offers
+                        </h3>
+                      </div>
+                      <TabsList className="grid w-full sm:w-[360px] grid-cols-2 rounded-xl bg-muted/80 p-1 text-muted-foreground h-10 border border-border/40">
+                        <TabsTrigger
+                          value="available"
+                          className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition-all cursor-pointer data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+                        >
+                          <span>Available Benefits</span>
+                          <span className="inline-flex items-center justify-center rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                            {currentOffers.length}
+                          </span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="past"
+                          className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition-all cursor-pointer data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+                        >
+                          <span>Past Benefits</span>
+                          <span className="inline-flex items-center justify-center rounded-full bg-muted-foreground/20 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+                            {pastOffers.length}
+                          </span>
+                        </TabsTrigger>
+                      </TabsList>
+                    </div>
                   {(["available", "past"] as const).map((benefitsTab) => {
                     const list = benefitsTab === "available" ? currentOffers : pastOffers;
                     return (
@@ -354,6 +379,7 @@ const MemberPortal = () => {
                     );
                   })}
                 </Tabs>
+              </div>
               </>
             )}
           </TabsContent>
