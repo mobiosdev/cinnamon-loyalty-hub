@@ -1503,6 +1503,14 @@ const CompanyRegistration = () => {
                   )}
                 </Button>
               </div>
+              <div className="text-right pt-2">
+                <span className="text-[11px] text-muted-foreground">
+                  Personal data is protected under the Sri Lanka PDPA No. 9 of 2022.{" "}
+                  <a href="/privacy" target="_blank" rel="noreferrer" className="text-primary underline hover:text-primary/80">
+                    View Statutory Privacy Notice
+                  </a>
+                </span>
+              </div>
             </div>
           </form>
           </CardContent>

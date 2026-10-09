@@ -648,9 +648,13 @@ export default function DigitalCard() {
               <Phone className="w-3 h-3 text-[#f0c040]" /> +94 11 249 7200
             </span>
           </div>
-          <p className="text-[10px] text-white/40 pt-2 border-t border-white/5">
-            © {new Date().getFullYear()} Cinnamon Hotels & Resorts. All rights reserved.
-          </p>
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] text-white/50 pt-2 border-t border-white/5">
+            <span>© {new Date().getFullYear()} Cinnamon Hotels & Resorts. All rights reserved.</span>
+            <span>•</span>
+            <Link to="/privacy" className="hover:text-[#f0c040] underline underline-offset-2">
+              Privacy Notice &amp; Data Rights
+            </Link>
+          </div>
         </footer>
 
       </div>

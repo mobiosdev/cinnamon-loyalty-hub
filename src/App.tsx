@@ -11,6 +11,7 @@ import MemberLogin from "./pages/MemberLogin";
 import MemberPortal from "./pages/MemberPortal";
 import DigitalCard from "./pages/DigitalCard";
 import SetPassword from "./pages/SetPassword";
+import PrivacyNotice from "./pages/PrivacyNotice";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/set-password" element={<SetPassword />} />
             <Route path="/card/:id" element={<DigitalCard />} />
             <Route path="/card" element={<NotFound />} />
+            <Route path="/privacy" element={<PrivacyNotice />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

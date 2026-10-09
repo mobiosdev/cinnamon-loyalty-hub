@@ -251,6 +251,34 @@ export const staffApi = {
     return apiManager.put(`/members/${memberId}/marketing-preferences`, preferences);
   },
 
+  async exportMemberData(memberId: string): Promise<any> {
+    return apiManager.get(`/members/${memberId}/export`);
+  },
+
+  async submitDsarRequest(request: {
+    requester_name: string;
+    requester_email?: string;
+    requester_phone?: string;
+    member_code?: string;
+    member_id?: string;
+    request_type: string;
+    channel?: string;
+  }): Promise<any> {
+    return apiManager.post('/members/dsar', request);
+  },
+
+  async getDsarRequests(filters?: { status?: string; request_type?: string }): Promise<any[]> {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.request_type) params.append('request_type', filters.request_type);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return apiManager.get(`/members/dsar/list${qs}`);
+  },
+
+  async updateDsarRequest(id: string, update: { status?: string; outcome_notes?: string; assigned_to?: number }): Promise<any> {
+    return apiManager.put(`/members/dsar/${id}`, update);
+  },
+
   async logout(): Promise<void> {
     try {
       await apiManager.post('/users/logout', {});

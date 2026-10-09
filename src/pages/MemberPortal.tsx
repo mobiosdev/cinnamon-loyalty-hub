@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { format, parseISO, startOfDay, endOfDay } from "date-fns";
+import { toast } from "sonner";
 import { AppDispatch, RootState } from "@/store";
 import { logout } from "@/store/slices/authSlice";
 import { logActivity } from "@/utils/auditLogger";
@@ -9,10 +10,11 @@ import { staffApi, MemberPortalData, PortalOffer } from "@/services/staffApi";
 import { MembershipCard } from "@/components/discount/MembershipCard";
 import { ForcedPasswordChangeModal } from "@/components/discount/ForcedPasswordChangeModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   DropdownMenu,
@@ -23,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   User, ChevronDown, LogOut, CreditCard, Gift, History, Phone, Mail, Building2,
-  Sparkles, CalendarDays, Receipt, Percent, RefreshCw,
+  Sparkles, CalendarDays, Receipt, Percent, RefreshCw, ShieldCheck, Download, ExternalLink,
 } from "lucide-react";
 import cinnamonLogo from "@/assets/cinnamon-logo.png";
 
@@ -111,6 +113,11 @@ const MemberPortal = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCardOpen, setIsCardOpen] = useState(false);
+  const [consentSms, setConsentSms] = useState(false);
+  const [consentWhatsapp, setConsentWhatsapp] = useState(false);
+  const [consentEmail, setConsentEmail] = useState(false);
+  const [savingConsent, setSavingConsent] = useState(false);
+  const [downloadingData, setDownloadingData] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) navigate("/login-member", { replace: true });
@@ -122,12 +129,57 @@ const MemberPortal = () => {
     setLoading(true);
     setError(null);
     try {
-      setData(await staffApi.getMemberPortalData(user.id));
+      const portalData = await staffApi.getMemberPortalData(user.id);
+      setData(portalData);
+      if (portalData?.member) {
+        setConsentSms(!!portalData.member.consent_marketing_sms);
+        setConsentWhatsapp(!!portalData.member.consent_marketing_whatsapp);
+        setConsentEmail(!!portalData.member.consent_marketing_email);
+      }
     } catch (err) {
       const e = err as { response?: { data?: { message?: string } }; message?: string };
       setError(e?.response?.data?.message || e?.message || "Unable to load your member portal.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSavePreferences = async (targetMemberId: string) => {
+    if (!targetMemberId) return;
+    try {
+      setSavingConsent(true);
+      await staffApi.updateMarketingPreferences(targetMemberId, {
+        consent_marketing_sms: consentSms,
+        consent_marketing_whatsapp: consentWhatsapp,
+        consent_marketing_email: consentEmail,
+      });
+      toast.success("Marketing preferences updated successfully.");
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update preferences.");
+    } finally {
+      setSavingConsent(false);
+    }
+  };
+
+  const handleDownloadMyData = async (targetMemberId: string) => {
+    if (!targetMemberId) return;
+    try {
+      setDownloadingData(true);
+      const exportPayload = await staffApi.exportMemberData(targetMemberId);
+      const jsonStr = JSON.stringify(exportPayload, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cinnamon_loyalty_data_${user?.member_code || "member"}_${format(new Date(), "yyyy-MM-dd")}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Your personal data export has downloaded successfully.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to download your data.");
+    } finally {
+      setDownloadingData(false);
     }
   };
 
@@ -215,6 +267,12 @@ const MemberPortal = () => {
                 <CreditCard className="mr-2 h-4 w-4" />
                 My Membership Card
               </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/privacy" className="cursor-pointer flex items-center">
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                  Privacy Notice &amp; Rights
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
@@ -294,7 +352,7 @@ const MemberPortal = () => {
         )}
 
         <Tabs defaultValue="offers">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="offers" className="text-xs sm:text-sm">
               <Gift className="mr-2 h-4 w-4" />
               Offers &amp; Privileges{!loading && ` (${availableCount})`}
@@ -302,6 +360,10 @@ const MemberPortal = () => {
             <TabsTrigger value="history" className="text-xs sm:text-sm">
               <History className="mr-2 h-4 w-4" />
               Redeemed History{!loading && ` (${history.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="privacy" className="text-xs sm:text-sm">
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              Privacy &amp; Data Rights
             </TabsTrigger>
           </TabsList>
 
@@ -408,6 +470,112 @@ const MemberPortal = () => {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* Privacy, Preferences & Portability */}
+          <TabsContent value="privacy" className="space-y-6 mt-4">
+            {/* Communication Preferences */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-primary" /> Direct Marketing &amp; Communication Preferences
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Under Section 17 of the Sri Lanka Personal Data Protection Act No. 9 of 2022, promotional communications require your affirmative consent. Choose which channels you wish to receive updates from.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-semibold">SMS Marketing</div>
+                    <div className="text-xs text-muted-foreground">Receive exclusive flash offers and event notices via SMS.</div>
+                  </div>
+                  <Switch
+                    checked={consentSms}
+                    onCheckedChange={setConsentSms}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-semibold">WhatsApp Promotions</div>
+                    <div className="text-xs text-muted-foreground">Receive digital dining vouchers and special event passes via WhatsApp.</div>
+                  </div>
+                  <Switch
+                    checked={consentWhatsapp}
+                    onCheckedChange={setConsentWhatsapp}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-semibold">Email Updates</div>
+                    <div className="text-xs text-muted-foreground">Receive monthly loyalty statements and hotel news.</div>
+                  </div>
+                  <Switch
+                    checked={consentEmail}
+                    onCheckedChange={setConsentEmail}
+                  />
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <Button
+                    onClick={() => handleSavePreferences(member?.id)}
+                    disabled={savingConsent}
+                    className="text-xs font-semibold"
+                  >
+                    {savingConsent ? "Saving..." : "Save Preferences"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Data Portability / Subject Rights */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-primary" /> Data Subject Rights &amp; Portability
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Under Sri Lanka PDPA Section 13, you have the right to access and export your personal data held in the loyalty platform.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-3 rounded-lg border bg-muted/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold">Download Personal Data Record</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Export your profile details, category privileges, and complete redemption logs in structured JSON format.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDownloadMyData(member?.id)}
+                    disabled={downloadingData}
+                    className="gap-2 shrink-0 text-xs"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    {downloadingData ? "Exporting..." : "Download My Data"}
+                  </Button>
+                </div>
+
+                <div className="p-3 rounded-lg border bg-muted/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold">Statutory Privacy Notice &amp; Rights Intake</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      View controller identity, lawful processing bases, or submit formal rectification/erasure requests.
+                    </p>
+                  </div>
+                  <Link to="/privacy">
+                    <Button variant="ghost" size="sm" className="gap-2 text-xs">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      View Privacy Notice
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </main>

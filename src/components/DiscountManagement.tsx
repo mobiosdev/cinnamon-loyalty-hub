@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Building2, CreditCard, FileText, BarChart3, Settings, ChevronDown, Gift, Users, Shield, MessageSquare, UserCog, LogOut, User, Sparkles, CheckCircle2, Phone, Mail, Download } from "lucide-react";
+import { Building2, CreditCard, FileText, BarChart3, Settings, ChevronDown, Gift, Users, Shield, MessageSquare, UserCog, LogOut, User, Sparkles, CheckCircle2, Phone, Mail, Download, ShieldCheck } from "lucide-react";
 import CompanyRegistration from "./discount/CompanyRegistration";
 import Redemption from "./discount/Redemption";
 import TransactionTracking from "./discount/TransactionTracking";
@@ -17,6 +17,7 @@ import CustomerCategoryManagement from "./discount/CustomerCategoryManagement";
 import { AuditTrail } from "./discount/AuditTrail";
 import SendNotifications from "./discount/SendNotifications";
 import UserManagement from "./discount/UserManagement";
+import DsarManagement from "./discount/DsarManagement";
 import ProfileDialog from "./discount/ProfileDialog";
 import { ForcedPasswordChangeModal } from "./discount/ForcedPasswordChangeModal";
 import { MembershipCard } from "./discount/MembershipCard";
@@ -76,6 +77,7 @@ const DiscountManagement = () => {
       case "categories": return permissions.settings_categories;
       case "notifications": return permissions.settings_notifications;
       case "audit": return permissions.settings_audit;
+      case "dsar": return isSuperAdmin || permissions.registration || permissions.settings_audit;
       case "usermanagement": return false;
       default: return false;
     }
@@ -86,7 +88,8 @@ const DiscountManagement = () => {
     permissions?.settings_categories || 
     permissions?.settings_offers || 
     permissions?.settings_notifications || 
-    permissions?.settings_audit
+    permissions?.settings_audit ||
+    permissions?.registration
   );
 
   const handleTabChange = (tab: string) => {
@@ -108,7 +111,7 @@ const DiscountManagement = () => {
     window.location.href = isMember ? "/login-member" : "/login";
   };
 
-  const settingsActive = ["offers", "categories", "audit", "notifications", "usermanagement"].includes(activeTab);
+  const settingsActive = ["offers", "categories", "audit", "notifications", "dsar", "usermanagement"].includes(activeTab);
 
   return (
     <div className="min-h-screen bg-background">
@@ -244,6 +247,12 @@ const DiscountManagement = () => {
                         Audit Trail
                       </DropdownMenuItem>
                     )}
+                    {(isSuperAdmin || permissions?.registration || permissions?.settings_audit) && (
+                      <DropdownMenuItem onClick={() => setActiveTab("dsar")} className="cursor-pointer">
+                        <ShieldCheck className="mr-2 h-4 w-4" />
+                        Privacy &amp; DSAR Requests
+                      </DropdownMenuItem>
+                    )}
                     {isSuperAdmin && (
                       <>
                         <DropdownMenuSeparator />
@@ -287,6 +296,10 @@ const DiscountManagement = () => {
 
           <TabsContent value="audit" className="mt-0 space-y-4">
             {canAccess("audit") ? <AuditTrail parentActiveTab={activeTab} /> : <AccessDenied />}
+          </TabsContent>
+
+          <TabsContent value="dsar" className="mt-0 space-y-4">
+            {canAccess("dsar") ? <DsarManagement /> : <AccessDenied />}
           </TabsContent>
 
           <TabsContent value="notifications" className="mt-0 space-y-4">

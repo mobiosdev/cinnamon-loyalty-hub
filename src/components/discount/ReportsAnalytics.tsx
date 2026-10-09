@@ -20,6 +20,14 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+// Defend against CSV/Formula Injection attacks
+const sanitizeSpreadsheetCell = (val: any): any => {
+  if (typeof val === 'string' && /^[=+\-@\t\r]/.test(val.trim())) {
+    return `'${val}`;
+  }
+  return val;
+};
+
 interface ReportStats {
   totalMembers: number;
   activeMembers: number;
@@ -293,8 +301,11 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
             const offer = allOffers?.find(o => o.id === offerId);
             if (!offer) return null;
             
-            // Get all redemptions for this member and offer with normalized phone comparison
+            // Get all redemptions for this member and offer (primary match by member_id, fallback to phone)
             const redemptions = offerRedemptionsData?.filter(r => {
+              if (r.member_id && member.id && r.member_id === member.id) {
+                return r.offer_id === offerId;
+              }
               const normalizedRedemptionPhone = r.customer_phone?.replace(/[\s+]/g, '').trim();
               return normalizedRedemptionPhone === normalizedMemberPhone && r.offer_id === offerId;
             }) || [];
@@ -321,8 +332,11 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
           })
           .filter(Boolean);
         
-        // Get discount redemptions for this member
+        // Get discount redemptions for this member (primary match by member_id, fallback to phone)
         const memberDiscountRedemptions = discountRedemptionsData?.filter(r => {
+          if (r.member_id && member.id && r.member_id === member.id) {
+            return true;
+          }
           const normalizedRedemptionPhone = r.customer_phone?.replace(/[\s+]/g, '').trim();
           return normalizedRedemptionPhone === normalizedMemberPhone;
         }) || [];
@@ -507,19 +521,19 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
       const offerRedemptions = member.assignedOffers.reduce((sum: number, o: any) => sum + o.redemptionCount, 0);
       
       return {
-        'Member Code': member.memberCode,
-        'Name': `${member.firstName} ${member.lastName}`,
-        'Mobile': member.mobile,
-        'Category': member.categoryName,
-        'Status': member.isActive ? 'Active' : 'Inactive',
-        'Assigned Offers': offerNames || 'None',
+        'Member Code': sanitizeSpreadsheetCell(member.memberCode),
+        'Name': sanitizeSpreadsheetCell(`${member.firstName} ${member.lastName}`),
+        'Mobile': sanitizeSpreadsheetCell(member.mobile),
+        'Category': sanitizeSpreadsheetCell(member.categoryName),
+        'Status': sanitizeSpreadsheetCell(member.isActive ? 'Active' : 'Inactive'),
+        'Assigned Offers': sanitizeSpreadsheetCell(offerNames || 'None'),
         'Total Offer Redemptions': offerRedemptions,
-        'Discount Policy': member.discountPolicy,
-        'Discount Value': member.discountPolicy === 'percentage' 
+        'Discount Policy': sanitizeSpreadsheetCell(member.discountPolicy),
+        'Discount Value': sanitizeSpreadsheetCell(member.discountPolicy === 'percentage' 
           ? `${member.discountPercentage}%` 
-          : `Rs ${member.discountAmount}`,
+          : `Rs ${member.discountAmount}`),
         'Total Discount Redemptions': member.discountRedemptions.length,
-        'Match Status': member.status
+        'Match Status': sanitizeSpreadsheetCell(member.status)
       };
     });
 
@@ -543,16 +557,25 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
       ['Total Discount Value', `Rs ${stats.totalDiscountValue.toFixed(2)}`],
       ['Offer Redemptions', stats.totalOfferRedemptions],
       ['Average Discount', `Rs ${stats.averageDiscount.toFixed(2)}`],
-      ['Top Company', stats.topCompany],
-      ['Top Category', stats.topCategory],
+      ['Top Company', sanitizeSpreadsheetCell(stats.topCompany)],
+      ['Top Category', sanitizeSpreadsheetCell(stats.topCategory)],
       [],
       ['Top Companies'],
       ['Company', 'Transactions', 'Amount'],
-      ...companyData.map(c => [c.name, c.transactions, `Rs ${c.amount.toFixed(2)}`])
+      ...companyData.map(c => [sanitizeSpreadsheetCell(c.name), c.transactions, `Rs ${c.amount.toFixed(2)}`])
     ];
 
-    const csv = csvData.map(row => row.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const formatCsvValue = (val: any) => {
+      const sanitized = sanitizeSpreadsheetCell(val);
+      const str = sanitized === null || sanitized === undefined ? '' : String(sanitized);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const csv = csvData.map(row => row.map(formatCsvValue).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
