@@ -130,4 +130,8 @@ export const userApi = {
   async updateProfile(payload: UpdateProfilePayload): Promise<SystemUser> {
     return apiManager.put<SystemUser>('/system-users/profile', payload);
   },
+
+  async changePassword(currentPassword: string, password: string): Promise<{ success: boolean }> {
+    return apiManager.put<{ success: boolean }>('/system-users/profile/password', { currentPassword, password });
+  },
 };

@@ -18,6 +18,7 @@ import { AuditTrail } from "./discount/AuditTrail";
 import SendNotifications from "./discount/SendNotifications";
 import UserManagement from "./discount/UserManagement";
 import ProfileDialog from "./discount/ProfileDialog";
+import { ForcedPasswordChangeModal } from "./discount/ForcedPasswordChangeModal";
 import { MembershipCard } from "./discount/MembershipCard";
 import cinnamonLogo from "@/assets/cinnamon-logo.png";
 import { staffApi } from "@/services/staffApi";
@@ -299,6 +300,7 @@ const DiscountManagement = () => {
       </Tabs>
 
       <ProfileDialog open={isProfileOpen} onOpenChange={setIsProfileOpen} />
+      <ForcedPasswordChangeModal />
 
       {isMember && (
         <MembershipCard

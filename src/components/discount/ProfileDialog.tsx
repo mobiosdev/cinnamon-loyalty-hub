@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Eye, EyeOff, User, Mail, Phone, Lock, Loader2 } from "lucide-react";
 import { logActivity } from "@/utils/auditLogger";
+import { validatePasswordPolicy } from "@/utils/passwordPolicy";
 
 interface ProfileDialogProps {
   open: boolean;
@@ -82,6 +83,16 @@ export default function ProfileDialog({ open, onOpenChange }: ProfileDialogProps
       };
 
       if (password) {
+        const isPrivileged = ["admin", "superadmin"].includes(currentUser?.role || "");
+        const policyResult = validatePasswordPolicy(password, isPrivileged, [
+          currentUser?.username || "",
+          currentUser?.email || "",
+          currentUser?.full_name || "",
+        ]);
+        if (!policyResult.isValid) {
+          toast.error(policyResult.message);
+          return;
+        }
         payload.password = password;
       }
 

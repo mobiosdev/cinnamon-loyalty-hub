@@ -7,6 +7,7 @@ import { logout } from "@/store/slices/authSlice";
 import { logActivity } from "@/utils/auditLogger";
 import { staffApi, MemberPortalData, PortalOffer } from "@/services/staffApi";
 import { MembershipCard } from "@/components/discount/MembershipCard";
+import { ForcedPasswordChangeModal } from "@/components/discount/ForcedPasswordChangeModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -454,6 +455,7 @@ const MemberPortal = () => {
               }
         }
       />
+      <ForcedPasswordChangeModal />
     </div>
   );
 };

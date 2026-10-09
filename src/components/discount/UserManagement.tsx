@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import { UserPlus, Pencil, RefreshCw, Eye, EyeOff, Users, Shield, ShieldCheck, Trash2, Clock, Activity, Building2, FileText, Gift, ChevronLeft, ChevronRight, ChevronDown, UserCircle2 } from "lucide-react";
 import { userApi, SystemUser, SystemRole, CreateUserPayload, UpdateUserPayload, CreateRolePayload, UpdateRolePayload, UserPermissions } from "@/services/userApi";
+import { validatePasswordPolicy } from "@/utils/passwordPolicy";
 import { auditApi, AuditLog } from "@/services/auditApi";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -271,6 +272,13 @@ const UserManagement = ({ onViewLogs }: UserManagementProps) => {
     if (!userForm.full_name.trim()) { toast.error("Full name is required"); return; }
     if (!editingUser && !userForm.username.trim()) { toast.error("Username is required"); return; }
     if (!editingUser && !userForm.password.trim()) { toast.error("Password is required"); return; }
+    if (userForm.password.trim()) {
+      const policyResult = validatePasswordPolicy(userForm.password.trim(), true, [userForm.username, userForm.email, userForm.full_name]);
+      if (!policyResult.isValid) {
+        toast.error(policyResult.message);
+        return;
+      }
+    }
     if (!userForm.mobile.trim()) { toast.error("Mobile number is required for OTP"); return; }
 
     setUserSubmitting(true);

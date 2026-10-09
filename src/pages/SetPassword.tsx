@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import cinnamonLogo from "@/assets/cinnamon-logo.png";
 import { staffApi } from "@/services/staffApi";
 import { Shield, Eye, EyeOff, CheckCircle2, AlertCircle, ArrowRight, UserCheck } from "lucide-react";
+import { validatePasswordPolicy } from "@/utils/passwordPolicy";
 
 const SetPassword = () => {
   const [searchParams] = useSearchParams();
@@ -65,21 +66,13 @@ const SetPassword = () => {
     checkToken();
   }, [token]);
 
-  const validateStrongPassword = (pwd: string) => {
-    if (pwd.length < 12) return "Password must be at least 12 characters long";
-    if (!/[A-Z]/.test(pwd)) return "Password must contain at least one uppercase letter (A-Z)";
-    if (!/[a-z]/.test(pwd)) return "Password must contain at least one lowercase letter (a-z)";
-    if (!/\d/.test(pwd)) return "Password must contain at least one number (0-9)";
-    if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pwd)) return "Password must contain at least one special character (!@#$%...)";
-    return null;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const policyError = validateStrongPassword(newPassword);
-    if (policyError) {
-      toast.error(policyError);
+    const identityList = [memberInfo?.email, memberInfo?.name, memberInfo?.member_code].filter(Boolean) as string[];
+    const policyResult = validatePasswordPolicy(newPassword, false, identityList);
+    if (!policyResult.isValid) {
+      toast.error(policyResult.message);
       return;
     }
 
@@ -212,12 +205,12 @@ const SetPassword = () => {
                     <Input
                       id="new-password"
                       type={showPassword ? "text" : "password"}
-                      placeholder="Enter new password (min. 12 chars)"
+                      placeholder="Enter new password (min. 8 chars)"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       className="pl-10 pr-10"
                       required
-                      minLength={12}
+                      minLength={8}
                     />
                     <button
                       type="button"
@@ -241,7 +234,7 @@ const SetPassword = () => {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className="pl-10 pr-10"
                       required
-                      minLength={6}
+                      minLength={8}
                     />
                     <button
                       type="button"
