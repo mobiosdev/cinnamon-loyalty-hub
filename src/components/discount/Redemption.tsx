@@ -45,6 +45,7 @@ interface AvailableOffer {
   is_redeemed: boolean;
   min_bill_value?: number;
   max_discount_amount?: number;
+  offer_value?: number | null;
   valid_from?: string;
   valid_to?: string;
   is_recurrent?: boolean;
@@ -54,6 +55,7 @@ interface AvailableOffer {
     id: string;
     redeemed_at: string;
     bill_number?: string;
+    offer_value?: number | null;
   }>;
 }
 
@@ -499,7 +501,8 @@ const Redemption = () => {
               {
                 id: Math.random().toString(),
                 redeemed_at: new Date().toISOString(),
-                bill_number: billNumber || undefined
+                bill_number: billNumber || undefined,
+                offer_value: o.offer_value ?? undefined
               },
               ...(o.redemptions || [])
             ];
@@ -568,7 +571,7 @@ const Redemption = () => {
   const refreshAvailableOffers = async (mobile: string) => {
     try {
       const cleanMobile = mobile.trim();
-      const offers = await offerApi.getAvailableOffers(cleanMobile);
+      const offers = await offerApi.getAvailableOffers(cleanMobile, true);
       setAvailableOffers(offers.offers || []);
     } catch (error) {
       console.error("Error refreshing available offers:", error);
@@ -1176,10 +1179,23 @@ const Redemption = () => {
                               >
                                 {isExpired ? "Expired" : isRedeemed ? "Used" : isUpcoming ? "Upcoming" : "Active"}
                               </Badge>
+                              {offer.offer_value !== undefined && offer.offer_value !== null && Number(offer.offer_value) > 0 && (
+                                <Badge 
+                                  variant="outline" 
+                                  className="text-[10px] py-0 px-2 font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                                >
+                                  Value: LKR {Number(offer.offer_value).toLocaleString()}
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-xs text-muted-foreground mt-1">{offer.description}</p>
                             
                             <div className="flex flex-col gap-1 mt-2 text-[11px] text-muted-foreground">
+                              {offer.offer_value !== undefined && offer.offer_value !== null && Number(offer.offer_value) > 0 && (
+                                <p className="font-semibold text-amber-700 dark:text-amber-400">
+                                  Benefit Value: LKR {Number(offer.offer_value).toLocaleString()}
+                                </p>
+                              )}
                               <p className="font-medium text-foreground/80">
                                 {recurrenceText}
                               </p>
@@ -1208,7 +1224,14 @@ const Redemption = () => {
                                   {offer.redemptions.map((redemption: any) => (
                                     <div key={redemption.id} className="flex justify-between items-center text-[10px] text-muted-foreground bg-muted/30 p-1.5 rounded">
                                       <span>Redeemed: {new Date(redemption.redeemed_at).toLocaleDateString()}</span>
-                                      {redemption.bill_number && <span className="font-mono">Bill: #{redemption.bill_number}</span>}
+                                      <div className="flex items-center gap-2">
+                                        {redemption.offer_value !== undefined && redemption.offer_value !== null && Number(redemption.offer_value) > 0 && (
+                                          <span className="font-medium text-amber-700 dark:text-amber-400">
+                                            LKR {Number(redemption.offer_value).toLocaleString()}
+                                          </span>
+                                        )}
+                                        {redemption.bill_number && <span className="font-mono">Bill: #{redemption.bill_number}</span>}
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -1269,23 +1292,27 @@ const Redemption = () => {
           <Button onClick={handleReset} variant="outline" size="lg" className="flex-1">
             Cancel / Reset
           </Button>
-          {queuedOffers.size > 0 && (
-            <Button
-              onClick={handleProcessRedemption}
-              disabled={loading}
-              size="lg"
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                `Complete Redemption (${queuedOffers.size})`
-              )}
-            </Button>
-          )}
+          {queuedOffers.size > 0 && (() => {
+            const queuedList = availableOffers.filter(o => queuedOffers.has(o.id));
+            const totalQueuedVal = queuedList.reduce((sum, o) => sum + (Number(o.offer_value) || 0), 0);
+            return (
+              <Button
+                onClick={handleProcessRedemption}
+                disabled={loading}
+                size="lg"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  `Complete Redemption (${queuedOffers.size}${totalQueuedVal > 0 ? ` • LKR ${totalQueuedVal.toLocaleString()}` : ''})`
+                )}
+              </Button>
+            );
+          })()}
         </div>
 
         {/* Discount History Section */}

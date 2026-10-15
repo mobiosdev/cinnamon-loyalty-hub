@@ -27,6 +27,7 @@ export interface Transaction {
   status?: string;
   type: 'discount' | 'offer';
   offer_name?: string;
+  offer_value?: number;
 }
 
 interface TransactionFilters {

@@ -229,7 +229,7 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
       t.type,
       t.type === 'discount' 
         ? `${t.discount_type === 'percentage' ? t.discount_value + '%' : 'Rs ' + t.discount_value}${t.discount_amount > 0 ? ' (Saved: Rs ' + t.discount_amount.toFixed(2) + ')' : ''}`
-        : t.offer_name,
+        : `${t.offer_name}${t.offer_value ? ' (Value: Rs ' + Number(t.offer_value).toFixed(2) + ')' : (t.discount_amount > 0 ? ' (Value: Rs ' + Number(t.discount_amount).toFixed(2) + ')' : '')}`,
       t.status === 'reversed' ? 'Reversed' : 'Redeemed',
       new Date(t.redeemed_at).toLocaleString()
     ]);
@@ -255,7 +255,7 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
         'Type': t.type,
         'Details': t.type === 'discount' 
           ? `${t.discount_type === 'percentage' ? t.discount_value + '%' : 'Rs ' + t.discount_value}${t.discount_amount > 0 ? ' (Saved: Rs ' + t.discount_amount.toFixed(2) + ')' : ''}`
-          : t.offer_name,
+          : `${t.offer_name}${t.offer_value ? ' (Value: Rs ' + Number(t.offer_value).toFixed(2) + ')' : (t.discount_amount > 0 ? ' (Value: Rs ' + Number(t.discount_amount).toFixed(2) + ')' : '')}`,
         'Status': t.status === 'reversed' ? 'Reversed' : 'Redeemed',
         'Date & Time': new Date(t.redeemed_at).toLocaleString()
       }))
@@ -283,7 +283,7 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
       t.type,
       t.type === 'discount' 
         ? `${t.discount_type === 'percentage' ? t.discount_value + '%' : 'Rs ' + t.discount_value}`
-        : t.offer_name,
+        : `${t.offer_name}${t.offer_value ? ' (Value: Rs ' + Number(t.offer_value).toFixed(0) + ')' : (t.discount_amount > 0 ? ' (Value: Rs ' + Number(t.discount_amount).toFixed(0) + ')' : '')}`,
       t.status === 'reversed' ? 'Reversed' : 'Redeemed',
       format(new Date(t.redeemed_at), 'PP')
     ]);
@@ -594,7 +594,14 @@ const TransactionTracking = ({ activeTab }: TransactionTrackingProps) => {
                           )}
                         </div>
                       ) : (
-                        <span className="font-medium">{transaction.offer_name}</span>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{transaction.offer_name}</span>
+                          {((transaction.offer_value !== undefined && transaction.offer_value !== null && Number(transaction.offer_value) > 0) || (transaction.discount_amount > 0)) && (
+                            <span className="text-xs text-muted-foreground">
+                              Value: Rs {Number(transaction.offer_value || transaction.discount_amount).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell>{getStatusBadge(transaction.status)}</TableCell>

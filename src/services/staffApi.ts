@@ -38,12 +38,13 @@ export interface PortalOffer {
   valid_to?: string;
   min_bill_value: number | null;
   max_discount_amount: number | null;
+  offer_value?: number | null;
   is_recurrent: boolean;
   usage_limit: number | null;
   redemptions_count: number;
   remaining_uses: number | null;
   is_redeemed: boolean;
-  redemptions: { id: string; redeemed_at: string; bill_number: string | null }[];
+  redemptions: { id: string; redeemed_at: string; bill_number: string | null; offer_value?: number | null }[];
 }
 
 export interface PortalRedemption {
@@ -55,6 +56,7 @@ export interface PortalRedemption {
   discount_type: string | null;
   discount_value: number | null;
   discount_amount: number | null;
+  offer_value?: number | null;
   status: string;
 }
 

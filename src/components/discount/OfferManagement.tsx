@@ -78,6 +78,7 @@ const OfferManagement = () => {
     description: "",
     valid_from: "",
     valid_until: "",
+    offer_value: "",
     hasMinBillValue: false,
     min_bill_value: "",
     hasMaxDiscount: false,
@@ -92,6 +93,7 @@ const OfferManagement = () => {
     description: "",
     valid_from: "",
     valid_to: "",
+    offer_value: "",
     hasMinBillValue: false,
     min_bill_value: "",
     hasMaxDiscount: false,
@@ -214,6 +216,10 @@ const OfferManagement = () => {
       toast.error("Please enter a valid maximum discount amount");
       return;
     }
+    if (formData.offer_value && (isNaN(parseFloat(formData.offer_value)) || parseFloat(formData.offer_value) < 0)) {
+      toast.error("Please enter a valid LKR value for the offer");
+      return;
+    }
 
     // Validate recurrence settings for each selected category
     for (const catId of selectedCategoryIds) {
@@ -246,6 +252,7 @@ const OfferManagement = () => {
         description: serializedDescription,
         valid_from: formData.valid_from,
         valid_to: formData.valid_until,
+        offer_value: formData.offer_value ? parseFloat(formData.offer_value) : undefined,
         is_active: true,
         category_ids: selectedCategoryIds, // Associate with ALL selected categories!
         category_id: firstCatId,
@@ -265,6 +272,7 @@ const OfferManagement = () => {
         categories: catNames,
         valid_from: formData.valid_from,
         valid_to: formData.valid_until,
+        offer_value: formData.offer_value || null,
         min_bill_value: formData.hasMinBillValue ? formData.min_bill_value : null,
         max_discount_amount: formData.hasMaxDiscount ? formData.max_discount_amount : null,
       });
@@ -288,6 +296,7 @@ const OfferManagement = () => {
         description: "", 
         valid_from: "", 
         valid_until: "",
+        offer_value: "",
         hasMinBillValue: false,
         min_bill_value: "",
         hasMaxDiscount: false,
@@ -342,6 +351,7 @@ const OfferManagement = () => {
       description: cleanDescription || "",
       valid_from: toDateInputValue(offer.valid_from),
       valid_to: toDateInputValue(offer.valid_to),
+      offer_value: offer.offer_value !== null && offer.offer_value !== undefined ? offer.offer_value.toString() : "",
       hasMinBillValue: !!offer.min_bill_value,
       min_bill_value: offer.min_bill_value?.toString() || "",
       hasMaxDiscount: !!offer.max_discount_amount,
@@ -401,6 +411,10 @@ const OfferManagement = () => {
       toast.error("Please enter a valid maximum discount amount");
       return;
     }
+    if (editFormData.offer_value && (isNaN(parseFloat(editFormData.offer_value)) || parseFloat(editFormData.offer_value) < 0)) {
+      toast.error("Please enter a valid LKR value for the offer");
+      return;
+    }
 
     // Validate recurrence settings for each selected category in Edit Form
     for (const catId of editSelectedCategoryIds) {
@@ -433,6 +447,7 @@ const OfferManagement = () => {
         description: serializedDescription,
         valid_from: editFormData.valid_from,
         valid_to: editFormData.valid_to,
+        offer_value: editFormData.offer_value ? parseFloat(editFormData.offer_value) : null,
         category_ids: editSelectedCategoryIds, // Associate with ALL selected categories!
         category_id: firstCatId,
         min_bill_value: editFormData.hasMinBillValue ? parseFloat(editFormData.min_bill_value) : null,
@@ -446,6 +461,7 @@ const OfferManagement = () => {
         categories: editSelectedCategoryIds.map(id => categories.find(c => c.id === id)?.name).join(', '),
         valid_from: editFormData.valid_from,
         valid_to: editFormData.valid_to,
+        offer_value: editFormData.offer_value || null,
         previous_name: editingOffer.name,
       });
       
@@ -666,7 +682,7 @@ const OfferManagement = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="name">Offer Name *</Label>
                 <Input
@@ -675,6 +691,21 @@ const OfferManagement = () => {
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g., Birthday Cake, Dinner Voucher"
                 />
+              </div>
+              <div>
+                <Label htmlFor="offer_value">Offer Value (LKR)</Label>
+                <Input
+                  id="offer_value"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.offer_value}
+                  onChange={(e) => setFormData({ ...formData, offer_value: e.target.value })}
+                  placeholder="e.g., 5000 (Value per cake / voucher in LKR)"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Value per redemption in LKR (tracked in redemption reports)
+                </p>
               </div>
             </div>
 
@@ -962,6 +993,7 @@ const OfferManagement = () => {
                   <TableHead>Member Categories</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="min-w-[220px] whitespace-nowrap">Type & Limit</TableHead>
+                  <TableHead className="whitespace-nowrap">Value (LKR)</TableHead>
                   <TableHead className="whitespace-nowrap">Valid Period</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
@@ -1033,6 +1065,13 @@ const OfferManagement = () => {
                           <span className="text-sm text-muted-foreground">No categories</span>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell className="text-sm font-semibold whitespace-nowrap">
+                      {offer.offer_value !== null && offer.offer_value !== undefined && Number(offer.offer_value) > 0 ? (
+                        `LKR ${Number(offer.offer_value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      ) : (
+                        <span className="text-muted-foreground font-normal">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm">
                       {offer.valid_from && offer.valid_to
@@ -1138,6 +1177,7 @@ const OfferManagement = () => {
                   <TableHead>Member Categories</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="min-w-[220px] whitespace-nowrap">Type & Limit</TableHead>
+                  <TableHead className="whitespace-nowrap">Value (LKR)</TableHead>
                   <TableHead className="whitespace-nowrap">Valid Period</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
@@ -1209,6 +1249,13 @@ const OfferManagement = () => {
                         <span className="text-sm text-muted-foreground">No categories</span>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell className="text-sm font-semibold whitespace-nowrap">
+                    {offer.offer_value !== null && offer.offer_value !== undefined && Number(offer.offer_value) > 0 ? (
+                      `LKR ${Number(offer.offer_value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    ) : (
+                      <span className="text-muted-foreground font-normal">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm">
                     {offer.valid_from && offer.valid_to
@@ -1282,7 +1329,7 @@ const OfferManagement = () => {
           <form onSubmit={handleEditSubmit} className="flex flex-col flex-1 overflow-hidden">
             {/* Scrollable Content Container */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4 max-h-[60vh] scrollbar-thin">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="edit-name">Offer Name *</Label>
                   <Input
@@ -1291,6 +1338,21 @@ const OfferManagement = () => {
                     onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
                     placeholder="e.g., Birthday Cake, Dinner Voucher"
                   />
+                </div>
+                <div>
+                  <Label htmlFor="edit-offer_value">Offer Value (LKR)</Label>
+                  <Input
+                    id="edit-offer_value"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editFormData.offer_value}
+                    onChange={(e) => setEditFormData({ ...editFormData, offer_value: e.target.value })}
+                    placeholder="e.g., 5000"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Value per redemption in LKR (tracked in redemption reports)
+                  </p>
                 </div>
               </div>
 

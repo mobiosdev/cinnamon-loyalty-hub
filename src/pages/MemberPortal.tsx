@@ -404,7 +404,7 @@ const MemberPortal = () => {
                         <TableHead>Date &amp; Time</TableHead>
                         <TableHead>Offer / Privilege</TableHead>
                         <TableHead>Bill No.</TableHead>
-                        <TableHead className="text-right">Saved</TableHead>
+                        <TableHead className="text-right">Saved / Value</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -421,7 +421,13 @@ const MemberPortal = () => {
                             )}
                           </TableCell>
                           <TableCell className="font-mono text-xs">{h.bill_number || "—"}</TableCell>
-                          <TableCell className="text-right text-sm whitespace-nowrap">{formatLkr(h.discount_amount)}</TableCell>
+                          <TableCell className="text-right text-sm whitespace-nowrap">
+                            {h.type === 'offer'
+                              ? (h.offer_value !== null && h.offer_value !== undefined && Number(h.offer_value) > 0
+                                  ? formatLkr(h.offer_value)
+                                  : (h.discount_amount ? formatLkr(h.discount_amount) : "—"))
+                              : formatLkr(h.discount_amount)}
+                          </TableCell>
                           <TableCell>
                             <Badge variant={h.status === "reversed" ? "destructive" : "secondary"} className="capitalize">
                               {h.status === "active" ? "Redeemed" : h.status}
@@ -478,11 +484,21 @@ const OfferCard = ({ offer }: { offer: PortalOffer }) => {
               <div className="flex items-center gap-2 flex-wrap">
                 <h4 className={`font-semibold text-sm ${styles.title}`}>{offer.name}</h4>
                 <Badge className={`text-[10px] py-0 px-1.5 font-semibold ${styles.badge}`}>{status}</Badge>
+                {offer.offer_value !== null && offer.offer_value !== undefined && Number(offer.offer_value) > 0 && (
+                  <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-semibold border-amber-300 text-amber-700 bg-amber-50">
+                    Value: {formatLkr(offer.offer_value)}
+                  </Badge>
+                )}
               </div>
               {offer.description && (
                 <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{offer.description}</p>
               )}
               <div className="flex flex-col gap-1 mt-2 text-[11px] text-muted-foreground">
+                {offer.offer_value !== null && offer.offer_value !== undefined && Number(offer.offer_value) > 0 && (
+                  <p className="font-semibold text-amber-700 dark:text-amber-400">
+                    Benefit Value: {formatLkr(offer.offer_value)}
+                  </p>
+                )}
                 <p className="font-medium text-foreground/80">{recurrenceText(offer)}</p>
                 <p>{validityText(offer)}</p>
                 {(hasMinBill || hasMaxDiscount) && (
@@ -503,7 +519,12 @@ const OfferCard = ({ offer }: { offer: PortalOffer }) => {
                     {offer.redemptions.map((r) => (
                       <div key={r.id} className="flex justify-between items-center gap-2 text-[10px] text-muted-foreground bg-muted/30 p-1.5 rounded">
                         <span>Redeemed: {formatDate(r.redeemed_at)}</span>
-                        {r.bill_number && <span className="font-mono">Bill: #{r.bill_number}</span>}
+                        <div className="flex items-center gap-2">
+                          {r.offer_value !== null && r.offer_value !== undefined && Number(r.offer_value) > 0 && (
+                            <span className="font-semibold text-emerald-600">{formatLkr(r.offer_value)}</span>
+                          )}
+                          {r.bill_number && <span className="font-mono">Bill: #{r.bill_number}</span>}
+                        </div>
                       </div>
                     ))}
                   </div>
