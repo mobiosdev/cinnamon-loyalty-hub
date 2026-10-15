@@ -61,6 +61,7 @@ const OfferRedemption = () => {
         customer_phone: member.mobile,
         bill_number: billNumber,
         redeemed_by: 1, // TODO: Get from auth
+        offer_value: offer.offer_value !== null && offer.offer_value !== undefined ? Number(offer.offer_value) : undefined,
       });
       
       // Log offer redemption
@@ -72,6 +73,7 @@ const OfferRedemption = () => {
         action: 'redeem',
         details: {
           offer_name: offer.name,
+          offer_value: offer.offer_value,
           bill_number: billNumber,
           customer_phone: member.mobile,
           member_name: `${member.first_name} ${member.last_name}`,
@@ -163,7 +165,14 @@ const OfferRedemption = () => {
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
-                              <h4 className="font-medium">{offer.name}</h4>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-medium">{offer.name}</h4>
+                                {offer.offer_value !== undefined && offer.offer_value !== null && Number(offer.offer_value) > 0 && (
+                                  <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
+                                    Value: LKR {Number(offer.offer_value).toLocaleString()}
+                                  </Badge>
+                                )}
+                              </div>
                               <p className="text-sm text-muted-foreground">{offer.description}</p>
                             </div>
                             <div className="flex items-center gap-3">
@@ -222,6 +231,14 @@ const OfferRedemption = () => {
                     {selectedOffer?.name}
                   </Badge>
                 </div>
+                {selectedOffer?.offer_value !== undefined && selectedOffer?.offer_value !== null && Number(selectedOffer.offer_value) > 0 && (
+                  <div className="flex justify-between border-t pt-2">
+                    <span className="text-muted-foreground">Offer Value:</span>
+                    <span className="font-semibold text-emerald-600">
+                      LKR {Number(selectedOffer.offer_value).toLocaleString()}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <Button onClick={handleReset} variant="outline" size="lg" className="w-full">

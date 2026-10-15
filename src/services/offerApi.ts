@@ -13,6 +13,7 @@ export interface PhysicalOffer {
   category_name?: string;
   min_bill_value?: number;
   max_discount_amount?: number;
+  offer_value?: number | null;
   is_recurrent?: boolean;
   usage_limit?: number | null;
   category_ids?: number[];
@@ -31,6 +32,7 @@ export interface OfferRedemption {
   redeemed_by: number;
   bill_number?: string;
   offer_name?: string;
+  offer_value?: number | null;
 }
 
 export interface AvailableOffer {
@@ -40,6 +42,7 @@ export interface AvailableOffer {
   is_redeemed: boolean;
   min_bill_value?: number;
   max_discount_amount?: number;
+  offer_value?: number | null;
 }
 
 export interface AvailableOffersResponse {

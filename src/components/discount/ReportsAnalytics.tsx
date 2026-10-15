@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   BarChart3, Download, TrendingUp, Users, DollarSign, 
-  Calendar as CalendarIcon, Package, FileText, PieChart, Activity, AlertCircle 
+  Calendar as CalendarIcon, Package, FileText, PieChart, Activity, AlertCircle, Sparkles 
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, eachDayOfInterval, startOfDay } from "date-fns";
@@ -26,6 +26,8 @@ interface ReportStats {
   totalTransactions: number;
   totalDiscountValue: number;
   totalOfferRedemptions: number;
+  totalOfferValue: number;
+  totalRedemptionValue: number;
   averageDiscount: number;
   topCompany: string;
   topCategory: string;
@@ -37,6 +39,8 @@ interface TrendData {
   discounts: number;
   offers: number;
   amount: number;
+  discountAmount: number;
+  offerAmount: number;
 }
 
 interface CategoryData {
@@ -54,6 +58,7 @@ interface CompanyData {
 interface OfferData {
   name: string;
   redemptions: number;
+  value: number;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#8DD1E1'];
@@ -113,6 +118,8 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
     totalTransactions: 0,
     totalDiscountValue: 0,
     totalOfferRedemptions: 0,
+    totalOfferValue: 0,
+    totalRedemptionValue: 0,
     averageDiscount: 0,
     topCompany: '',
     topCategory: '',
@@ -164,11 +171,20 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
 
       // Calculate stats
       const totalDiscountValue = discounts?.reduce((sum: number, d: any) => sum + (Number(d.discount_amount) || 0), 0) || 0;
+      const totalOfferValue = offers?.reduce((sum: number, o: any) => sum + (Number(o.offer_value) || 0), 0) || 0;
+      const totalRedemptionValue = totalDiscountValue + totalOfferValue;
       const totalTransactions = (discounts?.length || 0) + (offers?.length || 0);
       const averageDiscount = discounts?.length ? totalDiscountValue / discounts.length : 0;
       const activeMembers = members?.filter((m: any) => m.is_active).length || 0;
 
-      // Company analysis
+      // Phone lookup map for member associations
+      const memberPhoneMap = new Map<string, any>();
+      members?.forEach((m: any) => {
+        const norm = m.mobile ? m.mobile.replace(/[\s+]/g, '').trim() : '';
+        if (norm) memberPhoneMap.set(norm, m);
+      });
+
+      // Company analysis (including discount and offer redemptions)
       const companyMap = new Map<string, { transactions: number; amount: number }>();
       discounts?.forEach((d: any) => {
         const companyName = d.members?.companies?.name || 'Unknown';
@@ -179,12 +195,23 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
         });
       });
 
+      offers?.forEach((o: any) => {
+        const normPhone = o.customer_phone ? o.customer_phone.replace(/[\s+]/g, '').trim() : '';
+        const member = memberPhoneMap.get(normPhone);
+        const companyName = member?.companies?.name || member?.company_name || 'Unknown';
+        const current = companyMap.get(companyName) || { transactions: 0, amount: 0 };
+        companyMap.set(companyName, {
+          transactions: current.transactions + 1,
+          amount: current.amount + (Number(o.offer_value) || 0)
+        });
+      });
+
       const companiesArray = Array.from(companyMap.entries())
         .map(([name, data]) => ({ name, ...data }))
         .sort((a: any, b: any) => b.transactions - a.transactions)
         .slice(0, 5);
 
-      // Category analysis
+      // Category analysis (including discount savings and offer redemption values)
       const categoryMap = new Map<string, { value: number; members: number }>();
       members?.forEach((m: any) => {
         const categoryName = m.customer_categories?.name || 'Unknown';
@@ -199,18 +226,26 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
         const categoryName = d.members?.customer_categories?.name || 'Unknown';
         const current = categoryMap.get(categoryName) || { value: 0, members: 0 };
         
-        // Calculate actual discount value based on type
         let discountValue = 0;
         if (d.discount_type === 'fixed') {
           discountValue = Number(d.discount_value) || 0;
         } else if (d.discount_type === 'percentage' && d.discount_amount) {
-          // Use discount_amount if available
           discountValue = Number(d.discount_amount) || 0;
         }
-        // Note: For percentage discounts without bill amount, we can't calculate the actual value
         
         categoryMap.set(categoryName, {
           value: current.value + discountValue,
+          members: current.members
+        });
+      });
+
+      offers?.forEach(o => {
+        const normPhone = o.customer_phone ? o.customer_phone.replace(/[\s+]/g, '').trim() : '';
+        const member = memberPhoneMap.get(normPhone);
+        const categoryName = member?.customer_categories?.name || member?.category_name || 'Unknown';
+        const current = categoryMap.get(categoryName) || { value: 0, members: 0 };
+        categoryMap.set(categoryName, {
+          value: current.value + (Number(o.offer_value) || 0),
           members: current.members
         });
       });
@@ -219,19 +254,23 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
         .map(([name, data]) => ({ name, ...data }))
         .sort((a, b) => b.value - a.value);
 
-      // Offer analysis
-      const offerMap = new Map<string, number>();
+      // Offer analysis (count and total LKR value)
+      const offerMap = new Map<string, { redemptions: number; value: number }>();
       offers?.forEach(o => {
-        const offerName = o.offers?.name || 'Unknown';
-        offerMap.set(offerName, (offerMap.get(offerName) || 0) + 1);
+        const offerName = o.offers?.name || o.name || 'Unknown';
+        const current = offerMap.get(offerName) || { redemptions: 0, value: 0 };
+        offerMap.set(offerName, {
+          redemptions: current.redemptions + 1,
+          value: current.value + (Number(o.offer_value) || 0)
+        });
       });
 
       const offersArray = Array.from(offerMap.entries())
-        .map(([name, redemptions]) => ({ name, redemptions }))
+        .map(([name, data]) => ({ name, redemptions: data.redemptions, value: data.value }))
         .sort((a, b) => b.redemptions - a.redemptions)
         .slice(0, 5);
 
-      // Trend data (daily aggregation)
+      // Trend data (daily aggregation with offer LKR amounts)
       if (dateFrom && dateTo) {
         const days = eachDayOfInterval({ start: dateFrom, end: dateTo });
         const trendsArray = days.map(day => {
@@ -242,12 +281,16 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
           const dayOffers = offers?.filter(o => 
             format(new Date(o.redeemed_at), 'yyyy-MM-dd') === dayStr
           ) || [];
+          const dayDiscountAmount = dayDiscounts.reduce((sum, d) => sum + (Number(d.discount_amount) || 0), 0);
+          const dayOfferAmount = dayOffers.reduce((sum, o) => sum + (Number(o.offer_value) || 0), 0);
           
           return {
             date: format(day, 'MMM dd'),
             discounts: dayDiscounts.length,
             offers: dayOffers.length,
-            amount: dayDiscounts.reduce((sum, d) => sum + (Number(d.discount_amount) || 0), 0)
+            amount: dayDiscountAmount + dayOfferAmount,
+            discountAmount: dayDiscountAmount,
+            offerAmount: dayOfferAmount
           };
         });
         setTrendData(trendsArray);
@@ -265,6 +308,8 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
         totalTransactions,
         totalDiscountValue,
         totalOfferRedemptions: offers?.length || 0,
+        totalOfferValue,
+        totalRedemptionValue,
         averageDiscount,
         topCompany: companiesArray[0]?.name || 'N/A',
         topCategory: categoriesArray[0]?.name || 'N/A',
@@ -307,10 +352,14 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
             return {
               id: offer.id,
               name: offer.name,
+              offer_value: offer.offer_value !== null && offer.offer_value !== undefined ? Number(offer.offer_value) : 0,
               redemptionCount: redemptions.length,
               redemptions: redemptions.map(r => ({
                 date: r.redeemed_at,
-                billNumber: r.bill_number
+                billNumber: r.bill_number,
+                offerValue: r.offer_value !== null && r.offer_value !== undefined && Number(r.offer_value) > 0
+                  ? Number(r.offer_value)
+                  : (offer.offer_value !== null && offer.offer_value !== undefined ? Number(offer.offer_value) : 0)
               })),
               maxDiscountAmount: offer.max_discount_amount,
               minBillValue: offer.min_bill_value,
@@ -389,6 +438,8 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
       ['Total Transactions', stats.totalTransactions],
       ['Total Discount Value', `Rs ${stats.totalDiscountValue.toFixed(2)}`],
       ['Total Offer Redemptions', stats.totalOfferRedemptions],
+      ['Total Offer Redemption Value', `Rs ${stats.totalOfferValue.toFixed(2)}`],
+      ['Total Combined Redemption Value', `Rs ${stats.totalRedemptionValue.toFixed(2)}`],
       ['Average Discount', `Rs ${stats.averageDiscount.toFixed(2)}`],
       ['Top Company', stats.topCompany],
       ['Top Category', stats.topCategory]
@@ -410,7 +461,13 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
 
     // Offer data sheet
     if (offerData.length > 0) {
-      const offerSheet = XLSX.utils.json_to_sheet(offerData);
+      const offerSheet = XLSX.utils.json_to_sheet(
+        offerData.map(o => ({
+          'Offer Name': o.name,
+          'Redemptions': o.redemptions,
+          'Total Value (LKR)': Number(o.value || 0)
+        }))
+      );
       XLSX.utils.book_append_sheet(wb, offerSheet, 'Offers');
     }
 
@@ -441,6 +498,8 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
         ['Total Transactions', stats.totalTransactions.toString()],
         ['Total Discount Value', `Rs ${stats.totalDiscountValue.toFixed(2)}`],
         ['Offer Redemptions', stats.totalOfferRedemptions.toString()],
+        ['Total Offer Value', `Rs ${stats.totalOfferValue.toFixed(2)}`],
+        ['Total Combined Value', `Rs ${stats.totalRedemptionValue.toFixed(2)}`],
         ['Average Discount', `Rs ${stats.averageDiscount.toFixed(2)}`],
         ['Top Company', stats.topCompany],
         ['Top Category', stats.topCategory]
@@ -479,6 +538,21 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
       });
     }
 
+    // Top Offers
+    if (offerData.length > 0) {
+      doc.addPage();
+      doc.setFontSize(14);
+      doc.text('Top Offers Analysis', 14, 20);
+      
+      autoTable(doc, {
+        startY: 25,
+        head: [['Offer', 'Redemptions', 'Total Value']],
+        body: offerData.map(o => [o.name, o.redemptions.toString(), `Rs ${(o.value || 0).toFixed(2)}`]),
+        theme: 'striped',
+        headStyles: { fillColor: [66, 66, 66] }
+      });
+    }
+
     doc.save(`report_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     toast.success('PDF report exported successfully');
   };
@@ -503,8 +577,12 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
     const wb = XLSX.utils.book_new();
     
     const auditData = memberOfferAudit.map(member => {
-      const offerNames = member.assignedOffers.map((o: any) => o.name).join(', ');
+      const offerNames = member.assignedOffers.map((o: any) => `${o.name}${o.offer_value ? ` (LKR ${o.offer_value})` : ''}`).join(', ');
       const offerRedemptions = member.assignedOffers.reduce((sum: number, o: any) => sum + o.redemptionCount, 0);
+      const totalOfferRedeemedValue = member.assignedOffers.reduce((sum: number, o: any) => {
+        const offerVal = (o.redemptions || []).reduce((rSum: number, r: any) => rSum + (r.offerValue || 0), 0);
+        return sum + offerVal;
+      }, 0);
       
       return {
         'Member Code': member.memberCode,
@@ -514,6 +592,7 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
         'Status': member.isActive ? 'Active' : 'Inactive',
         'Assigned Offers': offerNames || 'None',
         'Total Offer Redemptions': offerRedemptions,
+        'Total Offer Value Redeemed (LKR)': totalOfferRedeemedValue,
         'Discount Policy': member.discountPolicy,
         'Discount Value': member.discountPolicy === 'percentage' 
           ? `${member.discountPercentage}%` 
@@ -542,13 +621,19 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
       ['Total Transactions', stats.totalTransactions],
       ['Total Discount Value', `Rs ${stats.totalDiscountValue.toFixed(2)}`],
       ['Offer Redemptions', stats.totalOfferRedemptions],
+      ['Total Offer Value', `Rs ${stats.totalOfferValue.toFixed(2)}`],
+      ['Total Combined Value', `Rs ${stats.totalRedemptionValue.toFixed(2)}`],
       ['Average Discount', `Rs ${stats.averageDiscount.toFixed(2)}`],
       ['Top Company', stats.topCompany],
       ['Top Category', stats.topCategory],
       [],
       ['Top Companies'],
       ['Company', 'Transactions', 'Amount'],
-      ...companyData.map(c => [c.name, c.transactions, `Rs ${c.amount.toFixed(2)}`])
+      ...companyData.map(c => [c.name, c.transactions, `Rs ${c.amount.toFixed(2)}`]),
+      [],
+      ['Top Offers'],
+      ['Offer', 'Redemptions', 'Total Value'],
+      ...offerData.map(o => [o.name, o.redemptions, `Rs ${(o.value || 0).toFixed(2)}`])
     ];
 
     const csv = csvData.map(row => row.join(',')).join('\n');
@@ -638,7 +723,7 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
 
         <TabsContent value="analytics" className="space-y-6">
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-start justify-between">
@@ -680,7 +765,7 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Discount Value</p>
                     <p className="text-2xl font-bold">
-                      {loading ? '...' : `Rs ${stats.totalDiscountValue.toFixed(0)}`}
+                      {loading ? '...' : `Rs ${stats.totalDiscountValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Avg: Rs {stats.averageDiscount.toFixed(0)}
@@ -700,10 +785,27 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
                       {loading ? '...' : stats.totalOfferRedemptions}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Top: {stats.topCategory}
+                      Value: Rs {stats.totalOfferValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </p>
                   </div>
                   <Package className="h-8 w-8 text-secondary" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Total Value</p>
+                    <p className="text-2xl font-bold text-primary">
+                      {loading ? '...' : `Rs ${stats.totalRedemptionValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Discounts + Offers
+                    </p>
+                  </div>
+                  <Sparkles className="h-8 w-8 text-amber-500" />
                 </div>
               </CardContent>
             </Card>
@@ -1004,6 +1106,11 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
                                             style={{ color: offer.redemptionCount > 0 ? '#059669' : '#374151' }}
                                           >
                                             {offer.name} {offer.redemptionCount > 0 && `(${offer.redemptionCount}x)`}
+                                            {offer.offer_value !== undefined && offer.offer_value !== null && Number(offer.offer_value) > 0 && (
+                                              <span className="text-[10px] text-muted-foreground font-normal">
+                                                • LKR {Number(offer.offer_value).toLocaleString()}
+                                              </span>
+                                            )}
                                             {offer.isExpiringSoon && (
                                               <span title={`Expires in ${offer.daysUntilExpiry} days`}>
                                                 <AlertCircle className="h-3 w-3 text-orange-500" />
@@ -1018,7 +1125,7 @@ const ReportsAnalytics = ({ activeTab }: ReportsAnalyticsProps) => {
                                                   className="text-[10px] font-medium"
                                                   style={{ color: '#2563EB' }}
                                                 >
-                                                  ({format(new Date(redemption.date), 'dd MMM yyyy')} - Bill: {redemption.billNumber})
+                                                  ({format(new Date(redemption.date), 'dd MMM yyyy')} - Bill: {redemption.billNumber}{redemption.offerValue ? ` • LKR ${Number(redemption.offerValue).toLocaleString()}` : ''})
                                                 </div>
                                               ))}
                                             </div>
